@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Kiss the Edge — drift to the beat</title>
+<meta name="description" content="One-tap neon drift game. The closer you cut the corner, the harder the music hits. Free, no download.">
+<meta name="theme-color" content="#2a0a4a">
+<meta property="og:title" content="Kiss the Edge — drift to the beat">
+<meta property="og:description" content="The closer you cut it, the harder the music hits. Can you reach OVERDRIVE?">
+<meta property="og:image" content="https://onemoretry-games.pages.dev/kiss-the-edge/og.jpg">
+<meta property="og:url" content="https://onemoretry-games.pages.dev/kiss-the-edge/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #12051f; overflow: hidden; overscroll-behavior: none; }
+  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; position: fixed; inset: 0; }
+  #garage { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8, 2, 20, .82); backdrop-filter: blur(6px); z-index: 5; }
+  #garage.on { display: grid; }
+  #garage .panel { width: min(92vw, 420px); max-height: 86vh; overflow: auto; background: #1b0b33; border: 2px solid #ff3ea5; border-radius: 22px; padding: 18px; color: #fff; box-sizing: border-box; }
+  #garage h2 { font: 28px "Russo One", sans-serif; margin: 0 0 4px; text-align: center; }
+  #garage .wallet { text-align: center; color: #ffd650; font-weight: 800; margin-bottom: 14px; }
+  #garage .cars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  #garage .car { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; border-radius: 16px; border: 2px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; font: inherit; cursor: pointer; }
+  #garage .car.sel { border-color: #ffd166; background: rgba(255, 209, 102, .12); }
+  #garage .car.locked { opacity: .75; }
+  #garage .car i { width: 64px; height: 30px; border-radius: 8px 14px 8px 8px; box-shadow: inset 0 -8px 0 rgba(0,0,0,.25), 0 0 18px rgba(255,255,255,.15); }
+  #garage .car b { font: 16px "Russo One", sans-serif; }
+  #garage .car span { font-size: 12px; font-weight: 800; color: #ffd650; }
+  #garage .close { display: block; margin: 16px auto 0; padding: 12px 34px; border: 0; border-radius: 99px; background: #ff3ea5; color: #120822; font: 18px "Russo One", sans-serif; cursor: pointer; }
+  #toast { position: fixed; left: 50%; bottom: 12vh; transform: translate(-50%, 20px); opacity: 0; transition: .25s; background: #fff; color: #120822; padding: 10px 18px; border-radius: 99px; font-weight: 800; z-index: 6; pointer-events: none; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .back { position: fixed; left: 12px; bottom: 10px; color: rgba(255,255,255,.45); font-size: 11px; text-decoration: none; z-index: 4; font-weight: 700; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="garage"><div class="panel">
+  <h2>GARAGE</h2>
+  <div class="wallet">◆ <span class="coins">0</span></div>
+  <div class="cars"></div>
+  <button class="close">DRIVE</button>
+</div></div>
+<div id="toast"></div>
+<a class="back" href="../">more games →</a>
+<script type="module" src="game.js"></script>
+</body>
+</html>

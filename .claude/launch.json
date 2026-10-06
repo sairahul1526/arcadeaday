@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "games", "runtimeExecutable": "npx", "runtimeArgs": ["--yes", "http-server", "/Users/sairahul/Documents/projects/poki/games", "-p", "8787", "-c-1", "--silent"], "port": 8787 }
+  ]
+}

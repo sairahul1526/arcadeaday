@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>One More Try — a new free game every day</title>
+<meta name="description" content="Tiny, ridiculously addictive browser games. A new one every day. Free, no download, no sign-up.">
+<meta name="theme-color" content="#12051f">
+<meta property="og:title" content="One More Try — a new free game every day">
+<meta property="og:description" content="Tiny, ridiculously addictive browser games. Free, no download. Just one more.">
+<meta property="og:image" content="https://onemoretry-games.pages.dev/kiss-the-edge/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔁</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #12051f; --ink: #fff; --dim: rgba(255,255,255,.62); --pink: #ff3ea5; --gold: #ffd650; --card: #1d0b36; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; min-height: 100vh; color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: radial-gradient(120% 60% at 50% 0%, #3a0f5c 0%, var(--bg) 60%) fixed; overflow-x: hidden; }
+  body::before { content: ""; position: fixed; inset: 45% -50% -20%; background: linear-gradient(transparent 0 calc(100% - 1px), rgba(255,62,165,.18) 0) 0 0 / 100% 48px, linear-gradient(90deg, transparent 0 calc(100% - 1px), rgba(255,62,165,.18) 0) 0 0 / 48px 100%; transform: perspective(420px) rotateX(62deg); transform-origin: top; pointer-events: none; mask-image: linear-gradient(transparent, #000 40%); z-index: -1; }
+  main { max-width: 980px; margin: 0 auto; padding: 56px 16px 40px; }
+  header { text-align: center; margin-bottom: 44px; }
+  .logo { font: clamp(44px, 11vw, 96px)/.95 "Russo One", sans-serif; letter-spacing: .5px; margin: 0; text-shadow: 0 0 28px rgba(255,62,165,.55), 0 6px 0 #5a1a6e; }
+  .logo span { color: var(--gold); display: block; }
+  .tag { margin: 18px 0 0; font-size: clamp(16px, 4vw, 20px); font-weight: 800; color: var(--dim); }
+  .tag b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+  .card { position: relative; display: block; border-radius: 22px; overflow: hidden; background: var(--card); color: inherit; text-decoration: none; border: 2px solid rgba(255,255,255,.08); transition: transform .18s, border-color .18s, box-shadow .18s; }
+  .card:hover, .card:focus-visible { transform: translateY(-4px); border-color: var(--accent, var(--pink)); box-shadow: 0 14px 40px -12px var(--accent, var(--pink)); outline: none; }
+  .card.hero { grid-column: 1 / -1; }
+  .thumb { aspect-ratio: 1200 / 630; background: #2a0d45 center / cover no-repeat; }
+  .hero .thumb { aspect-ratio: 16 / 7; }
+  .meta { padding: 16px 18px 18px; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center; }
+  .meta h2 { margin: 0; font: 24px "Russo One", sans-serif; }
+  .hero .meta h2 { font-size: clamp(26px, 5vw, 34px); }
+  .meta p { margin: 0; grid-column: 1; color: var(--dim); font-weight: 600; font-size: 14px; line-height: 1.35; }
+  .play { grid-row: 1 / span 2; grid-column: 2; padding: 12px 22px; border-radius: 99px; background: var(--accent, var(--pink)); color: #120822; font: 17px "Russo One", sans-serif; }
+  .badge { position: absolute; top: 14px; left: 14px; padding: 6px 12px; border-radius: 99px; background: var(--gold); color: #120822; font: 13px "Russo One", sans-serif; letter-spacing: .5px; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  .soon { display: grid; place-items: center; min-height: 180px; border: 2px dashed rgba(255,255,255,.14); border-radius: 22px; color: var(--dim); font-weight: 800; text-align: center; padding: 20px; }
+  .soon b { display: block; font: 20px "Russo One", sans-serif; color: var(--ink); margin-bottom: 4px; }
+  footer { text-align: center; color: rgba(255,255,255,.4); font-size: 13px; font-weight: 700; margin-top: 48px; }
+  @media (max-width: 520px) { main { padding-top: 40px; } .meta { grid-template-columns: 1fr; } .play { grid-row: auto; grid-column: 1; justify-self: start; margin-top: 10px; } .hero .thumb { aspect-ratio: 1200 / 630; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 class="logo">ONE MORE<span>TRY</span></h1>
+    <p class="tag"><b>a new free game every day.</b> no download. no sign-up. just one more.</p>
+  </header>
+  <section class="grid" id="games" aria-label="Games"></section>
+  <footer>made with way too much love · new game drops daily</footer>
+</main>
+<script>
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  fetch('games.json', { cache: 'no-cache' }).then(r => r.json()).then(list => {
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    const today = new Date().toISOString().slice(0, 10);
+    const html = list.map((gm, i) => `
+      <a class="card${i === 0 ? ' hero' : ''}" href="${esc(gm.slug)}/" style="--accent:${esc(gm.accent || '#ff3ea5')}">
+        <div class="thumb" style="background-image:url('${esc(gm.slug)}/og.jpg')"></div>
+        ${i === 0 ? `<span class="badge">${gm.date === today ? 'NEW TODAY' : 'LATEST'}</span>` : ''}
+        <div class="meta"><h2>${esc(gm.title)}</h2><span class="play">PLAY</span><p>${esc(gm.tagline)}</p></div>
+      </a>`).join('');
+    document.getElementById('games').innerHTML = html + '<div class="soon"><div><b>tomorrow\'s game</b>drops overnight. come back for one more.</div></div>';
+  });
+</script>
+</body>
+</html>
