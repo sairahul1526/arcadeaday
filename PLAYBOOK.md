@@ -3,9 +3,9 @@
 This is the pipeline the daily run follows to ship one new game. Every game must be one you would be proud to see with 10M plays. If a game isn't great, don't ship it: iterate until it is.
 
 ## 0. Context
-- Repo: `/Users/sairahul/Documents/projects/poki` → GitHub `sairahul1526/onemoretry` (branch `main`).
-- Live: `https://onemoretry-games.pages.dev/<slug>/`. The hub at `/` renders `games/games.json`.
-- Brand: **One More Try**, "just one more." Shipped games are listed in `games/games.json`. Never repeat a core mechanic.
+- Repo: `/Users/sairahul/Documents/projects/poki` → GitHub `sairahul1526/arcadeaday` (branch `main`).
+- Live: `https://arcadeaday.com/<slug>/`. The hub at `/` renders `games/games.json`. The Cloudflare Pages project is still named `onemoretry-games`; its pages.dev host redirects to arcadeaday.com.
+- Brand: **Arcade a Day**, "a new free game every day." Each game is "Day N" in order of release. Shipped games are listed in `games/games.json`. Never repeat a core mechanic.
 - Reference implementation: `games/kiss-the-edge/` (canvas + procedural Web Audio, record mode, og mode). Copy its patterns, not its game.
 
 ## 1. Scout (≤ 20 min)
@@ -39,7 +39,7 @@ Only build a concept that scores ≥ 28/35. Otherwise ideate again.
   - Web Share
   - vibration
   - a "more games →" link to `../`
-- OG/meta tags pointing at `https://onemoretry-games.pages.dev/<slug>/og.jpg`.
+- OG/meta tags and canonical link pointing at `https://arcadeaday.com/<slug>/`. The in-game share URL and the record-mode end card use `arcadeaday.com/<slug>`.
 - **Record-mode contract** (`?record=1`), needed by `tools/record.mjs`:
   - Render a fixed 1080×1920 canvas.
   - Use a fixed 1/60 s timestep, driven only by `window.__rec.step(n)`. It returns `{t, mode, score, dead, corners, streak}`, where `mode` becomes `'over'` at the end.

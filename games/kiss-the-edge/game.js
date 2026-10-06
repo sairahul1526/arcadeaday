@@ -3,7 +3,7 @@ import { Synth, Music, renderOffline, layerFor, dingNote, LAYER_AT, LAYER_NAMES,
 const Q = new URLSearchParams(location.search);
 const REC = Q.has('record');
 const OG = Q.has('og'); // share-image layout (tools/og.mjs)
-const URL_PLAY = 'onemoretry-games.pages.dev/kiss-the-edge';
+const URL_PLAY = 'arcadeaday.com/kiss-the-edge';
 const cvs = document.getElementById('game');
 const g = cvs.getContext('2d');
 

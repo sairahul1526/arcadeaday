@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>One More Try — a new free game every day</title>
+<title>Arcade a Day — a new free game every day</title>
 <meta name="description" content="Tiny, ridiculously addictive browser games. A new one every day. Free, no download, no sign-up.">
 <meta name="theme-color" content="#12051f">
-<meta property="og:title" content="One More Try — a new free game every day">
-<meta property="og:description" content="Tiny, ridiculously addictive browser games. Free, no download. Just one more.">
-<meta property="og:image" content="https://onemoretry-games.pages.dev/kiss-the-edge/og.jpg">
+<meta property="og:title" content="Arcade a Day — a new free game every day">
+<meta property="og:description" content="Tiny, ridiculously addictive browser games. A new one every day. Free, no download.">
+<meta property="og:image" content="https://arcadeaday.com/og.jpg">
+<meta property="og:url" content="https://arcadeaday.com/">
+<link rel="canonical" href="https://arcadeaday.com/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔁</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
@@ -34,37 +36,41 @@
   .hero .thumb { aspect-ratio: 16 / 7; }
   .meta { padding: 16px 18px 18px; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center; }
   .meta h2 { margin: 0; font: 24px "Russo One", sans-serif; }
+  .day { grid-column: 1; font: 13px "Russo One", sans-serif; letter-spacing: 1px; color: var(--accent, var(--pink)); }
   .hero .meta h2 { font-size: clamp(26px, 5vw, 34px); }
   .meta p { margin: 0; grid-column: 1; color: var(--dim); font-weight: 600; font-size: 14px; line-height: 1.35; }
-  .play { grid-row: 1 / span 2; grid-column: 2; padding: 12px 22px; border-radius: 99px; background: var(--accent, var(--pink)); color: #120822; font: 17px "Russo One", sans-serif; }
+  .play { grid-row: 1 / span 3; grid-column: 2; padding: 12px 22px; border-radius: 99px; background: var(--accent, var(--pink)); color: #120822; font: 17px "Russo One", sans-serif; }
   .badge { position: absolute; top: 14px; left: 14px; padding: 6px 12px; border-radius: 99px; background: var(--gold); color: #120822; font: 13px "Russo One", sans-serif; letter-spacing: .5px; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
   .soon { display: grid; place-items: center; min-height: 180px; border: 2px dashed rgba(255,255,255,.14); border-radius: 22px; color: var(--dim); font-weight: 800; text-align: center; padding: 20px; }
   .soon b { display: block; font: 20px "Russo One", sans-serif; color: var(--ink); margin-bottom: 4px; }
   footer { text-align: center; color: rgba(255,255,255,.4); font-size: 13px; font-weight: 700; margin-top: 48px; }
+  body.og { overflow: hidden; } body.og main { padding-top: 150px; } body.og .logo { font-size: 128px; } body.og .tag { font-size: 30px; margin-top: 28px; } body.og .grid, body.og footer { display: none; }
   @media (max-width: 520px) { main { padding-top: 40px; } .meta { grid-template-columns: 1fr; } .play { grid-row: auto; grid-column: 1; justify-self: start; margin-top: 10px; } .hero .thumb { aspect-ratio: 1200 / 630; } }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1 class="logo">ONE MORE<span>TRY</span></h1>
-    <p class="tag"><b>a new free game every day.</b> no download. no sign-up. just one more.</p>
+    <h1 class="logo">ARCADE<span>A DAY</span></h1>
+    <p class="tag"><b>a new free game every day.</b> no download. no sign-up. no excuses.</p>
   </header>
   <section class="grid" id="games" aria-label="Games"></section>
   <footer>made with way too much love · new game drops daily</footer>
 </main>
 <script>
+  if (new URLSearchParams(location.search).has('og')) document.body.classList.add('og');
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   fetch('games.json', { cache: 'no-cache' }).then(r => r.json()).then(list => {
     list.sort((a, b) => b.date.localeCompare(a.date));
     const today = new Date().toISOString().slice(0, 10);
+    const n = list.length;
     const html = list.map((gm, i) => `
       <a class="card${i === 0 ? ' hero' : ''}" href="${esc(gm.slug)}/" style="--accent:${esc(gm.accent || '#ff3ea5')}">
         <div class="thumb" style="background-image:url('${esc(gm.slug)}/og.jpg')"></div>
         ${i === 0 ? `<span class="badge">${gm.date === today ? 'NEW TODAY' : 'LATEST'}</span>` : ''}
-        <div class="meta"><h2>${esc(gm.title)}</h2><span class="play">PLAY</span><p>${esc(gm.tagline)}</p></div>
+        <div class="meta"><span class="day">DAY ${n - i}</span><h2>${esc(gm.title)}</h2><span class="play">PLAY</span><p>${esc(gm.tagline)}</p></div>
       </a>`).join('');
-    document.getElementById('games').innerHTML = html + '<div class="soon"><div><b>tomorrow\'s game</b>drops overnight. come back for one more.</div></div>';
+    document.getElementById('games').innerHTML = html + '<div class="soon"><div><b>tomorrow\'s game</b>drops overnight. see you tomorrow.</div></div>';
   });
 </script>
 </body>

@@ -1,12 +1,12 @@
-# One More Try
+# Arcade a Day
 
 Tiny, addictive browser games. A new one every day. Free, no download, no sign-up.
 
-**Play:** https://onemoretry-games.pages.dev
+**Play:** https://arcadeaday.com
 
 | Game | Released | Play |
 | --- | --- | --- |
-| **Kiss the Edge**: drift to the beat. The closer you cut it, the harder the music hits. | 2026-10-06 | [play](https://onemoretry-games.pages.dev/kiss-the-edge/) |
+| **Kiss the Edge**: drift to the beat. The closer you cut it, the harder the music hits. | 2026-10-06 | [play](https://arcadeaday.com/kiss-the-edge/) |
 
 ## Layout
 
