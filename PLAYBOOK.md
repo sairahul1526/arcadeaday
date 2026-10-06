@@ -4,7 +4,7 @@ This is the pipeline the daily run follows to ship one new game. Every game must
 
 ## 0. Context
 - Repo: `/Users/sairahul/Documents/projects/poki` → GitHub `sairahul1526/arcadeaday` (branch `main`).
-- Live: `https://arcadeaday.com/<slug>/`. The hub at `/` renders `games/games.json`. The Cloudflare Pages project is still named `onemoretry-games`; its pages.dev host redirects to arcadeaday.com.
+- Live: `https://arcadeaday.com/<slug>/`. The hub at `/` renders `games/games.json`. The Cloudflare Pages project is still named `onemoretry-games`. arcadeaday.com and www are proxied CNAMEs to `onemoretry-games.pages.dev`. The old pages.dev host still serves the site too, so share only arcadeaday.com links.
 - Brand: **Arcade a Day**, "a new free game every day." Each game is "Day N" in order of release. Shipped games are listed in `games/games.json`. Never repeat a core mechanic.
 - Reference implementation: `games/kiss-the-edge/` (canvas + procedural Web Audio, record mode, og mode). Copy its patterns, not its game.
 
