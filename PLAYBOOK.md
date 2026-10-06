@@ -60,6 +60,11 @@ Only build a concept that scores ≥ 28/35. Otherwise ideate again.
   - Does anything overlap or go off-screen?
 - Play it in the browser pane at mobile size (375×812) and at desktop size. There must be no console errors, and the title, play, death, retry, garage/shop and mute flows must all work.
 - Be honest: would a 16-year-old send this to a friend? If not, fix it.
+- Unattended (scheduled) runs can't start the preview dev server. Instead, drive the real page with Playwright: serve `games/`, open `?qa=1` at 375×812 (isMobile, hasTouch) and at 1440×900, and play with real `page.mouse` down/up. Add a `window.__qa()` state getter behind `?qa` and use it to build a noisy "human" bot with ~150 ms reaction lag. Its scores tell you whether the difficulty is fair.
+- Scouting: games embedded on Poki/CrazyGames don't load in the browser pane (blank iframe). Scout from the trending/new lists and thumbnails instead.
+- Scale the world by height on wide screens (e.g. `min(SW/460, SH/720)`). Otherwise the hero is tiny on desktop.
+- Keep the camera from letting the hero climb under the score HUD, especially in record mode, where the HUD sits lower.
+- Bonus moves that end in a death (SKIM etc.) should only pay out once you survive them. A "+2" on the death frame feels broken.
 
 ## 5. Ship
 1. Add the game to `games/games.json` (slug, title, tagline, date YYYY-MM-DD, accent) and to the README table.

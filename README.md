@@ -7,6 +7,7 @@ Tiny, addictive browser games. A new one every day. Free, no download, no sign-u
 | Game | Released | Play |
 | --- | --- | --- |
 | **Kiss the Edge**: drift to the beat. The closer you cut it, the harder the music hits. | 2026-10-06 | [play](https://arcadeaday.com/kiss-the-edge/) |
+| **Frog Fling**: lick a firefly, swing, fling. Every anchor is a snack. | 2026-10-07 | [play](https://arcadeaday.com/frog-fling/) |
 
 ## Layout
 
