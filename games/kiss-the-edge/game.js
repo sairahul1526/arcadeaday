@@ -639,7 +639,7 @@ function render() {
   buttons = [];
   if (mode === 'title') drawTitle();
   else {
-    if (!(REC && mode === 'over')) drawHUD(r);
+    if (!(REC && (mode === 'over' || hookOn()))) drawHUD(r);
     if (mode === 'over') drawOver(r);
   }
   if (REC) drawCaptions(r);
@@ -1157,7 +1157,7 @@ function drawHUD(r) {
     const k = b.t / 2.4;
     const a = k < 0.12 ? k / 0.12 : k > 0.8 ? 1 - (k - 0.8) / 0.2 : 1;
     g.globalAlpha = a;
-    const y = SH * 0.36;
+    const y = SH * (REC ? 0.44 : 0.36);
     g.fillStyle = 'rgba(0,0,0,0.45)';
     g.fillRect(0, y - 40 * U, SW, 80 * U);
     text(b.text, SW / 2, y - 8 * U, 34 * U * back(b.t / 0.3), '#fff', 'center', { glow: css(pal.glow) });
@@ -1309,20 +1309,22 @@ function drawOver(r) {
   if (!REC) text('tap anywhere to retry', SW / 2, SH - 30 * U, 12 * U, 'rgba(255,255,255,0.55)', 'center', { font: 'system-ui, sans-serif', weight: '700' });
 }
 
+const hookOn = () => REC && rec && rec.t < 3.6 && !!Q.get('hook');
+
 function drawCaptions(r) {
   const t = rec ? rec.t : 0;
   const hook = (Q.get('hook') || '').split('|').filter(Boolean);
   if (hook.length && t < 3.6) {
     const a = t > 3.2 ? 1 - (t - 3.2) / 0.4 : 1;
     g.globalAlpha = a;
-    const y0 = 150;
+    const y0 = 330;
     hook.forEach((ln, i) => text(ln, SW / 2, y0 + i * 92, 70, i === hook.length - 1 ? css(pal.glow) : '#fff', 'center', { stroke: 16, glow: 'rgba(0,0,0,0.6)' }));
     g.globalAlpha = 1;
   }
   const cap2 = Q.get('cap2');
   const plan = rec && rec.crashAt;
   if (cap2 && plan && !r.dead && r.next >= plan - 2 && r.next <= plan) {
-    text(cap2, SW / 2, 210, 64, '#fff', 'center', { stroke: 14 });
+    text(cap2, SW / 2, 290, 64, '#fff', 'center', { stroke: 14 });
   }
 }
 
@@ -1455,6 +1457,7 @@ if (REC) {
   const seed = +(Q.get('seed') || 11);
   const insane = new Set((Q.get('insane') || '').split(',').filter(Boolean).map(Number));
   const great = new Set((Q.get('great') || '').split(',').filter(Boolean).map(Number));
+  const ik = +(Q.get('ik') ?? 2.5);
   rec = { t: 0, frame: 0, events: [], screech: [], states: [], musicStart: 0, crashAt };
   document.querySelector('.back').style.display = 'none';
   const pr = rng(seed * 31);
@@ -1462,7 +1465,7 @@ if (REC) {
     seed,
     off: +(Q.get('off') || 10),
     bot: true,
-    plan: k => (k >= crashAt ? -16 : insane.has(k) ? 2.5 : great.has(k) ? 20 : 6 + pr() * 6),
+    plan: k => (k >= crashAt ? -16 : insane.has(k) ? ik : great.has(k) ? 20 : 6 + pr() * 6),
   });
   run.tutorial = false;
   mode = 'play';
