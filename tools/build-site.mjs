@@ -323,13 +323,13 @@ ${clientJs}
 }
 
 // The info sheet needs a scrollable page: html/body must not hide overflow, touch-action:none
-// belongs on the canvas, and the keyboard handler must ignore keys while the sheet is in view.
+// belongs on the canvas, and the keyboard handler must ignore keys while the sheet is in view (except mid-run).
 async function lintGame(g, html) {
   const js = await readFile(`${ROOT}${g.slug}/game.js`, 'utf8');
   if (/html,\s*body\s*{[^}]*overflow:\s*hidden/.test(html)) problems.push(`${g.slug}: html, body must not set overflow: hidden (the info sheet scrolls)`);
   if (/\bbody\s*{[^}]*touch-action:\s*none/.test(html)) problems.push(`${g.slug}: move touch-action: none from body to canvas`);
   if (!/canvas\s*{[^}]*touch-action:\s*none/.test(html)) problems.push(`${g.slug}: canvas needs touch-action: none`);
-  if (!/keydown[\s\S]{0,120}scrollY/.test(js)) problems.push(`${g.slug}: game.js keydown handler should start with: if (scrollY > 40) return;`);
+  if (!/keydown[\s\S]{0,300}scrollY[\s\S]{0,200}preventDefault\(\)[\s\S]{0,200}e\.repeat/.test(js)) problems.push(`${g.slug}: game.js keydown handler should match kiss-the-edge's: scrollY guard, then preventDefault() before the e.repeat check (a held Space otherwise scrolls the page)`);
 }
 
 function replaceBlock(html, name, block, slug) {

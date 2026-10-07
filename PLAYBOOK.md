@@ -45,7 +45,7 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - Page shell: copy `games/kiss-the-edge/index.html` and keep its rules, which the build lints:
   - `<!-- build:head --><!-- /build:head -->` right after the viewport meta, and `<!-- build:body --><!-- /build:body -->` right before the game script. Don't write title, description, canonical, og or twitter tags yourself. The build fills them from games.json, plus `/site.css`, JSON-LD and the `.back` links ("how to play" / "more games").
   - `html, body` must not set `overflow: hidden` or `height: 100%`, because the info sheet scrolls one screen below the game. Put `touch-action: none` on the canvas, not on body. Keep `#garage { touch-action: none; } #garage .panel { touch-action: pan-y; overscroll-behavior: contain; }` and the hidden-scrollbar rule.
-  - The `keydown` handler starts with `if (scrollY > 40) return;`, so keys don't play the game while someone is reading the sheet.
+  - The `keydown` handler copies Kiss the Edge's: ignore non-game keys, then `if (mode !== 'play' && scrollY > 40) return;` (keys don't start a game while someone reads the sheet), then `preventDefault()` **before** the `e.repeat` check. Otherwise each auto-repeat of a held Space scrolls the page mid-run.
 - The in-game share URL and the record-mode end card use `arcadeaday.com/<slug>`.
 - **Record-mode contract** (`?record=1`), needed by `tools/record.mjs`:
   - Render a fixed 1080×1920 canvas.
