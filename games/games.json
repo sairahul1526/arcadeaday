@@ -4,13 +4,238 @@
     "title": "Kiss the Edge",
     "tagline": "Drift to the beat. The closer you cut it, the harder the music hits.",
     "date": "2026-10-06",
-    "accent": "#ff3ea5"
+    "accent": "#ff3ea5",
+    "icon": "🏎️",
+    "store": "kte_",
+    "shop": {
+      "name": "Garage",
+      "item": "Car",
+      "items": [
+        [
+          "ROOKIE",
+          0
+        ],
+        [
+          "MINT",
+          60
+        ],
+        [
+          "LEMON",
+          120
+        ],
+        [
+          "GHOST",
+          200
+        ],
+        [
+          "COBALT",
+          320
+        ],
+        [
+          "LAVA",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "PRISM",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Kiss the Edge — drift to the beat",
+      "description": "The closer you cut it, the harder the music hits. Can you reach OVERDRIVE?"
+    },
+    "seo": {
+      "keyword": "drift game online",
+      "title": "Kiss the Edge: One-Tap Drift Game · Play Free Online",
+      "description": "Play Kiss the Edge, a free one-tap neon drift game in your browser. Cut corners close to the edge and the synthwave soundtrack builds. No download.",
+      "h1": "Kiss the Edge: a one-tap neon drift game",
+      "imageAlt": "Kiss the Edge: a neon car drifting around a corner on a synthwave road",
+      "genre": [
+        "Arcade",
+        "Racing",
+        "Rhythm",
+        "One-button"
+      ],
+      "intro": [
+        "Kiss the Edge is a free one-tap drift game you play right in your browser, on your phone or your computer. Your neon car slides through an endless road of hairpin corners and you steer with one finger: hold to drift right, let go to drift left.",
+        "The twist is the soundtrack. Every corner you take close to the edge adds a new layer to the synthwave music, so a great run literally sounds better and better until you hit OVERDRIVE. Cut it a little too close, though, and you're off the road."
+      ],
+      "howTo": [
+        "Tap to start. The car is always moving, so you only choose which way it drifts.",
+        "Hold anywhere on the screen to drift right. Let go to drift left. On a computer, hold Space, the right arrow or Enter.",
+        "Take every corner as tight as you dare. Passing close to the edge scores GREAT (+2), PERFECT (+3) or INSANE! (+5). A wide, safe corner only scores +1 and resets your streak.",
+        "Chain close corners into a streak. At streaks of 2, 4, 7, 11 and 16 the music adds hi-hats, bass, chords, a melody and finally OVERDRIVE, where every corner is worth double.",
+        "Leave the road and the run is over. Tap anywhere to retry instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Hold the screen to drift right, release to drift left"
+        ],
+        [
+          "Computer",
+          "Hold Space, → or Enter (or the mouse button) to drift right, release to drift left"
+        ],
+        [
+          "Retry",
+          "Tap or click anywhere after a crash"
+        ]
+      ],
+      "tips": [
+        "Your first runs tell you exactly when to HOLD and when to LET GO. Use them to feel the rhythm of the turns.",
+        "Turn in late. The closer your drift line passes the edge, the higher the grade.",
+        "A safe corner costs you your streak, but a crash costs you the whole run. When the music is at full OVERDRIVE, a GREAT is plenty.",
+        "Grab the gold coins on the road. Every run also pays one coin per 10 points.",
+        "Spend coins in the GARAGE on 8 cars, from ROOKIE to the rainbow PRISM.",
+        "Keep going to see new zones: SUNSET BLVD, MIDNIGHT, AURORA, VAPORWAVE, INFERNO and THE VOID."
+      ],
+      "faq": [
+        [
+          "Is Kiss the Edge free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Kiss the Edge on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with the keyboard or mouse."
+        ],
+        [
+          "Do I need sound on?",
+          "You can play muted, but the music is half the game: the soundtrack reacts to how close you drive. Turn it up."
+        ],
+        [
+          "What is OVERDRIVE?",
+          "Chain 16 close corners in a row and the full track kicks in. While you stay in OVERDRIVE, every corner scores double points."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and cars are saved in your browser on this device."
+        ]
+      ]
+    }
   },
   {
     "slug": "frog-fling",
     "title": "Frog Fling",
     "tagline": "Lick a firefly, swing, fling. Every anchor is a snack.",
     "date": "2026-10-07",
-    "accent": "#7dff6b"
+    "accent": "#7dff6b",
+    "icon": "🐸",
+    "store": "ffl_",
+    "shop": {
+      "name": "Pond Shop",
+      "item": "Frog",
+      "items": [
+        [
+          "CLASSIC",
+          0
+        ],
+        [
+          "PEACH",
+          60
+        ],
+        [
+          "BLUEBERRY",
+          120
+        ],
+        [
+          "LEMON",
+          200
+        ],
+        [
+          "TOMATO",
+          320
+        ],
+        [
+          "GHOST",
+          480
+        ],
+        [
+          "GOLDEN",
+          800
+        ],
+        [
+          "COSMIC",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Frog Fling — lick, swing, fling",
+      "description": "Lick a firefly, swing, fling. Skim the pond, dodge the pike. How far can you fling?"
+    },
+    "seo": {
+      "keyword": "frog tongue game online",
+      "title": "Frog Fling: Frog Tongue Swing Game · Play Free Online",
+      "description": "Play Frog Fling free online: a one-tap frog tongue swing game. Hold to lick a firefly, swing, let go to fling over the pond. No download, works on phone.",
+      "h1": "Frog Fling: the frog tongue swing game",
+      "imageAlt": "Frog Fling: a frog swinging over a pond on its tongue from a firefly",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Swing",
+        "One-button"
+      ],
+      "intro": [
+        "Frog Fling is a free one-tap swing game where the grappling hook is a frog's tongue. Hold to lick a firefly and swing from it, then let go to fling yourself across the pond. Play it right here in your browser on a phone or a computer.",
+        "There's a catch: every firefly you swing from gets eaten. You can never grab the same one twice, so every fling has to land you within reach of the next snack. Fall into the water and it's SPLASH. Hang around near the bubbles and the pike gets you."
+      ],
+      "howTo": [
+        "Tap to start. Your frog jumps off the lily pad.",
+        "Hold anywhere on the screen to stick your tongue on the nearest firefly in reach. Keep holding to swing.",
+        "Let go to fling. Release while the frog is flying forward and upward for a PERFECT fling, a speed boost and a bigger combo.",
+        "Each firefly you swing from is gulped down (+1). PERFECT flings in a row add a combo bonus on top.",
+        "Swing all the way around for a LOOP (+3), DOUBLE LOOP (+6) or TRIPLE LOOP (+9).",
+        "Fall into the pond and the run ends. Tap anywhere to retry instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Hold the screen to lick and swing, release to fling"
+        ],
+        [
+          "Computer",
+          "Hold Space, ↑ or Enter (or the mouse button) to lick and swing, release to fling"
+        ],
+        [
+          "Retry",
+          "Tap or click anywhere after you splash"
+        ]
+      ],
+      "tips": [
+        "Let go on the upswing, just past the bottom of the arc. That's where PERFECT lives.",
+        "Don't panic when you drop low. Skim the water and climb back out for a SKIM bonus (+2).",
+        "Bubbles in the water mean a pike is about to jump. Stay high over that gap.",
+        "Golden fireflies give you coins. Every run also pays one coin per 10 points.",
+        "Spend coins in the POND SHOP on 8 frogs, from CLASSIC to COSMIC.",
+        "Every 12 gulps the pond changes: SUNSET POND, DUSK, MOONLIGHT, MIDNIGHT BOG, AURORA and BLOOD MOON."
+      ],
+      "faq": [
+        [
+          "Is Frog Fling free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Frog Fling on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with the keyboard or mouse."
+        ],
+        [
+          "Why can't I grab the same firefly again?",
+          "Because the frog eats it. Every firefly you swing from is gone, which is what keeps each run moving forward."
+        ],
+        [
+          "How do I get a PERFECT fling?",
+          "Let go while the frog is moving forward and upward, at a decent speed. You'll see PERFECT! pop up and the frog gets a small boost."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and frogs are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

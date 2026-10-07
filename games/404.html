@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Page not found · Arcade a Day</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f1efff">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body class="site">
+<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 3 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
+<main class="wrap">
+  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/frog-fling/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY FROG FLING</a></div>
+  <section class="shelf"><div class="shelf-h"><h2>All games</h2></div><ul class="tiles">
+<li><a class="tile" href="/frog-fling/" style="--accent:#7dff6b">
+  <img src="/frog-fling/og.jpg" alt="Frog Fling: a frog swinging over a pond on its tongue from a firefly" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <div class="tb"><div><h3>Frog Fling</h3><small data-best="ffl_">Day 2 · Oct 7</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
+<li><a class="tile" href="/kiss-the-edge/" style="--accent:#ff3ea5">
+  <img src="/kiss-the-edge/og.jpg" alt="Kiss the Edge: a neon car drifting around a corner on a synthwave road" width="1200" height="630" loading="lazy" decoding="async">
+  <div class="tb"><div><h3>Kiss the Edge</h3><small data-best="kte_">Day 1 · Oct 6</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
+  </ul></section>
+</main>
+<footer class="foot wrap">© 2026 Arcade a Day · a new free game every day · <a href="/">all games</a></footer>
+<script>
+(() => {
+  const LATEST = "2026-10-07", H = 9;
+  const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
+  const today = istDay(Date.now());
+  document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });
+  document.querySelectorAll('[data-best]').forEach(el => {
+    let v = 0;
+    try { v = JSON.parse(localStorage.getItem(el.dataset.best + 'best')) || 0; } catch (e) {}
+    if (v > 0) el.textContent += (el.dataset.full ? '🏆 your best: ' : ' · best ') + v;
+  });
+  const target = () => {
+    let d = today;
+    if (LATEST >= today) d = istDay(Date.now() + 864e5);
+    return Date.parse(d + 'T' + String(H).padStart(2, '0') + ':00:00Z');
+  };
+  const els = document.querySelectorAll('[data-next]');
+  if (!els.length) return;
+  const tick = () => {
+    const ms = target() - Date.now();
+    let txt = 'any minute';
+    if (ms > 0) {
+      const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+      txt = (h ? h + 'h ' : '') + String(m).padStart(h ? 2 : 1, '0') + 'm' + (innerWidth >= 520 || !h ? ' ' + String(ss).padStart(2, '0') + 's' : '');
+    }
+    els.forEach(el => (el.textContent = txt));
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

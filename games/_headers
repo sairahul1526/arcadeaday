@@ -1,0 +1,10 @@
+# Only arcadeaday.com should be indexed. The same deployment also answers on
+# www.arcadeaday.com and onemoretry-games.pages.dev; keep those out of search.
+https://www.arcadeaday.com/*
+  X-Robots-Tag: noindex
+
+https://onemoretry-games.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.onemoretry-games.pages.dev/*
+  X-Robots-Tag: noindex

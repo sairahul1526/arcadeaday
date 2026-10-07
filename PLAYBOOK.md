@@ -2,9 +2,11 @@
 
 This is the pipeline the daily run follows to ship one new game. Every game must be one you would be proud to see with 10M plays. If a game isn't great, don't ship it: iterate until it is.
 
+Two audiences, both matter: people scrolling TikTok/Reels (the video) and people searching Google for a game to play (the page). Every game ships with a page that ranks for a real search phrase.
+
 ## 0. Context
 - Repo: `/Users/sairahul/Documents/projects/poki` → GitHub `sairahul1526/arcadeaday` (branch `main`).
-- Live: `https://arcadeaday.com/<slug>/`. The hub at `/` renders `games/games.json`. The Cloudflare Pages project is still named `onemoretry-games`. arcadeaday.com and www are proxied CNAMEs to `onemoretry-games.pages.dev`. The old pages.dev host still serves the site too, so share only arcadeaday.com links.
+- Live: `https://arcadeaday.com/<slug>/`. `games/games.json` is the source of truth. `node tools/build-site.mjs` generates the hub (`/`), 404, sitemap, robots and each game page's `<!-- build:head -->` / `<!-- build:body -->` blocks from it. Never hand-edit generated parts. The Cloudflare Pages project is still named `onemoretry-games`. arcadeaday.com and www are proxied CNAMEs to `onemoretry-games.pages.dev`. The old pages.dev host still serves the site too, so share only arcadeaday.com links.
 - Brand: **Arcade a Day**, "a new free game every day." Each game is "Day N" in order of release. Shipped games are listed in `games/games.json`. Never repeat a core mechanic.
 - Reference implementation: `games/kiss-the-edge/` (canvas + procedural Web Audio, record mode, og mode). Copy its patterns, not its game.
 
@@ -22,8 +24,9 @@ Write 3 concepts. Score each 1–5 on:
 5. **Progression and escalation**: speed, intensity or music builds up, so you want one more run.
 6. **Shareable twist**: something people comment on ("wait, the music changes?!").
 7. **Session length**: the first death comes in 10–40 s and retry is instant.
+8. **Search demand**: there's a 2–4 word phrase people already type into Google that this game honestly is ("frog tongue game online", "drift game online"). Check with `node tools/keywords.mjs "<seed>" ...`: 5 = DataForSEO volume ≥ 1k/mo or a full autocomplete list, 1 = no completions at all. Prefer phrases with low difficulty: the site is new and can't win "free online games" yet.
 
-Only build a concept that scores ≥ 28/35. Otherwise ideate again.
+Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality still comes first: never pick a weaker game just because its keyword is bigger.
 
 ## 3. Build (games/<slug>/)
 - Plain HTML5 Canvas 2D with ES modules. No build step, no external libraries. Fonts from Google Fonts only.
@@ -39,7 +42,11 @@ Only build a concept that scores ≥ 28/35. Otherwise ideate again.
   - Web Share
   - vibration
   - a "more games →" link to `../`
-- OG/meta tags and canonical link pointing at `https://arcadeaday.com/<slug>/`. The in-game share URL and the record-mode end card use `arcadeaday.com/<slug>`.
+- Page shell: copy `games/kiss-the-edge/index.html` and keep its rules, which the build lints:
+  - `<!-- build:head --><!-- /build:head -->` right after the viewport meta, and `<!-- build:body --><!-- /build:body -->` right before the game script. Don't write title, description, canonical, og or twitter tags yourself. The build fills them from games.json, plus `/site.css`, JSON-LD and the `.back` links ("how to play" / "more games").
+  - `html, body` must not set `overflow: hidden` or `height: 100%`, because the info sheet scrolls one screen below the game. Put `touch-action: none` on the canvas, not on body. Keep `#garage { touch-action: none; } #garage .panel { touch-action: pan-y; overscroll-behavior: contain; }` and the hidden-scrollbar rule.
+  - The `keydown` handler starts with `if (scrollY > 40) return;`, so keys don't play the game while someone is reading the sheet.
+- The in-game share URL and the record-mode end card use `arcadeaday.com/<slug>`.
 - **Record-mode contract** (`?record=1`), needed by `tools/record.mjs`:
   - Render a fixed 1080×1920 canvas.
   - Use a fixed 1/60 s timestep, driven only by `window.__rec.step(n)`. It returns `{t, mode, score, dead, corners, streak}`, where `mode` becomes `'over'` at the end.
@@ -66,14 +73,27 @@ Only build a concept that scores ≥ 28/35. Otherwise ideate again.
 - Keep the camera from letting the hero climb under the score HUD, especially in record mode, where the HUD sits lower.
 - Bonus moves that end in a death (SKIM etc.) should only pay out once you survive them. A "+2" on the death frame feels broken.
 
-## 5. Ship
-1. Add the game to `games/games.json` (slug, title, tagline, date YYYY-MM-DD, accent) and to the README table.
-2. Run `node tools/og.mjs <slug>`, then look at `games/<slug>/og.jpg`.
+## 5. SEO page (games.json)
+Copy an existing entry and fill every field. The build refuses missing ones.
+- `slug`, `title`, `tagline`, `date` (YYYY-MM-DD, IST), `accent`, `icon` (one emoji), `store` (the game's localStorage prefix, e.g. `ffl_`, so the hub can show "your best"), `shop` (name, item noun, `[NAME, price]` list straight from game.js).
+- `share.title` / `share.description`: the punchy social copy for og tags.
+- `seo.keyword`: the primary phrase from the ideation check. Pick the most specific one with real demand. The slug and game title stay brandable; the keyword goes in:
+  - `seo.title`: ≤ 60 chars, pattern `<Title>: <Keyword-ish Phrase> · Play Free Online`.
+  - `seo.description`: 110–160 chars. Say what you do in the game, include the keyword, and end with "no download" or "works on phone".
+  - `seo.h1`: `<Title>: the <keyword phrase>` or similar.
+- `seo.intro` (2 paragraphs), `howTo` (5–6 steps with real point values), `controls`, `tips` (5–6, specific to this game), `faq` (4–5 real questions a player would google), `genre`, `imageAlt` (describe the og image).
+- Every fact must match game.js: point values, prices, names, controls. Read the code, don't guess. Write for players, not robots: no keyword stuffing, and the keyword appears naturally 2–4 times.
+- Run `node tools/build-site.mjs`. It must print no PROBLEMS. Then open `/<slug>/#how` at 375×812 and 1440×900 and check the sheet looks right, "back to the game" works, and a swipe on the game doesn't scroll the page.
+
+## 6. Ship
+1. Add the game to the README table.
+2. Run `node tools/og.mjs <slug>` and look at `games/<slug>/og.jpg` (it's also the tile art on the hub). Then run `node tools/build-site.mjs` and `node tools/og.mjs hub` so the hub and its share image include the new game.
 3. Commit (message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), then `git push`.
 4. Deploy with `npx wrangler pages deploy games --project-name onemoretry-games --branch main --commit-dirty=true`. Never pass `--force`.
-5. Run `curl` against the live URLs. Every file must return 200.
+5. Run `curl` against the live URLs. Every file must return 200. `/sitemap.xml` must list the new game, and a junk URL must return 404.
+6. Run `node tools/indexnow.mjs` to ping Bing and co. Google picks the page up from the sitemap, which is registered in Search Console.
 
-## 6. Video
+## 7. Video
 - Run `node tools/record.mjs <slug> --secs 40 --out videos/<date>-<slug>.mp4 --query "seed=..&crash=..&hook=..|..&cap2=.."`.
 - Target 20–30 s:
   - hook in the first second
@@ -88,9 +108,10 @@ Only build a concept that scores ≥ 28/35. Otherwise ideate again.
   - an X post
   - a pinned-comment idea
 
-## 7. Report
+## 8. Report
 The final message must include:
 - the live URL
 - the video path
 - the caption
-- a 3-line summary of the game and the twist.
+- a 3-line summary of the game and the twist
+- the primary keyword and the SEO title.

@@ -1,0 +1,166 @@
+/* Arcade a Day: shared styles for the hub, 404 and the info sheet under each game.
+   Generated pages: tools/build-site.mjs. Game canvases keep their own inline styles. */
+:root {
+  --ink: #1d1a3a;
+  --dim: #625e86;
+  --line: rgba(29, 26, 58, 0.09);
+  --card: #fff;
+  --pink: #ff3e8a;
+  --sun: #ffd23f;
+  --sky: #3ec5ff;
+  --bg: #f1efff;
+  --paper: radial-gradient(900px 520px at 0% -8%, #ffe0f0 0, transparent 60%), radial-gradient(900px 560px at 100% 0%, #d6f2ff 0, transparent 58%), #f1efff;
+  --shadow: 0 1px 0 rgba(29, 26, 58, 0.05), 0 12px 32px -14px rgba(64, 40, 150, 0.38);
+  --display: "Lilita One", system-ui, sans-serif;
+}
+
+/* ------------------------------------------------------------ page chrome */
+body.site {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+.site *, .sheet * { box-sizing: border-box; }
+:where(.site, .sheet) a { color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+
+.top { position: sticky; top: 0; z-index: 10; background: rgba(241, 239, 255, 0.82); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 60px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 23px/1 var(--display); letter-spacing: 0.3px; white-space: nowrap; }
+.logo i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(140deg, var(--pink), #9b5bff); font-style: normal; font-size: 21px; box-shadow: 0 4px 0 #b3236a, 0 8px 18px -6px rgba(255, 62, 138, 0.7); transform: rotate(-6deg); }
+.logo b { color: var(--pink); font-weight: inherit; }
+.drop { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--ink); color: #fff; font-weight: 800; font-size: 13px; white-space: nowrap; text-decoration: none; }
+.drop .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 0 0 rgba(255, 210, 63, 0.7); animation: ping 1.8s infinite; }
+.drop time { font-variant-numeric: tabular-nums; color: var(--sun); }
+@keyframes ping { 70% { box-shadow: 0 0 0 9px rgba(255, 210, 63, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 210, 63, 0); } }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 15px 28px; border-radius: 99px; border: 0; background: var(--pink); color: #fff; font: 22px/1 var(--display); letter-spacing: 0.5px; text-decoration: none; white-space: nowrap; cursor: pointer; box-shadow: 0 5px 0 #c21f63, 0 14px 26px -10px rgba(255, 62, 138, 0.8); transition: transform 0.12s, box-shadow 0.12s; }
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #c21f63, 0 8px 16px -10px rgba(255, 62, 138, 0.8); }
+.btn.ghost { background: #fff; color: var(--ink); box-shadow: 0 4px 0 #d7d3f0; font-size: 18px; padding: 13px 22px; }
+.btn svg { width: 0.9em; height: 0.9em; }
+
+.pill { display: inline-block; padding: 5px 11px; border-radius: 99px; font: 13px/1.2 var(--display); letter-spacing: 0.6px; }
+.pill.new { background: var(--sun); color: var(--ink); box-shadow: 0 3px 0 #d9a800; }
+.pill.day { background: var(--ink); color: #fff; }
+.pill.soft { background: color-mix(in srgb, var(--accent, var(--pink)) 16%, #fff); color: var(--ink); font: 700 13px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+
+/* ------------------------------------------------------------ hub hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); margin: 22px 0 34px; border-radius: 28px; overflow: hidden; background: var(--card); box-shadow: var(--shadow); border: 3px solid #fff; }
+.hero .art { position: relative; display: block; background: #241046; }
+.hero .art img { display: block; width: 100%; height: 100%; aspect-ratio: 1200 / 630; object-fit: cover; transition: transform 0.4s; }
+.hero .art:hover img { transform: scale(1.03); }
+.hero .art .pill { position: absolute; top: 16px; right: 16px; }
+.hero .info { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 28px 30px; }
+.hero .kick { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--dim); font-weight: 800; font-size: 13px; letter-spacing: 0.4px; text-transform: uppercase; }
+.hero h1, .hero h2 { margin: 0; font: clamp(32px, 4.4vw, 50px)/1 var(--display); color: var(--ink); }
+.hero p { margin: 0; color: var(--dim); font-weight: 600; font-size: 17px; }
+.hero .best { font-weight: 800; color: var(--ink); font-size: 14px; }
+.hero .best:empty { display: none; }
+.hero .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ------------------------------------------------------------ tiles */
+.shelf { margin: 0 0 40px; }
+.shelf-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.shelf-h h2 { margin: 0; font: 28px/1.1 var(--display); }
+.shelf-h span { color: var(--dim); font-weight: 700; font-size: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; padding: 0; margin: 0; list-style: none; }
+.tile { position: relative; display: block; height: 100%; border-radius: 20px; overflow: hidden; background: var(--card); text-decoration: none; box-shadow: var(--shadow); border: 3px solid #fff; transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s; }
+a.tile:hover, a.tile:focus-visible { transform: translateY(-4px) rotate(-0.6deg); border-color: var(--accent, var(--pink)); box-shadow: 0 18px 34px -14px var(--accent, var(--pink)); outline: none; }
+.tile img, .tile .ph { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; background: #241046; }
+.tile .pill { position: absolute; top: 10px; right: 10px; }
+.tile .tb { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px 12px; }
+.tile h3 { margin: 0; font: 19px/1.1 var(--display); }
+.tile small { display: block; color: var(--dim); font-weight: 700; font-size: 12.5px; margin-top: 3px; }
+.tile .go { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent, var(--pink)); color: #1d1a3a; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18); }
+.tile .go svg { width: 14px; height: 14px; margin-left: 2px; }
+.tile.next { border: 3px dashed #c9c3ee; background: rgba(255, 255, 255, 0.55); box-shadow: none; }
+.tile.next .ph { display: grid; place-items: center; background: repeating-linear-gradient(-45deg, #ebe7ff 0 14px, #f5f3ff 14px 28px); color: #b4acdf; font: 64px/1 var(--display); }
+.tile.next time { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------ text blocks */
+.about { margin: 0 0 40px; padding: 30px; border-radius: 28px; background: var(--card); box-shadow: var(--shadow); }
+.about h2 { margin: 0 0 10px; font: 30px/1.1 var(--display); }
+.about h3 { margin: 0 0 4px; font-size: 16px; }
+.about p { margin: 0 0 12px; color: #3c3962; }
+.about .faq { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; margin-top: 18px; }
+.about .faq p { margin: 0; font-size: 15px; }
+.foot { padding: 6px 0 40px; color: var(--dim); font-size: 13px; font-weight: 700; text-align: center; }
+.foot a { text-decoration: none; }
+
+/* 404 */
+.lost { text-align: center; padding: 48px 0 34px; }
+.lost b { display: block; font: clamp(80px, 20vw, 150px)/0.9 var(--display); color: var(--pink); text-shadow: 0 7px 0 #c21f63; transform: rotate(-4deg); }
+.lost h1 { margin: 22px 0 6px; font: 30px/1.1 var(--display); }
+.lost p { margin: 0 0 22px; color: var(--dim); font-weight: 600; }
+
+/* ------------------------------------------------------------ game pages */
+/* small links over the game canvas (hidden by game.js in og / record modes) */
+.back { position: fixed; left: 10px; bottom: 10px; z-index: 4; display: flex; gap: 6px; }
+.back a { padding: 7px 11px; border-radius: 99px; background: rgba(0, 0, 0, 0.32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.85); font: 700 12px/1 system-ui, sans-serif; text-decoration: none; }
+.back a:hover { background: rgba(0, 0, 0, 0.5); color: #fff; }
+
+/* the info sheet sits one screen below the game and slides over it */
+.sheet { position: relative; z-index: 7; margin-top: 100vh; margin-top: 100svh; min-height: 100vh; background: var(--paper); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-user-select: text; user-select: text; border-radius: 28px 28px 0 0; box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.45); }
+.sheet .top { border-radius: 28px 28px 0 0; }
+.crumbs { margin: 18px 0 0; padding: 0; list-style: none; display: flex; gap: 8px; color: var(--dim); font-weight: 700; font-size: 13px; }
+.crumbs li + li::before { content: "›"; margin-right: 8px; }
+.crumbs a { text-decoration: none; }
+.gamebar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; margin: 12px 0 26px; padding: 18px 20px; border-radius: 24px; background: var(--card); box-shadow: var(--shadow); }
+.gamebar .ic { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 20px; background: color-mix(in srgb, var(--accent) 22%, #fff); font-size: 38px; }
+.gamebar h1 { margin: 0; font: clamp(24px, 3.6vw, 36px)/1.08 var(--display); }
+.gamebar .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; padding-bottom: 30px; }
+.doc { padding: 6px 30px 26px; border-radius: 28px; background: var(--card); box-shadow: var(--shadow); }
+.doc h2 { margin: 26px 0 10px; font: 25px/1.15 var(--display); }
+.doc h3 { margin: 18px 0 4px; font-size: 16.5px; }
+.doc p, .doc li { color: #34315a; }
+.doc .lead { font-size: 18px; color: var(--ink); }
+.doc ol { padding-left: 0; list-style: none; counter-reset: s; }
+.doc ol li { position: relative; counter-increment: s; padding: 2px 0 10px 44px; }
+.doc ol li::before { content: counter(s); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: var(--accent); color: var(--ink); font: 17px/1 var(--display); }
+.doc ul { padding-left: 20px; }
+.doc ul li { margin-bottom: 6px; }
+.doc ul li::marker { color: var(--accent); }
+.doc table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.doc th, .doc td { vertical-align: top; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+.doc th { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--dim); }
+.doc td:first-child { font-weight: 800; white-space: nowrap; }
+.doc .replay { margin: 28px 0 6px; text-align: center; }
+.side { position: sticky; top: 80px; }
+.side .tiles { grid-template-columns: 1fr; gap: 14px; }
+.side .shelf-h h2 { font-size: 22px; }
+
+/* ------------------------------------------------------------ small screens */
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; margin-top: 14px; }
+  .hero .info { padding: 18px 18px 22px; gap: 10px; }
+  .hero .cta .btn { flex: 1; }
+  .hero .cta .btn.ghost { flex: 0 0 auto; font-size: 16px; padding: 13px 16px; }
+  .cols { grid-template-columns: 1fr; }
+  .side { position: static; }
+  .side .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+@media (max-width: 520px) {
+  .logo { font-size: 20px; gap: 8px; }
+  .logo i { width: 34px; height: 34px; font-size: 18px; }
+  .drop { padding: 7px 11px; font-size: 12px; }
+  .drop .lbl { display: none; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .tile { border-radius: 16px; border-width: 2px; }
+  .tile .tb { padding: 8px 10px 10px; }
+  .tile h3 { font-size: 16px; }
+  .tile .go { display: none; }
+  .about { padding: 22px 18px; border-radius: 22px; }
+  .gamebar { grid-template-columns: auto 1fr; align-items: start; padding: 14px; gap: 14px; }
+  .gamebar .ic { width: 54px; height: 54px; font-size: 30px; border-radius: 16px; }
+  .gamebar .btn { grid-column: 1 / -1; }
+  .doc { padding: 4px 18px 20px; border-radius: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drop .dot { animation: none; }
+  .tile, .btn, .hero .art img { transition: none; }
+}

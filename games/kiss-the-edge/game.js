@@ -1429,6 +1429,7 @@ if (!REC) {
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
   window.addEventListener('keydown', e => {
+    if (scrollY > 40) return; // reading the info sheet below the game
     if (e.repeat) return;
     if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'Enter') {
       e.preventDefault();
