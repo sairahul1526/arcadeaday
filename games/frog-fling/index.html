@@ -139,6 +139,10 @@
 </div>
 <script>
 (() => {
+  // Space belongs to the games, so it never scrolls a page. Form fields and buttons still get it.
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
+  });
   const LATEST = "2026-10-07", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());

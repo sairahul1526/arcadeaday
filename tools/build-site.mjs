@@ -51,9 +51,13 @@ function tile(g, { badge = false, lazy = true } = {}) {
 }
 const nextTile = `<li><div class="tile next" id="next"><div class="ph" aria-hidden="true">?</div><div class="tb"><div><h3>Day ${latest.day + 1}</h3><small>drops in <time data-next>soon</time></small></div></div></div></li>`;
 
-// Shared client script: countdown to the next drop, "NEW TODAY" badge, best scores from each game's localStorage.
+// Shared client script: no Space scrolling, countdown to the next drop, "NEW TODAY" badge, best scores from each game's localStorage.
 const clientJs = `<script>
 (() => {
+  // Space belongs to the games, so it never scrolls a page. Form fields and buttons still get it.
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
+  });
   const LATEST = ${JSON.stringify(latest.date)}, H = ${DROP_UTC_HOUR};
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
