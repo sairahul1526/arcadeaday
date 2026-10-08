@@ -72,6 +72,9 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - Scale the world by height on wide screens (e.g. `min(SW/460, SH/720)`). Otherwise the hero is tiny on desktop.
 - Keep the camera from letting the hero climb under the score HUD, especially in record mode, where the HUD sits lower.
 - Bonus moves that end in a death (SKIM etc.) should only pay out once you survive them. A "+2" on the death frame feels broken.
+- For timing games, give the QA bot the game's own timing (phase, period, amplitude via `__qa()`) and add Gaussian timing noise (σ 25/50/80 ms = good/average/casual player). Extrapolating velocity from sampled frames is too noisy at headless 30 fps. Target: casual reaches the first zone change, good players go 2–3× further.
+- Attract-mode bots must not call `navigator.vibrate` (or any player-only side effect). Gate those on `!run.bot`.
+- itch.io shows a Cloudflare challenge in the browser pane. Skip it (never solve the challenge) and scout from Poki/CrazyGames lists instead.
 
 ## 5. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.

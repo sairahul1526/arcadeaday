@@ -237,5 +237,125 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "cat-stack",
+    "title": "Cat Stack",
+    "tagline": "Drop sleepy cats from a swinging claw. Stack them to the moon. Don't wake the tower.",
+    "date": "2026-10-08",
+    "accent": "#ffb347",
+    "icon": "🐱",
+    "store": "cst_",
+    "shop": {
+      "name": "Cat Café",
+      "item": "Litter",
+      "items": [
+        [
+          "STREET",
+          0
+        ],
+        [
+          "TUXEDO",
+          60
+        ],
+        [
+          "SIAMESE",
+          120
+        ],
+        [
+          "CALICO",
+          200
+        ],
+        [
+          "MIDNIGHT",
+          320
+        ],
+        [
+          "GHOST",
+          480
+        ],
+        [
+          "GOLDEN",
+          800
+        ],
+        [
+          "COSMIC",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Cat Stack — stack cats to the moon",
+      "description": "Drop sleepy cats from a swinging claw and stack them to the moon. Land it dead center for PURRFECT. Don't let it topple."
+    },
+    "seo": {
+      "keyword": "cat stacking game online",
+      "title": "Cat Stack: Cat Stacking Game · Play Free Online",
+      "description": "Play Cat Stack, a free cat stacking game online. Drop sleepy cats from a swinging claw, land them dead center and build a tower to the moon. No download.",
+      "h1": "Cat Stack: the cat stacking game",
+      "imageAlt": "Cat Stack: a tower of sleeping cats under the moon, with a cat dangling from a claw above it",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Stacking",
+        "One-button"
+      ],
+      "intro": [
+        "Cat Stack is a free one-tap cat stacking game. A sleepy cat swings from a claw above your tower. Tap to drop it, land it on the cat below, and keep building toward the moon. Play it right here in your browser on a phone or a computer.",
+        "The tower has real balance. Land off-center a few times on the same side and the whole thing starts to lean, the cats wake up in a panic, and one more sloppy drop sends everyone tumbling. Land dead center and the tower stays straight, the cats purr, and every PURRFECT in a row meows one note higher."
+      ],
+      "howTo": [
+        "Tap to start. A cat dangles from a claw that swings left and right above your tower.",
+        "Tap anywhere to drop the cat. It falls straight down onto the top of the tower.",
+        "Land it dead center for PERFECT (+2 and a coin). From the third PERFECT in a row each one is a PURRFECT worth +3.",
+        "Any other landing on the tower scores +1, but it shifts the tower's weight to that side.",
+        "Miss the tower completely and you lose one of your 3 paws. Lose all 3 and the run is over.",
+        "If the cats above any point lean too far past the cat below them, the tower topples and the run ends. Tap anywhere to retry instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Tap the screen to drop the cat"
+        ],
+        [
+          "Computer",
+          "Press Space, ↓ or Enter (or click) to drop the cat"
+        ],
+        [
+          "Retry",
+          "Tap or click anywhere after the tower falls"
+        ]
+      ],
+      "tips": [
+        "Watch the rhythm of the swing and tap a moment before the cat passes over the tower. The cat falls straight down.",
+        "When the screen flashes red and the cats look scared, the tower is leaning. Drop the next cat a little on the other side to pull the weight back.",
+        "The claw swings wider and faster the taller your tower gets, so PERFECT streaks early on buy you a straight tower for later.",
+        "Chonky cats are wide and heavy. Kittens are small and harder to land on.",
+        "Every run pays one coin per PERFECT plus one per 10 points. Spend them in the CAT CAFÉ on 8 litters, from STREET to COSMIC.",
+        "Every 10 cats the sky changes: ROOFTOPS, CHIMNEY SMOKE, CLOUD NINE, BAT COUNTRY, THE MOON and DEEP SPACE."
+      ],
+      "faq": [
+        [
+          "Is Cat Stack free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Cat Stack on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with the keyboard or mouse."
+        ],
+        [
+          "Why did my tower fall over?",
+          "Too much weight ended up on one side. Each off-center cat shifts the balance, and when the cats above any point hang past the edge of the cat below, the tower topples. Landing PERFECTs keeps it straight."
+        ],
+        [
+          "What's the difference between PERFECT and PURRFECT?",
+          "A PERFECT is a dead-center landing worth +2. Land three or more in a row and each one becomes a PURRFECT worth +3, with a rising meow."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and cat litters are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]
