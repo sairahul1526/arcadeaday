@@ -75,6 +75,11 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - For timing games, give the QA bot the game's own timing (phase, period, amplitude via `__qa()`) and add Gaussian timing noise (σ 25/50/80 ms = good/average/casual player). Extrapolating velocity from sampled frames is too noisy at headless 30 fps. Target: casual reaches the first zone change, good players go 2–3× further.
 - Attract-mode bots must not call `navigator.vibrate` (or any player-only side effect). Gate those on `!run.bot`.
 - itch.io shows a Cloudflare challenge in the browser pane. Skip it (never solve the challenge) and scout from Poki/CrazyGames lists instead.
+- QA bots must fire taps on **game time**, not on wall-clock `setTimeout`. Under headless load, the `dt` cap (0.05) makes game time run slower than real time, so wall-clock bots tap early and report fake deaths. Check `__qa().t >= aim` inside a rAF loop.
+- If the QA page server is hand-rolled, serve `.css` as `text/css`. Otherwise `/site.css` is rejected and the info sheet looks broken (it isn't).
+- Waves or moving ground: paint everything behind the water (hills, sky) all the way to the bottom of the screen. Otherwise unpainted canvas shows through as black slabs in the troughs. OG renders catch this.
+- When a number caption sits next to a live HUD count (e.g. "1 more to the record"), the video `cap2` must agree with the HUD on every frame it shows. Use a vague cap2 ("SO close…") if it appears several skips before the crash.
+- A real-world record (88 skips) makes a great built-in target: a progress bar with a WR flag on the HUD and the game-over card ("1 skip short of the world record"), and the video ends one short.
 
 ## 5. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.

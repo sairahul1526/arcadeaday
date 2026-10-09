@@ -357,5 +357,125 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "stone-skip",
+    "title": "Stone Skip",
+    "tagline": "Tap the moment the stone kisses the water. Chain PERFECT skips and chase the 88-skip world record.",
+    "date": "2026-10-09",
+    "accent": "#3ec7ff",
+    "icon": "🪨",
+    "store": "ssk_",
+    "shop": {
+      "name": "Rock Shop",
+      "item": "Stone",
+      "items": [
+        [
+          "PEBBLE",
+          0
+        ],
+        [
+          "SLATE",
+          60
+        ],
+        [
+          "JADE",
+          120
+        ],
+        [
+          "ROSE QUARTZ",
+          200
+        ],
+        [
+          "OBSIDIAN",
+          320
+        ],
+        [
+          "LAVA",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "COMET",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Stone Skip: can you beat the 88-skip world record?",
+      "description": "A one-tap stone skipping game. Tap the instant the stone touches the water, chain PERFECT skips and chase the real world record of 88."
+    },
+    "seo": {
+      "keyword": "stone skipping game online",
+      "title": "Stone Skip: Stone Skipping Game · Play Free Online",
+      "description": "Play Stone Skip, a free stone skipping game online. Tap the moment the stone touches the water, chain PERFECT skips and chase the 88-skip world record.",
+      "h1": "Stone Skip: the stone skipping game",
+      "imageAlt": "Stone Skip: a flat stone flying over a golden-hour lake, leaving a trail of ripple rings",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Timing",
+        "One-button"
+      ],
+      "intro": [
+        "Stone Skip is a free one-tap stone skipping game. You throw a flat stone across a lake and tap the instant it touches the water to make it bounce again. Every tap is one more skip. Play it right here in your browser on a phone or a computer.",
+        "Your target is the real world record: 88 skips in a single throw. A shrinking ring shows exactly where and when the stone will land. Tap as it closes for a PERFECT and the stone flies high and long, and each PERFECT in a row chimes one note higher. Sloppy taps drain momentum, the hops get short and frantic, and the lake keeps changing, from a calm mill pond to a stormy sea."
+      ],
+      "howTo": [
+        "Tap to throw. The stone flies off the dock toward the water.",
+        "Watch the ring on the water. It shrinks and closes the instant the stone touches down.",
+        "Tap as the ring closes. A tap right on time is a PERFECT, a little off is GREAT or OK. Every good tap is one skip.",
+        "PERFECT skips refill the MOMENTUM bar and keep the hops high. GREAT refills a little, OK doesn't, and every skip drains some.",
+        "Tap too early while the stone is coming down, or don't tap at all, and it sinks with a plunk. If momentum runs out, it sinks too.",
+        "Tap anywhere on the game-over card to throw again instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Tap the screen when the stone touches the water"
+        ],
+        [
+          "Computer",
+          "Press Space, Enter or ↑ (or click) to skip"
+        ],
+        [
+          "Retry",
+          "Tap or click anywhere after the stone sinks"
+        ]
+      ],
+      "tips": [
+        "Watch the ring, not the stone. It turns gold during the PERFECT window.",
+        "Taps while the stone is still rising are ignored, so you can't be too early on the way up. Only an early tap on the way down sinks it.",
+        "The further you get, the shorter and faster the hops and the tighter the timing. Bank PERFECTs early to keep momentum high for later.",
+        "When the MOMENTUM bar blinks LOW, only PERFECT skips will save the run.",
+        "Every 15 skips the water changes: MILL POND, RIVER BEND, GOLDEN HOUR, MOONLIT BAY, STORM SEA, AURORA FJORD and BEYOND. Bigger waves move the landing spot, so trust the ring.",
+        "Each run pays the gems you skip through, plus one per PERFECT and one per 5 skips. Spend them in the ROCK SHOP on 8 stones, from PEBBLE to COMET."
+      ],
+      "faq": [
+        [
+          "Is Stone Skip free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Stone Skip on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with the keyboard or mouse."
+        ],
+        [
+          "What is the stone skipping world record?",
+          "The Guinness World Record is 88 skips, set by Kurt Steiner in Pennsylvania in 2013. Stone Skip uses it as your target. Pass 88 and you get the WORLD RECORD fanfare."
+        ],
+        [
+          "Why did my stone sink?",
+          "Either you tapped too early as it came down, you tapped too late (or not at all) after it touched the water, or the MOMENTUM bar ran out. The game-over card tells you which."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, gems and stones are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

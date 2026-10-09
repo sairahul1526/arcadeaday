@@ -9,6 +9,7 @@ Tiny, addictive browser games. A new one every day. Free, no download, no sign-u
 | **Kiss the Edge**: drift to the beat. The closer you cut it, the harder the music hits. | 2026-10-06 | [play](https://arcadeaday.com/kiss-the-edge/) |
 | **Frog Fling**: lick a firefly, swing, fling. Every anchor is a snack. | 2026-10-07 | [play](https://arcadeaday.com/frog-fling/) |
 | **Cat Stack**: drop sleepy cats from a swinging claw. Stack them to the moon. | 2026-10-08 | [play](https://arcadeaday.com/cat-stack/) |
+| **Stone Skip**: tap the moment the stone touches the water. Chase the 88-skip world record. | 2026-10-09 | [play](https://arcadeaday.com/stone-skip/) |
 
 ## Layout
 
