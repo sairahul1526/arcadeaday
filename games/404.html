@@ -13,12 +13,16 @@
 <link rel="stylesheet" href="/site.css">
 </head>
 <body class="site">
-<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 5 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
+<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 6 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
 <main class="wrap">
-  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/stone-skip/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY STONE SKIP</a></div>
+  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/fifty-fifty/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY FIFTY FIFTY</a></div>
   <section class="shelf"><div class="shelf-h"><h2>All games</h2></div><ul class="tiles">
+<li><a class="tile" href="/fifty-fifty/" style="--accent:#ff4d5e">
+  <img src="/fifty-fifty/og.jpg" alt="Fifty Fifty: a watermelon sliced perfectly in half on a wooden board, each half labelled 50%" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <div class="tb"><div><h3>Fifty Fifty</h3><small data-best="ffy_">Day 5 · Oct 10</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
 <li><a class="tile" href="/stone-skip/" style="--accent:#3ec7ff">
-  <img src="/stone-skip/og.jpg" alt="Stone Skip: a flat stone flying over a golden-hour lake, leaving a trail of ripple rings" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <img src="/stone-skip/og.jpg" alt="Stone Skip: a flat stone flying over a golden-hour lake, leaving a trail of ripple rings" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Stone Skip</h3><small data-best="ssk_">Day 4 · Oct 9</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
 </a></li>
 <li><a class="tile" href="/cat-stack/" style="--accent:#ffb347">
@@ -42,7 +46,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
   });
-  const LATEST = "2026-10-09", H = 9;
+  const LATEST = "2026-10-10", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
   document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });

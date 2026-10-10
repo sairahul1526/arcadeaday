@@ -477,5 +477,125 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "fifty-fifty",
+    "title": "Fifty Fifty",
+    "tagline": "Swipe to slice every fruit exactly in half. The game tells you the split, and 50 | 50 is the jackpot.",
+    "date": "2026-10-10",
+    "accent": "#ff4d5e",
+    "icon": "🍉",
+    "store": "ffy_",
+    "shop": {
+      "name": "Blades",
+      "item": "Blade",
+      "items": [
+        [
+          "CLASSIC",
+          0
+        ],
+        [
+          "MINT",
+          60
+        ],
+        [
+          "FLAME",
+          120
+        ],
+        [
+          "ICE",
+          200
+        ],
+        [
+          "TOXIC",
+          320
+        ],
+        [
+          "SAKURA",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "RAINBOW",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Fifty Fifty: can you cut a fruit EXACTLY in half?",
+      "description": "A fruit slicing game that measures every cut. Swipe through the middle, watch both halves show their %, and chase a perfect 50 | 50."
+    },
+    "seo": {
+      "keyword": "fruit slicing game online",
+      "title": "Fifty Fifty: Fruit Slicing Game · Play Free Online",
+      "description": "Play Fifty Fifty, a free fruit slicing game online. Swipe to cut every fruit exactly in half, see the split on each piece and chase a perfect 50/50.",
+      "h1": "Fifty Fifty: the fruit slicing game where halves count",
+      "imageAlt": "Fifty Fifty: a watermelon sliced perfectly in half on a wooden board, each half labelled 50%",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Skill",
+        "Swipe"
+      ],
+      "intro": [
+        "Fifty Fifty is a free fruit slicing game you play by swiping. Fruit flies up onto a wooden cutting board and you slash through it with your finger or mouse. The twist: the game measures every cut. Each half flies off showing its share of the fruit, like 47% and 53%, so you always know exactly how close you came. Play it right here in your browser on a phone or a computer.",
+        "The closer you get to a true 50 | 50, the more points you score. Chain GOOD cuts or better to build a streak and multiply your points up to ×4, and every cut in a streak rings one note higher. Land a PERFECT 50 | 50 and time slows, gold confetti bursts and the music swells. Miss a fruit or hack off a lopsided sliver and you take a strike. Three strikes, or a single bomb, ends the run. Unlike a classic fruit cutting game, mashing doesn't work here: aim beats speed."
+      ],
+      "howTo": [
+        "Tap to start. Fruit is tossed up from the bottom of the screen.",
+        "Swipe straight through each fruit. Aim for the exact middle.",
+        "Each half shows its share of the fruit. 50 | 50 is a PERFECT, 48 to 49 is SO CLOSE, 45 to 47 is GREAT, 40 to 44 is GOOD and 25 to 39 is OK.",
+        "GOOD cuts or better build your streak. Every 5 in a row adds a points multiplier, up to ×4. An OK cut resets the streak.",
+        "A fruit that falls uncut, or a lopsided cut under 25%, is a strike. Three strikes ends the run, and so does slicing a bomb.",
+        "Tap anywhere on the game-over card to slice again instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Swipe your finger through the fruit"
+        ],
+        [
+          "Computer",
+          "Click and drag the mouse through the fruit"
+        ],
+        [
+          "Retry",
+          "Tap, click, or press Space or Enter after the run ends"
+        ]
+      ],
+      "tips": [
+        "Wait for the fruit to slow near the top of its arc. It is easiest to cut dead centre when it is barely moving.",
+        "Make short, straight swipes. A long slash can clip a second fruit and leave a lopsided strike.",
+        "Long fruit like lemons and watermelons still split 50 | 50 through their centre, at any angle.",
+        "Bombs glow red and hiss. Swipe around them, never through them.",
+        "Golden apples are worth double points and 5 bonus coins (◆).",
+        "Every 15 cuts the board changes: FARMERS MARKET, CITRUS GROVE, TROPICAL BEACH, SUNSET DOJO, NIGHT MARKET and MOONLIGHT. Each adds new fruit and throws them faster."
+      ],
+      "faq": [
+        [
+          "Is Fifty Fifty free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Fifty Fifty on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with a mouse."
+        ],
+        [
+          "How does the game measure the cut?",
+          "It works out the exact area of fruit on each side of your swipe and rounds it to a whole percent. Both halves show their number, so 50 | 50 means you cut it within a hair of the true middle."
+        ],
+        [
+          "Is this like Fruit Ninja?",
+          "It's a fruit slicing game too, but the goal is precision, not speed. Points come from how evenly you cut, so careful swipes beat frantic ones."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and blades are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

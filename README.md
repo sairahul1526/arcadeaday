@@ -10,6 +10,7 @@ Tiny, addictive browser games. A new one every day. Free, no download, no sign-u
 | **Frog Fling**: lick a firefly, swing, fling. Every anchor is a snack. | 2026-10-07 | [play](https://arcadeaday.com/frog-fling/) |
 | **Cat Stack**: drop sleepy cats from a swinging claw. Stack them to the moon. | 2026-10-08 | [play](https://arcadeaday.com/cat-stack/) |
 | **Stone Skip**: tap the moment the stone touches the water. Chase the 88-skip world record. | 2026-10-09 | [play](https://arcadeaday.com/stone-skip/) |
+| **Fifty Fifty**: swipe to cut every fruit exactly in half. Each piece shows its %, and 50 \| 50 is the jackpot. | 2026-10-10 | [play](https://arcadeaday.com/fifty-fifty/) |
 
 ## Layout
 

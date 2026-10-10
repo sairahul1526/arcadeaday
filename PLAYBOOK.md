@@ -80,6 +80,16 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - Waves or moving ground: paint everything behind the water (hills, sky) all the way to the bottom of the screen. Otherwise unpainted canvas shows through as black slabs in the troughs. OG renders catch this.
 - When a number caption sits next to a live HUD count (e.g. "1 more to the record"), the video `cap2` must agree with the HUD on every frame it shows. Use a vague cap2 ("SO close…") if it appears several skips before the crash.
 - A real-world record (88 skips) makes a great built-in target: a progress bar with a WR flag on the HUD and the game-over card ("1 skip short of the world record"), and the video ends one short.
+- CrazyGames `/t/trending` is a 404 now. Scout from `crazygames.com/hot` and `/new` instead.
+- Precision scoring with integer readouts (e.g. "50%") needs a small assist toward the target. Without one, the perfect window was ~0.4 px and hits were pure luck. Tune the assist with the human bot until a skilled bot lands ~15–20% perfects and a casual one lands a few.
+- Swipe bots: the first stroke sample must sit **outside** the target. If you advance the swipe before the first sample, the stroke starts inside the fruit and never registers as a cut.
+- One callout at a time:
+  - New pops fade the older ones, but only pops past ~0.15 s, so a combo pop pushed in the same frame doesn't kill the main one.
+  - When a target sits under the HUD, move its pop *below* it rather than clamping it onto the % labels.
+  - A big centre callout (PERFECT) carries its own points and yields (starts fading) on the next cut.
+- Juice splats: draw each as a single filled path with a few blobs. Many separate circles read as bubble clutter.
+- Record-mode crash: trigger the scripted fail toss at `cuts >= crashAt`, not `crashAt - 1`. Otherwise the bot clears the bait before the fail plan applies.
+- Put on-canvas hints like "tap anywhere to retry" just under the game-over card. At the screen bottom they sit behind the "how to play / more games" chips.
 
 ## 5. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.

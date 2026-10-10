@@ -125,6 +125,10 @@
       <aside class="side">
         <div class="shelf-h"><h2>More free games</h2><a href="/">see all</a></div>
         <ul class="tiles">
+<li><a class="tile" href="/fifty-fifty/" style="--accent:#ff4d5e">
+  <img src="/fifty-fifty/og.jpg" alt="Fifty Fifty: a watermelon sliced perfectly in half on a wooden board, each half labelled 50%" width="1200" height="630" loading="lazy" decoding="async">
+  <div class="tb"><div><h3>Fifty Fifty</h3><small data-best="ffy_">Day 5 · Oct 10</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
 <li><a class="tile" href="/stone-skip/" style="--accent:#3ec7ff">
   <img src="/stone-skip/og.jpg" alt="Stone Skip: a flat stone flying over a golden-hour lake, leaving a trail of ripple rings" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Stone Skip</h3><small data-best="ssk_">Day 4 · Oct 9</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
@@ -137,7 +141,7 @@
   <img src="/frog-fling/og.jpg" alt="Frog Fling: a frog swinging over a pond on its tongue from a firefly" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Frog Fling</h3><small data-best="ffl_">Day 2 · Oct 7</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
 </a></li>
-<li><div class="tile next" id="next"><div class="ph" aria-hidden="true">?</div><div class="tb"><div><h3>Day 5</h3><small>drops in <time data-next>soon</time></small></div></div></div></li>
+<li><div class="tile next" id="next"><div class="ph" aria-hidden="true">?</div><div class="tb"><div><h3>Day 6</h3><small>drops in <time data-next>soon</time></small></div></div></div></li>
         </ul>
       </aside>
     </div>
@@ -150,7 +154,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
   });
-  const LATEST = "2026-10-09", H = 9;
+  const LATEST = "2026-10-10", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
   document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });
