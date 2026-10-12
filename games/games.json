@@ -597,5 +597,127 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "dont-pop",
+    "title": "Don't Pop",
+    "tagline": "Hold to pump a balloon toward a pin. Let go as close as you dare, because one pump too many and it pops.",
+    "date": "2026-10-12",
+    "accent": "#ff3b5c",
+    "icon": "🎈",
+    "store": "dpp_",
+    "shop": {
+      "name": "Balloons",
+      "item": "Balloon",
+      "items": [
+        [
+          "CLASSIC",
+          0
+        ],
+        [
+          "SKY",
+          60
+        ],
+        [
+          "LIME",
+          120
+        ],
+        [
+          "GRAPE",
+          200
+        ],
+        [
+          "POLKA",
+          320
+        ],
+        [
+          "MELON",
+          480
+        ],
+        [
+          "DISCO",
+          800
+        ],
+        [
+          "RAINBOW",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Don't Pop: how close can you pump it without popping it?",
+      "description": "Hold to pump a nervous balloon toward a sewing pin and let go a hair before it touches. The game measures the gap in millimetres. One pump too many and it pops."
+    },
+    "seo": {
+      "keyword": "don't pop the balloon game",
+      "title": "Don't Pop the Balloon Game · Play Free Online",
+      "description": "Play Don't Pop, a free balloon game online. Hold to pump a balloon right up to a pin, let go a hair before it touches, and don't pop it.",
+      "h1": "Don't Pop: the balloon game where one pump too many ends it",
+      "imageAlt": "Don't Pop: a terrified red balloon pumped up to within 0.4 mm of a sewing pin",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Skill",
+        "One button"
+      ],
+      "intro": [
+        "Don't Pop is a free balloon game you play with one finger. A balloon with a face sits on a pump, and a sewing pin hangs just above it. Hold to pump it up, and let go to tie it off. The closer the balloon gets to the pin without touching it, the more points you score. The game measures the gap in millimetres, so every balloon ends with a number to beat. Play it right here in your browser on a phone or a computer.",
+        "Every pump stroke pushes the balloon closer, and as it nears the pin time slows down, the balloon starts to sweat and scream, and a heartbeat kicks in. Let go a hair away for a KISS, chain close calls to build a streak and bring in more of the music, and hit a 12 streak for PARTY mode with double points. One pump too many and it pops. Let go too early, before the dotted line, and it fizzles away. Either way the run is over, and a retry is one tap away."
+      ],
+      "howTo": [
+        "Tap to start. A balloon sits on the pump with a pin waiting nearby.",
+        "Hold your finger (or the mouse button, or Space) to pump. Each stroke makes the balloon bigger.",
+        "Pump it past the dotted line. A balloon that is let go before the line is too small to float, and the run ends.",
+        "Let go to tie it off before it touches the pin. Touch the pin and it pops, which also ends the run.",
+        "The gap decides your points: KISS (1.5 mm or less) is +5, PERFECT (5 mm or less) is +3, GREAT (12 mm or less) is +2 and anything wider is +1.",
+        "GREAT or better builds your streak and adds layers to the music. At a 12 streak PARTY mode doubles your points. A wider gap resets the streak.",
+        "Tap anywhere on the game-over card to pump again instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Press and hold anywhere to pump, lift your finger to tie it off"
+        ],
+        [
+          "Computer",
+          "Hold the mouse button or Space to pump, release to tie it off"
+        ],
+        [
+          "Retry",
+          "Tap, click, or press Space or Enter after the run ends"
+        ]
+      ],
+      "tips": [
+        "Pumping comes in strokes with a short pause between them. If the next stroke looks like too much, let go during the pause.",
+        "Time slows down when the balloon gets close to the pin. Use that moment to let go, not to squeeze in one more pump.",
+        "Watch the millimetre readout next to the pin. It turns red as the gap closes.",
+        "Pins can sit above, beside or at an angle to the balloon. Round and long balloons grow toward them at different speeds.",
+        "From balloon 10 a second pin can join, and from balloon 14 some pins sway back and forth.",
+        "Gold balloons pay 3 bonus coins (◆). Every 10 points also pays a coin at the end of the run.",
+        "Every 10 balloons you move somewhere new: PLAYGROUND, FUNFAIR, SUNSET, STARRY NIGHT and OUTER SPACE."
+      ],
+      "faq": [
+        [
+          "Is Don't Pop free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Don't Pop on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with a mouse or keyboard."
+        ],
+        [
+          "How is the gap measured?",
+          "The game measures the shortest distance from the tip of the pin to the skin of the balloon when you let go, and shows it in millimetres. A KISS is 1.5 mm or less."
+        ],
+        [
+          "Is this like the don't pop the balloon game show?",
+          "It shares the idea: pump a balloon as far as you dare without popping it. Here you can see exactly where the danger is, so it's about nerve and timing, not luck."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, closest shave, coins and balloons are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

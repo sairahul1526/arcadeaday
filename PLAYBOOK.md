@@ -90,6 +90,11 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - Juice splats: draw each as a single filled path with a few blobs. Many separate circles read as bubble clutter.
 - Record-mode crash: trigger the scripted fail toss at `cuts >= crashAt`, not `crashAt - 1`. Otherwise the bot clears the bait before the fail plan applies.
 - Put on-canvas hints like "tap anywhere to retry" just under the game-over card. At the screen bottom they sit behind the "how to play / more games" chips.
+- "Get as close as you dare" games (hold to grow, release before contact): set the slow-mo from a **target closing speed** in mm per real second (`ts = V / worldClosingSpeed`, V rising with level), not a fixed time scale. The gap closes several times faster than the radius grows when the target is far from the anchor, so a fixed slow-mo was unplayable (good bot died at balloon 0–6) and the next try was endless (casual bot averaged 25). Make the first 2–3 rounds gentler so nobody dies on the tutorial.
+- Long-surviving bots make QA runs crawl: cap a profile at ~50 rounds and run mobile and desktop QA in parallel in the background.
+- Wide screens: if the title sits over the play area, give landscape its own title layout (words on the left, camera shifted so the scene sits right).
+- Record-mode bots aiming for a tiny gap must predict the next frame's gap and release early, or they overshoot into a pop at 60 fps steps. Scan a few `seed`s with a quick headless loop and pick one where the crash target looks dramatic on screen.
+- Hide the HUD score while `cap2` is showing in record mode; they share the top band.
 
 ## 5. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.
