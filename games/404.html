@@ -13,12 +13,16 @@
 <link rel="stylesheet" href="/site.css">
 </head>
 <body class="site">
-<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 7 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
+<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 8 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
 <main class="wrap">
-  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/dont-pop/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY DON&#39;T POP</a></div>
+  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/cap-flip/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY CAP FLIP</a></div>
   <section class="shelf"><div class="shelf-h"><h2>All games</h2></div><ul class="tiles">
+<li><a class="tile" href="/cap-flip/" style="--accent:#2fb8ff">
+  <img src="/cap-flip/og.jpg" alt="Cap Flip: a water bottle spinning mid-flip between a desk and a stool in a purple bedroom" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <div class="tb"><div><h3>Cap Flip</h3><small data-best="cfl_">Day 7 · Oct 13</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
 <li><a class="tile" href="/dont-pop/" style="--accent:#ff3b5c">
-  <img src="/dont-pop/og.jpg" alt="Don&#39;t Pop: a terrified red balloon pumped up to within 0.4 mm of a sewing pin" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <img src="/dont-pop/og.jpg" alt="Don&#39;t Pop: a terrified red balloon pumped up to within 0.4 mm of a sewing pin" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Don&#39;t Pop</h3><small data-best="dpp_">Day 6 · Oct 12</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
 </a></li>
 <li><a class="tile" href="/fifty-fifty/" style="--accent:#ff4d5e">
@@ -50,7 +54,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
   });
-  const LATEST = "2026-10-12", H = 9;
+  const LATEST = "2026-10-13", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
   document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });

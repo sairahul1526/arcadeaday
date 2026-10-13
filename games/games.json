@@ -719,5 +719,128 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "cap-flip",
+    "title": "Cap Flip",
+    "tagline": "Hold to flip a water bottle from desk to shelf to fridge. Let go when it’s upright to land it, or flip it onto the cap for 5x.",
+    "date": "2026-10-13",
+    "accent": "#2fb8ff",
+    "icon": "🧴",
+    "store": "cfl_",
+    "shop": {
+      "name": "Bottles",
+      "item": "Bottle",
+      "items": [
+        [
+          "CLASSIC",
+          0
+        ],
+        [
+          "SODA",
+          60
+        ],
+        [
+          "MILK",
+          120
+        ],
+        [
+          "KETCHUP",
+          200
+        ],
+        [
+          "HONEY",
+          320
+        ],
+        [
+          "POTION",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "GALAXY",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Cap Flip: the bottle flip game where you can land it on the cap",
+      "description": "Hold to flip a water bottle across the room and let go when it’s upright to land it. Chain double flips, nail PERFECT landings and try to stick it on the cap."
+    },
+    "seo": {
+      "keyword": "bottle flip game online",
+      "title": "Cap Flip: Water Bottle Flip Game · Play Free Online",
+      "description": "Play Cap Flip, a free bottle flip game online. Hold to spin a water bottle across the room, let go to land it upright, and stick it on the cap for 5x.",
+      "h1": "Cap Flip: the water bottle flip game you can land on the cap",
+      "imageAlt": "Cap Flip: a water bottle spinning mid-flip between a desk and a stool in a purple bedroom",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Skill",
+        "One button"
+      ],
+      "intro": [
+        "Cap Flip is a free bottle flip game you play with one finger. A plastic water bottle stands on a desk, and the next piece of furniture waits a jump away. Press and hold to launch it and make it spin, then let go to stop spinning and land it standing up. Every landing moves you one step further across the room, and one bad landing knocks it over and spills the water. Play it right here in your browser on a phone or a computer.",
+        "Land it dead upright for a PERFECT and double points. Hold longer and the spin winds up faster, so on long jumps you can try for a double flip worth three times as much. Or go for the trick shot: let go when the bottle is upside down and stick it on its cap for 5 points. Chain landings to build a streak that adds layers to the music, and reach a 13 streak for HYPE mode with double points. The room changes every 12 landings, from a bedroom to a kitchen, a classroom and a rooftop at night."
+      ],
+      "howTo": [
+        "Tap to start. The bottle stands on a piece of furniture with the next one a jump away.",
+        "Press and hold (the screen, the mouse button, or Space) to launch the bottle. It spins for as long as you hold.",
+        "Let go when the bottle is close to upright. It stops spinning and the water inside helps pull it straight before it lands.",
+        "Land it upright to score: 1 point for a single flip, 3 for a double and 6 for a triple. A PERFECT landing (within 7 degrees of straight) doubles that.",
+        "A bottle that wobbles on its edge and stays up is a CLUTCH and earns 1 extra point. If it lands too far over, it tips off the furniture and the run ends.",
+        "Let go while it is upside down to try a cap landing. Sticking it on the cap scores 5 points for each flip, but the window is much narrower.",
+        "Landings in a row build your streak and the music. At a 13 streak HYPE mode doubles your points. A hop with no flip scores nothing and resets the streak.",
+        "Tap anywhere on the game-over card to flip again instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Press and hold anywhere to launch and spin, lift your finger to stop the spin"
+        ],
+        [
+          "Computer",
+          "Hold the mouse button, Space or the Up arrow to spin, release to stop"
+        ],
+        [
+          "Retry",
+          "Tap, click, or press Space or Enter after the run ends"
+        ]
+      ],
+      "tips": [
+        "You only need one flip per jump. Let go a little before the bottle is straight: the spin takes a moment to stop and the water pulls it upright.",
+        "Holding for longer than about 0.7 seconds makes the bottle spin faster. Great for double flips, risky for singles.",
+        "A yellow 2X? bubble over the next furniture means the jump is long enough for a double flip.",
+        "Near the cap the water helps much less, so cap landings need sharp timing. Try them when your streak is low and there is less to lose.",
+        "The bottle spins faster and the jumps get quicker the further you go.",
+        "PERFECT and CLUTCH landings pay 1 coin (◆), a cap landing pays 3, and every 10 points pays a coin at the end of the run. Spend them on new bottles like SODA, KETCHUP, POTION and GALAXY.",
+        "A flag marks how far you got on your best run."
+      ],
+      "faq": [
+        [
+          "Is Cap Flip free?",
+          "Yes. It’s free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Cap Flip on my phone?",
+          "Yes. It was made for phones held upright, and it also works on desktop with a mouse or keyboard."
+        ],
+        [
+          "How do you land a bottle flip in the game?",
+          "Hold to spin and let go a moment before the bottle is upright. It stops spinning quickly, and the water inside pulls it a little straighter before it touches down."
+        ],
+        [
+          "Can you really land it on the cap?",
+          "Yes. Let go while the bottle is upside down and it can land on its cap for 5 points per flip. The window is much narrower than an upright landing."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and bottles are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

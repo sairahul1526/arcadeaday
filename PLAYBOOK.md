@@ -95,6 +95,10 @@ Only build a concept that scores ≥ 32/40. Otherwise ideate again. Virality sti
 - Wide screens: if the title sits over the play area, give landscape its own title layout (words on the left, camera shifted so the scene sits right).
 - Record-mode bots aiming for a tiny gap must predict the next frame's gap and release early, or they overshoot into a pop at 60 fps steps. Scan a few `seed`s with a quick headless loop and pick one where the crash target looks dramatic on screen.
 - Hide the HUD score while `cap2` is showing in record mode; they share the top band.
+- Games where the object keeps moving after release (spin decays, settles): the QA bot must predict the outcome **if it let go now** (expose `__qaAhead(sec)` that simulates forward with hold=false). Assuming the state freezes at release made every bot look terrible.
+- A rare "jackpot" outcome (landing on the cap): use an asymmetric assist, a strong settle toward the normal result and a weaker one toward the jackpot. That makes it a skill shot, not a lottery. Target: good bot hits it every few landings, casual bot almost never.
+- Need double moves (two flips) without making singles twitchy: add a wind-up. Holding past ~0.7 s ramps the speed up, instead of raising the base speed.
+- In unattended runs the browser pane may be declined. Use Playwright screenshots from a scratchpad script (mobile 375×812 and desktop 1440×900); don't retry the pane.
 
 ## 5. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.
@@ -126,6 +130,8 @@ Copy an existing entry and fill every field. The build refuses missing ones.
   - end card with the URL
 - Make sure the end card loops nicely back into the start.
 - Review frames at 0.5 s, the climax, the fail and the end card. Re-record if anything is off.
+- If the game has a post-release assist, the scripted crash error must beat it. Check that `dead` actually flips in the `--snap` JSON before recording (Cap Flip: 37° was rescued into a CLUTCH, and 46° teeters and falls).
+- OG images: hand-place the hero (mid-action, between two props) rather than taking a sim frame, and hide decor that reads as clutter at thumbnail size.
 - Write `videos/<date>-<slug>.md`:
   - TikTok/Reels caption (hook + question + "link in bio"), 5–8 hashtags
   - an X post

@@ -125,6 +125,10 @@
       <aside class="side">
         <div class="shelf-h"><h2>More free games</h2><a href="/">see all</a></div>
         <ul class="tiles">
+<li><a class="tile" href="/cap-flip/" style="--accent:#2fb8ff">
+  <img src="/cap-flip/og.jpg" alt="Cap Flip: a water bottle spinning mid-flip between a desk and a stool in a purple bedroom" width="1200" height="630" loading="lazy" decoding="async">
+  <div class="tb"><div><h3>Cap Flip</h3><small data-best="cfl_">Day 7 · Oct 13</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
 <li><a class="tile" href="/dont-pop/" style="--accent:#ff3b5c">
   <img src="/dont-pop/og.jpg" alt="Don&#39;t Pop: a terrified red balloon pumped up to within 0.4 mm of a sewing pin" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Don&#39;t Pop</h3><small data-best="dpp_">Day 6 · Oct 12</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
@@ -145,7 +149,7 @@
   <img src="/frog-fling/og.jpg" alt="Frog Fling: a frog swinging over a pond on its tongue from a firefly" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Frog Fling</h3><small data-best="ffl_">Day 2 · Oct 7</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
 </a></li>
-<li><div class="tile next" id="next"><div class="ph" aria-hidden="true">?</div><div class="tb"><div><h3>Day 7</h3><small>drops in <time data-next>soon</time></small></div></div></div></li>
+<li><div class="tile next" id="next"><div class="ph" aria-hidden="true">?</div><div class="tb"><div><h3>Day 8</h3><small>drops in <time data-next>soon</time></small></div></div></div></li>
         </ul>
       </aside>
     </div>
@@ -158,7 +162,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
   });
-  const LATEST = "2026-10-12", H = 9;
+  const LATEST = "2026-10-13", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
   document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });
