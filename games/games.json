@@ -842,5 +842,128 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "bin-it",
+    "title": "Bin It",
+    "tagline": "Flick a crumpled paper ball into the office bin. Easy, until the fan turns on and the wind starts pushing it off course.",
+    "date": "2026-10-14",
+    "accent": "#ff8a3d",
+    "icon": "🗑️",
+    "store": "bni_",
+    "shop": {
+      "name": "Paper",
+      "item": "Paper",
+      "items": [
+        [
+          "PRINTER",
+          0
+        ],
+        [
+          "NOTEBOOK",
+          60
+        ],
+        [
+          "STICKY",
+          120
+        ],
+        [
+          "NEWSPAPER",
+          200
+        ],
+        [
+          "MAP",
+          320
+        ],
+        [
+          "CASH",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "COSMIC",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Bin It: the paper toss game where the wind hates you",
+      "description": "Flick a paper ball into the bin across the office. A fan blows it sideways, so read the wind, aim off and chain swishes until you're ON FIRE."
+    },
+    "seo": {
+      "keyword": "paper toss game online",
+      "title": "Bin It: Paper Toss Game · Play Free Online",
+      "description": "Play Bin It, a free paper toss game online. Flick a paper ball into the office bin, aim against the fan's wind and chain swishes to catch fire.",
+      "h1": "Bin It: the paper toss game where the wind hates you",
+      "imageAlt": "Bin It: a crumpled paper ball curving through the wind toward a wire bin in a cartoon office",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Skill",
+        "Sports"
+      ],
+      "intro": [
+        "Bin It is a free paper toss game you play with one flick. A crumpled paper ball sits in your hand and a wire bin waits across the office. Swipe up toward the bin to throw, and the ball arcs through the air and drops in. Every bin you make moves it to a new spot, usually further away, and the first miss ends the run. Play it right here in your browser on a phone or a computer.",
+        "The twist is the wind. A desk fan on one side of the room blows the paper sideways, and the panel at the top tells you how hard, from a gentle 0.60 to gales near 10. Aim off to let the wind carry the ball in. Clip the rim and the ball rolls around the edge in slow motion before it decides to drop in or fall out. Swish six in a row and you're ON FIRE for double points, and the room changes every 10 bins, from the office to a classroom, the boss's office, the night shift and the rooftop."
+      ],
+      "howTo": [
+        "Tap to start. The paper ball is at the bottom of the screen and the bin is across the room.",
+        "Swipe up from the ball toward the bin. The direction of your swipe sets where the ball goes; the distance is handled for you.",
+        "Check the WIND panel before you throw. The arrow shows which way the fan blows and the number shows how hard. Aim the other way to let it carry the ball in.",
+        "A ball that drops cleanly in is a SWISH for 2 points. Dead centre is a PERFECT for 3 points.",
+        "A ball that clips the rim rolls around it. If it falls in it's a RIM IN for 1 point but resets your streak; if it falls out the run is over.",
+        "Swishes in a row build your streak and add layers to the music. At 6 in a row you're ON FIRE and every bin is worth double.",
+        "After every bin the bin moves. Later it rides a robot vacuum that slides side to side, and some fans start blowing in gusts.",
+        "Tap anywhere on the game-over card to throw again instantly."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Swipe up from the paper ball toward the bin"
+        ],
+        [
+          "Computer",
+          "Drag the mouse upward toward the bin, or aim with the Left and Right arrows (or A and D) and press Space, Up or Enter to throw"
+        ],
+        [
+          "Retry",
+          "Tap, click, or press Space or Enter after the run ends"
+        ]
+      ],
+      "tips": [
+        "No wind? Swipe straight at the bin. Your swipe line points right where the ball will land.",
+        "The wind pushes harder the further the bin is, so a far bin with a big wind number needs a big aim-off.",
+        "Watch the white streaks crossing the room: they show the wind direction too, and the fan that's spinning is the one blowing.",
+        "On a robot vacuum, throw where the bin will be when the ball arrives, not where it is now.",
+        "A gold sparkly paper ball is a bonus: bin it for 3 extra coins.",
+        "PERFECT bins pay 1 coin (◆), and every 5 points pays a coin at the end of the run. Spend them on new paper like STICKY notes, NEWSPAPER, CASH and COSMIC.",
+        "A RIM IN keeps you alive but resets your streak, so aim for the middle when you're close to ON FIRE."
+      ],
+      "faq": [
+        [
+          "Is Bin It free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play Bin It on my phone?",
+          "Yes. It was made for phones held upright and a quick swipe, and it also works on desktop with a mouse or keyboard."
+        ],
+        [
+          "How do you deal with the wind in a paper toss game?",
+          "Aim against it. If the wind arrow points right, swipe a little to the left of the bin and let the wind carry the ball back in. The bigger the number and the further the bin, the more you aim off."
+        ],
+        [
+          "What happens when the ball hits the rim?",
+          "It rolls around the rim in slow motion. If it drops in you score a RIM IN and stay alive, but your swish streak resets. If it rolls off the outside, the run ends."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, coins and paper styles are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

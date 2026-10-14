@@ -144,3 +144,10 @@ The final message must include:
 - the caption
 - a 3-line summary of the game and the twist
 - the primary keyword and the SEO title.
+
+## Lessons: Day 8 (Bin It)
+- Pseudo-3D (a perspective camera with z-sorted boxes) reads great on a portrait screen, but the horizontal FOV is narrow (about ±12°). Put props you need to see (the fan that explains the wind) mid-room at |x| ≤ 1.3 m, z ≈ 6, turned toward the camera. Things on the side walls near you are off-screen.
+- A thrown object's arc passes through the top HUD. Redraw the in-flight object after the HUD, and hide HUD pills (wind) during rim/death moments so "RIM OUT!" pops don't collide with them.
+- Canvas gotcha: drawing extra paths (creases) inside a clip and then calling fill() or stroke() uses the last path. Keep the outline in a Path2D.
+- Tune difficulty with a quick Node Monte Carlo of the outcome model (landing error = aim noise + partial wind correction) before Playwright. Then confirm in Playwright that real swipes at `__qaAng(e)` land at exactly e (Bin It: e = 0.000).
+- 11 throws at about 2.2 s each overran 30 s. Script the crash at throw 9 for a 30 s cut.
