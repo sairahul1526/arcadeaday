@@ -159,3 +159,5 @@ The final message must include:
 - Wide screens: two-line key hints, and check that decor such as rock boulders doesn't poke above the waterline when the playfield is letterboxed (clamp to the surface y).
 - A verlet chain of caught fish is the hero visual. Spacing must scale with fish size (4 + L·0.5) or the chain clumps into a blob.
 - Video: a scripted 330 u/s "crash" shark that snaps the line about 11 m from the boat with 14 fish on it is the money shot. Freeze the bot's steering so it can't dodge it.
+- Review the video frames *before* recording, not just in QA. The record run found two callouts at once ("REEL IN!" over a fading zone banner) and a bare "0" in the HUD the moment the line snapped. Showing the lost points struck through, live, makes the fail land twice as hard.
+- World-gen changes reshuffle seeds. Re-run a seed sweep (outcome, tUp, tSnap, maxFish per seed) before reusing yesterday's record query.

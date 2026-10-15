@@ -639,6 +639,7 @@ function startReel(r, label) {
   r.phase = 'turn';
   r.phT = 0;
   r.reelLabel = label;
+  if (r.banner && !r.banner.col) r.banner = null; // one callout at a time: the reel beats a zone name
   pop(r, r.lure.x, r.lure.y - 30, label, label === 'HOOKED!' ? GOLD : '#fff', 30, 1.2);
   sfx('reel');
   vibrate(15);
@@ -682,7 +683,7 @@ function bite(r, c, i) {
   c.full = 1.6;
   c.chomp = 0.35;
   c.near = false;
-  pop(r, at.x, at.y, 'CHOMP! −' + lost.length, CORAL, 30, 1.3);
+  pop(r, at.x, at.y, 'CHOMP! −' + lost.length, CORAL, 38, 1.4);
   for (let k = 0; k < 10; k++) r.parts.push({ x: at.x, y: at.y, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, life: 0.5, max: 0.5, type: 'bub', s: 2 + Math.random() * 4 });
   sfx('chomp');
   vibrate(60);
@@ -2020,7 +2021,19 @@ function drawHUD(r) {
     text(String(r.score), SW / 2, top + 30 * U, 58 * U * bump, '#fff', 'center', { stroke: 9 * U });
     text('LANDED · ' + r.landedN + ' fish', SW / 2, y2, 16 * U, '#ffd650', 'center', { stroke: 5 * U });
   } else if (ph === 'snap') {
-    text('0', SW / 2, top + 30 * U, 58 * U, '#fff', 'center', { stroke: 9 * U });
+    const lp = String(r.lostPts || 0);
+    text(lp, SW / 2, top + 30 * U, 58 * U, '#9fb0c4', 'center', { stroke: 9 * U });
+    if (r.lostPts > 0) {
+      g.font = `${58 * U}px ${FONT}`;
+      const tw = g.measureText(lp).width * Math.min(1, r.phT / 0.25);
+      g.strokeStyle = CORAL;
+      g.lineWidth = 6 * U;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(SW / 2 - tw / 2 - 8 * U, top + 34 * U);
+      g.lineTo(SW / 2 + tw / 2 + 8 * U, top + 26 * U);
+      g.stroke();
+    }
   } else if (r.chain.length || r.bonus) {
     text(String(r.haul + r.bonus), SW / 2, top + 30 * U, 58 * U * bump, '#ffd650', 'center', { stroke: 9 * U });
     text(r.chain.length + ' fish on the line · ' + d + ' m', SW / 2, y2, 15 * U, '#fff', 'center', { stroke: 5 * U });
