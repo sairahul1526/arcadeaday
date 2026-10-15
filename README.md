@@ -14,6 +14,7 @@ Tiny, addictive browser games. A new one every day. Free, no download, no sign-u
 | **Don't Pop**: hold to pump a balloon toward a pin, let go as close as you dare. One pump too many and it pops. | 2026-10-12 | [play](https://arcadeaday.com/dont-pop/) |
 | **Cap Flip**: hold to flip a water bottle across the room, let go when it's upright to land it. Stick it on the cap for 5x. | 2026-10-13 | [play](https://arcadeaday.com/cap-flip/) |
 | **Bin It**: flick a paper ball into the office bin. Easy, until the fan turns on and the wind hates you. | 2026-10-14 | [play](https://arcadeaday.com/bin-it/) |
+| **Reel Greedy**: drop your hook deep, then catch every fish on the way back up. Sharks eat whatever's on your line. | 2026-10-15 | [play](https://arcadeaday.com/reel-greedy/) |
 
 ## Layout
 

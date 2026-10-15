@@ -151,3 +151,11 @@ The final message must include:
 - Canvas gotcha: drawing extra paths (creases) inside a clip and then calling fill() or stroke() uses the last path. Keep the outline in a Path2D.
 - Tune difficulty with a quick Node Monte Carlo of the outcome model (landing error = aim noise + partial wind correction) before Playwright. Then confirm in Playwright that real swipes at `__qaAng(e)` land at exactly e (Bin It: e = 0.000).
 - 11 throws at about 2.2 s each overran 30 s. Script the crash at throw 9 for a 30 s cut.
+
+## Lessons: Day 9 (Reel Greedy)
+- A perfect bot lies about difficulty. The first Monte Carlo had sharks snapping 0–6% of runs, so the game felt toothless. Give the sim bot a human reaction lag (re-decide every ~0.35 s with ±15 u of noise) and a greed factor that pulls it toward fish. Then tune hazards until snaps are about 13–19% at 70–150 m and bites rise with depth.
+- Hazards that just drift past never create drama. Sharks needed two behaviours: homing (drift toward the nearest chain node once the hook is full or heading up) and a short lunge when the hook or chain is right ahead. Add an edge "!" warning, plus a first-sighting tip so the lunge feels fair.
+- One callout at a time: hide the tutorial hint whenever a banner (SHARK!, SNAPPED!) is up. Two texts at once read as noise on a phone.
+- Wide screens: two-line key hints, and check that decor such as rock boulders doesn't poke above the waterline when the playfield is letterboxed (clamp to the surface y).
+- A verlet chain of caught fish is the hero visual. Spacing must scale with fish size (4 + L·0.5) or the chain clumps into a blob.
+- Video: a scripted 330 u/s "crash" shark that snaps the line about 11 m from the boat with 14 fish on it is the money shot. Freeze the bot's steering so it can't dodge it.

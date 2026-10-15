@@ -965,5 +965,128 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "reel-greedy",
+    "title": "Reel Greedy",
+    "tagline": "Drop your hook deep, then catch every fish on the way back up. Sharks eat whatever's on your line, so how greedy are you?",
+    "date": "2026-10-15",
+    "accent": "#ffc83d",
+    "icon": "🎣",
+    "store": "rgr_",
+    "shop": {
+      "name": "Tackle Box",
+      "item": "Lure",
+      "items": [
+        [
+          "WORM",
+          0
+        ],
+        [
+          "SPOON",
+          60
+        ],
+        [
+          "FLY",
+          120
+        ],
+        [
+          "DUCKY",
+          200
+        ],
+        [
+          "NEON",
+          320
+        ],
+        [
+          "SKULL",
+          480
+        ],
+        [
+          "GOLD",
+          800
+        ],
+        [
+          "DIAMOND",
+          1500
+        ]
+      ]
+    },
+    "share": {
+      "title": "Reel Greedy: the fishing game where sharks eat your catch",
+      "description": "Hold to drop your hook deep, let go to reel up and steer into every fish on the way. Dodge the sharks or lose your whole catch."
+    },
+    "seo": {
+      "keyword": "fishing game online",
+      "title": "Reel Greedy: Fishing Game · Play Free Online",
+      "description": "Play Reel Greedy, a free fishing game online. Drop your hook deep, catch fish on the way up and dodge the sharks before they snap your line.",
+      "h1": "Reel Greedy: the fishing game online where sharks eat your catch",
+      "imageAlt": "Reel Greedy: a fishing line pulling a long chain of colourful fish up through the sea while a shark swims in to bite it",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Skill",
+        "Fishing"
+      ],
+      "intro": [
+        "Reel Greedy is a free fishing game you play with one finger. A cat sits in a little boat and you control the hook. Hold to drop it down through the sea, slide left and right to dodge the fish on the way down, then let go to reel up. On the way back up, every fish your hook touches gets caught and hangs on your line, and everything you bring back to the boat is your score. Play it right here in your browser on a phone or a computer.",
+        "The deeper you go, the better the fish. Sardines and clownfish in the sunlit shallows are worth 1 or 2 points; lanternfish, anglerfish and ghost fish down in the dark are worth up to 25. But the deep is also where the sharks are. A shark that bites your line of fish eats everything below the bite, and a shark or jellyfish that touches the hook snaps the line and you lose the whole catch. So every run is the same question: one more metre, or reel up now?"
+      ],
+      "howTo": [
+        "Press and hold anywhere to drop the hook. It sinks faster the deeper it goes.",
+        "While it sinks, slide your finger (or move the mouse) left and right to steer. Touching a fish on the way down hooks it and starts the reel early, so dodge them.",
+        "Let go when you're deep enough. The hook turns around and reels up on its own.",
+        "On the way up, steer into fish to catch them. They hang on your line in a long, wriggling chain.",
+        "Keep sharks and jellyfish away from the hook: one touch snaps the line and you lose everything on it.",
+        "Sharks also go for the chain. A bite takes every fish below it, and the fish that weren't eaten swim off so you can catch them again.",
+        "Reach the boat and every fish flies in and adds to your score. Squeezing past a shark or jelly without touching it adds a +2 close-call bonus.",
+        "Tap anywhere on the end card to fish again straight away."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Hold to sink, slide to steer, let go to reel up"
+        ],
+        [
+          "Computer",
+          "Hold the mouse button to sink and move the mouse to steer, or hold Space (or Down or S) to sink and steer with the Left and Right arrows (or A and D)"
+        ],
+        [
+          "Retry",
+          "Tap, click, or press Space or Enter after the run ends"
+        ]
+      ],
+      "tips": [
+        "The zones change as you go down: Sunlit Shallows, Coral Drop at 40 m, Twilight at 90 m, Midnight at 150 m, the Abyss at 220 m and the Trench at 300 m. Each one has better fish.",
+        "Watch for the red ! at the edge of the reef: it means a shark is about to swim in at that depth.",
+        "Sharks speed up when your hook or your chain is right in front of them, so give them a wide gap.",
+        "A long chain swings when you steer hard. Move smoothly near sharks so your fish don't swing into their mouths.",
+        "A golden fish is worth 20 points and 3 extra coins (◆) when you land it.",
+        "Every 4 points you land pays a coin. Spend them in the Tackle Box on new lures like the DUCKY, NEON, SKULL and DIAMOND.",
+        "The dashed yellow line marks your deepest dive so far. Passing it is a good way to find the high-value fish."
+      ],
+      "faq": [
+        [
+          "Is Reel Greedy free?",
+          "Yes. It's free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play this fishing game on my phone?",
+          "Yes. It was made for phones held upright and one finger, and it also works on desktop with a mouse or keyboard."
+        ],
+        [
+          "What happens when a shark bites my line?",
+          "If it bites the chain of fish, you lose that fish and everything below it, but you keep the rest. If it touches the hook itself, the line snaps and you lose the whole catch for that run."
+        ],
+        [
+          "How do I get a high score?",
+          "Go deeper for fish worth more points, catch as many as you can on the way up, and dodge the sharks. Close calls add a bonus, but only if you get the catch back to the boat."
+        ],
+        [
+          "Is my progress saved?",
+          "Your best score, deepest dive, coins and lures are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]
