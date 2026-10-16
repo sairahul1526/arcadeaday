@@ -38,8 +38,8 @@ const PIECE_SLACK = 1, MAX_EXTRA_FREE = 3;
 //   so strands pack; the proto lengths could not fit even 12 strands on 6×7 under the §3.1 geometry rules.
 // DECISION (v2): placement score favours crossings (xW 3, −4 for a strand crossing nothing) over shortness, with
 //   2-peg strands up to 4.2 long, so dense boards still weave (~0.6–0.7 crossings per strand).
-export const GEO = { min2: 1.6, max2: 4.2, minS: 1.4, maxS: 2.6, lenW: 0.1, bt: 200, xW: 3, zeroPen: 4, tries: 300, early: 100, over: 3, btOver: 60, covW: 0.5 };
-const COV_R = 0.6;
+export const GEO = { min2: 1.6, max2: 4.2, minS: 1.4, maxS: 2.6, lenW: 0.1, bt: 200, xW: 3, zeroPen: 4, tries: 300, early: 100, over: 3, btOver: 60, covW: 0.15, covUntil: 0.4 };
+const COV_R = 0.6, COV_MIN = 0.88; // share of board (or silhouette) grid points within COV_R of a strand
 
 // ------------------------------------------------------------------ level plan
 const NAMES = [null,
@@ -59,8 +59,8 @@ const NAMES = [null,
 const STRANDS = [0, 3, 6, 9, 12, 12, 15, 15, 12, 15, 15,
   15, 15, 15, 12, 15, 18, 18, 18, 18, 18,
   15, 18, 18, 18, 18, 18, 21, 18, 21, 18,
-  18, 21, 21, 21, 18, 21, 21, 21, 21, 18,
-  21, 18, 21, 21, 21, 21, 21, 21, 21, 18,
+  18, 21, 21, 21, 18, 21, 21, 21, 21, 15,
+  21, 18, 21, 21, 21, 21, 21, 21, 21, 15,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 18];
 // DECISION (v2): per-level casual first-try win-rate aim: a smooth ramp inside each GDD band, teach levels and
 //   post-boss breathers above the band middle, every boss below both neighbours, L60 the lowest.
@@ -119,6 +119,7 @@ function specFor(id) {
   s.segs = segsFor(s.n, s.segs);
   s.boss = id % 10 === 0;
   // DECISION (v2): late bosses may need a peak of 4 in the 5-slot basket; that tightness is what makes them peaks.
+  if (id === 20) s.par = [2, 3];
   if (id === 40) s.par = [2, 4];
   if (id >= 50 && s.boss) s.par = [3, 4];
   // DECISION: minX = round(0.6 × strands) (L3: 5, L4–5: 7), not 1.1 ×: measured on the GDD boards under the
@@ -167,13 +168,56 @@ export const SHAPES = {
   star: (X, Y) => inPoly(X, Y, STAR),
   kitten: (X, Y) => X * X + (Y + 0.45) ** 2 <= 0.52 ** 2 || (X / 0.88) ** 2 + ((Y - 0.42) / 0.58) ** 2 <= 1 || inPoly(X, Y, [[-0.5, -0.6], [-0.42, -1.05], [-0.12, -0.9]]) || inPoly(X, Y, [[0.5, -0.6], [0.42, -1.05], [0.12, -0.9]]),
 };
+// DECISION (v2, render review): boss masks now trace the exact silhouette render.js shapePath() paints on the
+//   felt (same circles / beziers / polygons, in peg units), so the strand cloud fills the drawn patch instead of
+//   the old board-stretched ellipse masks (which left parts of the patch bare and spilled strands off it).
+const TAU = Math.PI * 2;
+function arcPts(cx, cy, r, a0, a1, ccw = false, k = 48, ry = r) {
+  let d = a1 - a0;
+  if (!ccw && d <= 0) d += TAU;
+  if (ccw && d >= 0) d -= TAU;
+  return Array.from({ length: k + 1 }, (_, i) => { const a = a0 + (d * i) / k; return [cx + Math.cos(a) * r, cy + Math.sin(a) * ry]; });
+}
+function bez(p0, p1, p2, p3, k = 24) {
+  return Array.from({ length: k + 1 }, (_, i) => { const t = i / k, u = 1 - t; return [0, 1].map(j => u * u * u * p0[j] + 3 * u * u * t * p1[j] + 3 * u * t * t * p2[j] + t * t * t * p3[j]); });
+}
+export function silhouette(shape, cols, rows) {
+  const cx = (cols - 1) / 2, cy = (rows - 1) / 2, rx = (cols - 1 + 0.7) / 2, ry = (rows - 1 + 0.7) / 2;
+  const P = [];
+  if (shape === 'pumpkin') {
+    const ex = rx * 0.98, ey = ry * 0.84, oy = cy + ry * 0.1;
+    P.push(arcPts(cx, oy, ex, 0, TAU, false, 64, ey));
+    P.push([[cx - 0.35, oy - ey + 0.1], [cx - 0.25, cy - ry], [cx + 0.3, cy - ry - 0.1], [cx + 0.35, oy - ey + 0.1]]);
+  } else if (shape === 'cathead') {
+    const r = Math.min(rx, ry * 0.85), oy = cy + ry - r;
+    P.push(arcPts(cx, oy, r, 0, TAU, false, 64));
+    P.push([[cx - r * 0.95, oy - r * 0.2], [cx - r * 0.8, cy - ry], [cx - r * 0.2, oy - r * 0.92]]);
+    P.push([[cx + r * 0.95, oy - r * 0.2], [cx + r * 0.8, cy - ry], [cx + r * 0.2, oy - r * 0.92]]);
+  } else if (shape === 'heart') {
+    P.push([...bez([cx, cy + ry], [cx - rx * 1.25, cy + ry * 0.1], [cx - rx * 1.05, cy - ry * 1.15], [cx, cy - ry * 0.45]),
+      ...bez([cx, cy - ry * 0.45], [cx + rx * 1.05, cy - ry * 1.15], [cx + rx * 1.25, cy + ry * 0.1], [cx, cy + ry])]);
+  } else if (shape === 'moon') {
+    const r = Math.min(rx, ry);
+    P.push([...arcPts(cx, cy, r, Math.PI * 0.32, Math.PI * 1.68), ...arcPts(cx + r * 0.55, cy - r * 0.05, r * 0.72, Math.PI * 1.5, Math.PI * 0.5, true)]);
+  } else if (shape === 'star') {
+    const r = Math.min(rx, ry) * 1.05;
+    P.push(Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? r * 0.5 : r; return [cx + Math.cos(a) * q, cy + 0.08 * r + Math.sin(a) * q]; }));
+  } else if (shape === 'kitten') {
+    const hr = Math.min(rx * 0.7, ry * 0.42), hy = cy - ry + hr * 1.35;
+    P.push(arcPts(cx, hy, hr, 0, TAU, false, 64));
+    P.push([[cx - hr * 0.95, hy - hr * 0.2], [cx - hr * 0.8, hy - hr * 1.3], [cx - hr * 0.2, hy - hr * 0.92]]);
+    P.push([[cx + hr * 0.95, hy - hr * 0.2], [cx + hr * 0.8, hy - hr * 1.3], [cx + hr * 0.2, hy - hr * 0.92]]);
+    P.push(arcPts(cx, cy + ry * 0.35, rx * 0.9, 0, TAU, false, 64, ry * 0.62));
+  } else return null;
+  return P;
+}
+export const inShape = (shape, cols, rows) => { const P = silhouette(shape, cols, rows); return (x, y) => P.some(poly => inPoly(x, y, poly)); };
 function pegSet(spec, dil = 0) {
   const all = [];
   for (let x = 0; x <= (spec.cols - 1) * 2; x++) for (let y = 0; y <= (spec.rows - 1) * 2; y++) all.push([x / 2, y / 2]);
   if (!spec.shape) return all;
-  const f = SHAPES[spec.shape];
-  const ins = p => f((2 * p[0]) / (spec.cols - 1) - 1, (2 * p[1]) / (spec.rows - 1) - 1);
-  const base = all.filter(ins);
+  const ins = inShape(spec.shape, spec.cols, spec.rows);
+  const base = all.filter(p => ins(p[0], p[1]));
   if (!dil) return base;
   return all.filter(p => base.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) <= dil + 1e-9));
 }
@@ -189,6 +233,10 @@ function genGeometry(spec, r, pegs) {
   genGeometry.max = 0;
   // DECISION (v2, render review): strands spread over the whole board (or the boss silhouette). A candidate
   //   earns GEO.covW per target point within COV_R of it that no strand covers yet.
+//   Weight 0.15 on plain boards for the first 40 % of strands (a spread skeleton; the rest pack around it). Also
+//   lifts crossings to ~0.75–0.9 × n (longer, spread strands cross more). Weighting every strand packed too few.
+  //   0 on boss silhouettes, which their own mask already spreads (90–95 % covered).
+  const covW = spec.shape ? 0 : GEO.covW;
   const tgt = pegSet(spec, 0), cov = new Uint8Array(tgt.length);
   const covers = (c, i) => { const p = tgt[i]; const b = c._bb || (c._bb = bbox(c)); return p[0] > b[0] - COV_R && p[0] < b[2] + COV_R && p[1] > b[1] - COV_R && p[1] < b[3] + COV_R && distPointPoly(p[0], p[1], c.pts) < COV_R; };
   const recover = () => { cov.fill(0); for (const st of strands) for (let i = 0; i < tgt.length; i++) if (!cov[i] && covers(st, i)) cov[i] = 1; };
@@ -211,7 +259,7 @@ function genGeometry(spec, r, pegs) {
       if (!cand) continue;
       const ok = check(cand, strands, allX);
       if (!ok) continue;
-      const score = GEO.xW * ok.length - (ok.length ? 0 : strands.length >= 2 ? GEO.zeroPen : 0) - GEO.lenW * cand.at[cand.at.length - 1] + GEO.covW * gain(cand) + r() * 0.8;
+      const score = GEO.xW * ok.length - (ok.length ? 0 : strands.length >= 2 ? GEO.zeroPen : 0) - GEO.lenW * cand.at[cand.at.length - 1] + (strands.length < GEO.covUntil * n ? covW * gain(cand) : 0) + r() * 0.8;
       if (!best || score > best.score) best = { cand, xs: ok, score };
       if (tries > GEO.early && best) break;
     }
@@ -628,6 +676,10 @@ function choiceCount(puz, level, want) {
 //   (JIT × band jitter) to widen the difficulty spread; a quick 80-run casual screen skips far-off candidates.
 //   Search stops early once a candidate's score without the crossing bonus is under GOOD (after 40 % budget).
 const DRESS = 48, JIT = [1, 0.5, 1.5, 2, 0.75, 1.25], JIT_HARD = [1, 1.5, 2, 2.5, 3, 1.25], GOOD = 0.6, SCREEN = 0.2;
+// DECISION (v2, render review): pegs may sit up to this far outside the painted boss silhouette (a thin halo), the
+//   least that packs the boss's strand count: pumpkin / kitten / cathead 0.5, heart / moon / star 1.0 (moon and
+//   star patches are small: render.js draws them inside min(rx, ry) circles, ~35 % of the board).
+const BOSS_DIL = { cathead: 0.5, pumpkin: 0.5, heart: 1, moon: 1, star: 1, kitten: 0.5 };
 const GEO_FAILS = new Set(['minX', 'pieces']);
 function genOne(spec, secs) {
   const t0 = Date.now();
@@ -638,14 +690,12 @@ function genOne(spec, secs) {
   const fails = {};
   const F = k => { fails[k] = (fails[k] || 0) + 1; };
   const baseSeed = (spec.daily !== undefined ? 7000003 + spec.daily * 100003 : spec.id * 100003) + OFF * 50021;
-  let dil = spec.shape && spec.n >= 18 ? 1 : 0, pegs = pegSet(spec, dil), reduced = 0;
+  let dil = spec.shape ? BOSS_DIL[spec.shape] : 0, pegs = pegSet(spec, dil), reduced = 0;
   const el = () => (Date.now() - t0) / 1000;
   for (let k = 0; ; k++) {
     if (el() > secs) break;
     if (best && best.pen < GOOD && el() > secs * 0.4) break;
-    if (spec.shape && !geos && dil === 0 && el() > secs * 0.1) { dil = 0.5; pegs = pegSet(spec, 0.5); }
-    // DECISION: boss shapes that still have no geometry widen the mask to 1.0 (silhouette kept, edges softer).
-    if (spec.shape && !geos && dil === 0.5 && el() > secs * 0.2) { dil = 1; pegs = pegSet(spec, 1); }
+    if (spec.shape && !geos && dil < 1 && el() > secs * 0.2) { dil = Math.min(1, dil + 0.5); pegs = pegSet(spec, dil); }
     if (!valid && el() > secs * 0.3 * (1 + reduced) && spec.n > 9 && reduced < 2) {
       reduced++; spec = { ...spec, n: spec.n - 3, minX: MINX(spec.n - 3) };
       console.log(`${tag}: no valid level yet, strands -> ${spec.n}`);
@@ -653,6 +703,7 @@ function genOne(spec, secs) {
     const gseed = (baseSeed + k) >>> 0;
     const geo = spec.id <= 2 ? null : genGeometry(spec, rng(gseed), pegs);
     if (spec.id > 2 && !geo) { F('geo'); continue; }
+    if (geo && geo.cover < (spec.n >= 15 ? COV_MIN : COV_MIN - 0.13)) { F('cover'); continue; } // sparse teach boards: 75 %
     geos++;
     let okHere = 0;
     for (let d = 0; d < (spec.id <= 2 ? 1 : DRESS); d++) {

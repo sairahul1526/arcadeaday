@@ -57,3 +57,12 @@ No BLOCKERs.
 - PLAY done: tap queue (0 lost in 6/6 bursts), chain/spoolDone events, canUseBooster, host-pause input, win beat, MAX_PIXELS 6.0M. Left: at 4K dpr1 (8.3M px) the scene.js bake gets re-copied each frame in software Chromium; tile or cap the bake.
 - UI done: nearest-centre booster hits (44–46 px phone), uncapped board (~66% safe height at 1440), hover + cursors, booster guard, tappable trophy, map strips, Esc→title, lose card docked + ✕, CHAIN/COMBO pops, kitten names, L1 no basket. Spools ~1.55× (not 2×) to keep the board size.
 - MODES done: 20-strand deterministic showcase, hook on frame 0, gaps ≤1.2 s, CHAIN ×3 at ~16 s, 3★ win, 520 px end-card Kitty, one callout at a time. Left for UI: in normal play the CHAIN pop overlaps the HUD subtitle, and COMBO overwrites CHAIN ×3 in the same frame (queue pops).
+- LEVELS v2 done: on-target 15→47/60 levels, 3→44/60 dailies; strands up (finals 21), pars 2–4, bosses are local peaks (L60 casual 21%), boards fill ≥88%. Left: L40/L50 boss silhouettes too small (15 strands), so enlarge render.js shapePath and sync gen.mjs silhouette(); band B still easy (L4/L5/L8 81–87%); 16 dailies outside 35–55%.
+- Combined check after round 1: check.mjs PASS; build 22 files/791 KiB; playables-check ALL MUST PASS (3 browsers).
+
+## Next run, in order
+1. Merge wip/knot-kitty → main (it also carries the Playables infra).
+2. Quick fix round 2: pop queue/position (UI), 4K bake cliff (scene.js), boss silhouettes + band B, readability re-check at 21 strands at 320×480.
+3. Stage I: 6 critics (each ≥8, mean ≥9).
+4. Stage J: ship Day 10.
+5. Then Day 11.
