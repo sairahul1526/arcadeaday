@@ -921,10 +921,12 @@ export function drawCat(g, x, y, s, o) {
     g.restore();
   };
   const arms = o.arms || 'down', sw = o.swat || 0;
-  if (arms === 'up') { legs(-1, 2.6); legs(1, -2.6); }
-  else if (arms === 'swat') { legs(-1, 0); legs(1, -0.4 - sw * 2.0); }
-  else { legs(-1, 0); legs(1, 0); }
+  // resting legs go under the outfit; raised paws are drawn over it so a swat / cheer reads in every outfit
+  if (arms === 'swat') legs(-1, 0);
+  else if (arms !== 'up') { legs(-1, 0); legs(1, 0); }
   if (o.under) o.under(g, { fur, line, lw });
+  if (arms === 'up') { legs(-1, 2.6); legs(1, -2.6); }
+  else if (arms === 'swat') legs(1, -0.4 - sw * 2.0);
   // ears
   const ear = (side) => {
     g.save();

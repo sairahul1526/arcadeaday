@@ -168,13 +168,19 @@ export function boosterRects(L, keys = null) {
   const all = ['undo', 'hint', 'slot', 'snip'];
   const list = keys || all;
   const b = L.boosters;
-  const n = 4;
+  const n = Math.max(1, list.length);
   const gap = Math.max(3, 4 * L.u);
-  const rowFits = (b.w - gap * 3) / n >= Math.min(b.h, 44) * 0.98;
   const out = {};
-  if (rowFits || L.orient === 'landscape') {
-    const cw = (b.w - gap * (n - 1)) / n;
-    const sz = Math.min(cw, b.h);
+  const cap = Math.max(44, 60 * L.u);
+  // DECISION: pick whichever of "one row" / "2-column grid" gives the bigger buttons for the boosters shown
+  //   (a lone Undo on L4 gets the whole tray height instead of a quarter cell); landscape is always one row.
+  const rowCw = (b.w - gap * (n - 1)) / n, rowSz = Math.min(rowCw, b.h);
+  const gr = Math.ceil(n / 2), gcw = n === 1 ? b.w : (b.w - gap) / 2, gch = (b.h - gap * (gr - 1)) / gr;
+  const gridSz = Math.min(gcw, gch);
+  if (L.orient === 'landscape' || rowSz >= gridSz) {
+    // landscape keeps the fixed 4-cell pitch so buttons don't jump size as boosters unlock
+    const cw = L.orient === 'landscape' ? (b.w - gap * 3) / 4 : rowCw;
+    const sz = Math.min(cw, b.h, cap);
     const total = list.length * cw + (list.length - 1) * gap;
     const x0 = b.x + (b.w - total) / 2;
     list.forEach((k, i) => {
@@ -183,13 +189,12 @@ export function boosterRects(L, keys = null) {
       out[k].hit = R(cx, b.y, cw, b.h);
     });
   } else {
-    const cw = (b.w - gap) / 2, ch = (b.h - gap) / 2;
-    const sz = Math.min(cw, ch);
     list.forEach((k, i) => {
       const c = i % 2, rw = (i / 2) | 0;
-      const x = b.x + c * (cw + gap), y = b.y + rw * (ch + gap);
-      out[k] = R(x + (cw - sz) / 2, y + (ch - sz) / 2, sz, sz);
-      out[k].hit = R(x, y, cw, ch);
+      const x = b.x + c * (gcw + gap), y = b.y + rw * (gch + gap);
+      const sz = Math.min(gridSz, cap);
+      out[k] = R(x + (gcw - sz) / 2, y + (gch - sz) / 2, sz, sz);
+      out[k].hit = R(x, y, gcw, gch);
     });
   }
   return out;

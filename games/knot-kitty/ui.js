@@ -26,8 +26,8 @@
 // DECISION: the NEXT-spool "bounce" (L3, L4) is a gold attention ring UI draws at rackSlots().next[0].
 // DECISION: celebratory pops (CHAIN ×m!, +n) draw at the spool and hide the band callout while they show (0.9 s).
 // DECISION: L3 "CHAIN!" pops on the first spool that arrives while a ball of its colour waits in the basket.
-// DECISION: map: the yarn-ball count opens the shop; ↑/↓ keys move the selection; the wheel listener calls
-//   preventDefault only while the map can still scroll that way. Locked nodes say "Beat level N first".
+// DECISION: map: the yarn-ball count opens the shop; ↑/↓ keys move the selection; ui.wheel returns true (Core then
+//   calls preventDefault) only while the map can still scroll that way. Locked nodes say "Beat level N first".
 // DECISION: settings sliders/toggle emit bus 'settings' {k, v} (meta.setSetting has no event) so Audio can apply them
 //   live; win-card stars emit bus 'star' {i} as each one pops.
 // DECISION: the locked Daily dialog shows "Beat level 6 to unlock" with an OK primary. Reset progress = two taps within 3 s.
@@ -50,6 +50,8 @@ const FT = '"Lilita One", "Arial Rounded MT Bold", system-ui, sans-serif';
 const FB = 'Nunito, system-ui, sans-serif';
 const YCOL = ['#E8463A', '#1FB0A0', '#F5B82E', '#3D86EE', '#8C55D3', '#86C440', '#E8463A'];
 const BK = ['undo', 'hint', 'slot', 'snip'];
+const ICOL = { pause: TEAL, retry: TEAL, undo: TEAL, hint: GOLD, slot: CREAM, snip: TOMATO, gear: TEAL, cart: TEAL, paw: TOMATO,
+  calendar: CREAM, share: TEAL, close: TOMATO, home: TOMATO, lock: CREAM };
 const BNAME = { undo: 'Undo', hint: 'Hint', slot: '+1 Slot', snip: 'Snip' };
 const BDESC = { undo: 'Takes back your last pull', hint: 'Shows a good next move', slot: 'One more basket space (max 2★)',
   snip: 'Pull any strand, even covered (max 2★)' };
@@ -191,6 +193,7 @@ function fbHand(g, x, y, s, press) {
   g.closePath(); g.fill(); g.stroke();
 }
 function fbIcon(g, name, x, y, s, col = INK) {
+  if (col === CREAM) col = INK;
   g.translate(x, y);
   const k = s / 2;
   g.strokeStyle = col; g.fillStyle = col; g.lineWidth = Math.max(1.5, s * 0.12); g.lineCap = 'round'; g.lineJoin = 'round';
@@ -232,10 +235,10 @@ function fbIcon(g, name, x, y, s, col = INK) {
     default: g.arc(0, 0, k * 0.5, 0, 7); g.fill();
   }
 }
-function fbMiniBoard(g, rect, level, t) {
+function fbMiniBoard(g, rect, level, t, opt = {}) {
   const cols = (level && level.cols) || 5, rows = (level && level.rows) || 5;
-  const un = Math.min(rect.w / (cols - 1 + 1.2), rect.h / (rows - 1 + 1.2));
-  const w = (cols - 1 + 1.2) * un, h = (rows - 1 + 1.2) * un, x = rect.x + (rect.w - w) / 2, y = rect.y + (rect.h - h) / 2;
+  const un = Math.min(rect.w / (cols - 1 + 1.2), rect.h / (rows - 1 + 1.2 + 1.4));
+  const w = (cols - 1 + 1.2) * un, h = (rows - 1 + 1.2) * un, x = rect.x + (rect.w - w) / 2, y = rect.y + (rect.h - h - 1.4 * un) / 2;
   rr(g, x, y, w, h, un * 0.3); g.fillStyle = '#6B4329'; g.fill(); g.lineWidth = Math.max(1, un * 0.06); g.strokeStyle = INK; g.stroke();
   rr(g, x + un * 0.22, y + un * 0.22, w - un * 0.44, h - un * 0.44, un * 0.18); g.fillStyle = '#E8D5BC'; g.fill();
   const ss = ((level && level.strands) || []).slice().sort((a, b) => (a.d || 0) - (b.d || 0));
@@ -246,7 +249,10 @@ function fbMiniBoard(g, rect, level, t) {
     g.lineWidth = Math.max(2.5, un * 0.3); g.strokeStyle = INK; g.stroke();
     g.lineWidth = Math.max(1.5, un * 0.22); g.strokeStyle = YCOL[s.c] || '#999'; g.stroke();
   }
+  if (opt.kitten !== false) fbKitten(g, x + w / 2, y + h + 1.25 * un, 1.6 * un, { loops: opt.loops || 0, stage: 0 });
+  return { B: { x, y, w, h, unit: un } };
 }
+
 const KCOAT = ['#C98B5A', '#3A3346', '#F2E3CC', '#EFE1CC', '#2A2633', '#E8873A'];
 function fbCat(g, x, y, s, col, o = {}) {
   g.translate(x, y);
@@ -395,7 +401,7 @@ function iconBtn(g, b) {
   g.beginPath(); g.arc(cx, cy0 + lip / 2, R0 - lip / 2, 0, 7); g.fillStyle = SHADE; g.fill();
   g.beginPath(); g.arc(cx, cy, R0 - lip / 2, 0, 7); g.fillStyle = b.fill || CREAM; g.fill();
   g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
-  aIcon(g, b.icon, cx, cy, R0 * 1.05, b.iconCol || INK);
+  aIcon(g, b.icon, cx, cy, R0 * 1.05, b.iconCol || ICOL[b.icon] || CREAM);
   g.restore();
   if (b.dot) { g.beginPath(); g.arc(cx + R0 * 0.72, cy0 - R0 * 0.72, Math.max(4, R0 * 0.24), 0, 7); g.fillStyle = TOMATO; g.fill(); g.lineWidth = Math.max(1, 2 * d); g.strokeStyle = '#fff'; g.stroke(); }
   if (b.badge) badge(g, cx + R0 * 0.72, cy0 + R0 * 0.62, Math.max(7, R0 * 0.36), b.badge, d);
@@ -616,7 +622,7 @@ function onBus(type, d) {
   const S = U.S;
   if (!S) return;
   if (type === 'win') { U.winAt = U.t + DUR.kittenFree; clearHand(); U.ghost = null; }
-  if (type === 'stuck') { U.loseAt = U.t + DUR.stuckCard; clearHand(); U.ghost = null; }
+  if (type === 'stuck') { U.loseAt = U.t + DUR.stuckCard; U.loseDone = false; clearHand(); U.ghost = null; }
   if (type === 'kittenFree') { clearHand(); clearSay(); }
   if (type === 'pull' || type === 'press') U.idle = 0;
   if (!S.sess || S.screen !== 'play') return;
@@ -655,19 +661,18 @@ export function init(a) {
   api = a;
   U.S = a && a.S;
   for (const t of BUS) bus.on(t, d => onBus(t, d));
-  if (typeof window !== 'undefined' && window.addEventListener) {
-    window.addEventListener('wheel', e => {
-      const S = U.S;
-      if (!S || S.screen !== 'map' || U.card) return;
-      const mm = mapM(S);
-      const dy = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
-      const can = dy > 0 ? U.map.scroll > 0.5 : U.map.scroll < mm.maxScroll - 0.5;
-      if (!can) return;
-      e.preventDefault();
-      U.map.target = null; U.map.v = 0;
-      U.map.scroll = clamp(U.map.scroll - dy, 0, mm.maxScroll);
-    }, { passive: false });
-  }
+}
+
+/** Core calls this for wheel events off the play screen; true → Core calls preventDefault. */
+export function wheel(dy, x, y, S) {
+  S = S || U.S;
+  if (!S || S.screen !== 'map' || U.card) return false;
+  const mm = mapM(S);
+  const can = dy > 0 ? U.map.scroll > 0.5 : U.map.scroll < mm.maxScroll - 0.5;
+  if (!can) return false;
+  U.map.target = null; U.map.v = 0;
+  U.map.scroll = clamp(U.map.scroll - dy, 0, mm.maxScroll);
+  return true;
 }
 
 // ---------- update ----------
@@ -815,9 +820,9 @@ function nextCard() {
 }
 function loseBooster(k) {
   if (!tapBooster(k)) return;
-  U.loseDone = true; U.card = null;
   const S = U.S;
   if (S && S.screen === 'lose') safe(() => api.resume());
+  if (S && S.sess && !S.sess.stuck) U.card = null;
 }
 
 // ---------- boosters ----------
@@ -959,17 +964,13 @@ function drawTitle(g, S) {
   };
   const boardBlock = (bx, by, bw, bh) => {
     if (bw < 20 || bh < 20) return;
-    const ks = Math.min(bh * 0.5, bw * 0.3);
-    const ledge = Math.min(bh, bw) * 0.12;
-    const side = Math.min(bh - ledge, (bw - ks * 0.8) * 0.98);
-    const total = side + ks * 0.8;
-    const x0 = bx + (bw - total) / 2, y0 = by + (bh - side - ledge) / 2;
-    const rect = { x: x0, y: y0, w: side, h: side };
-    aMini(g, rect, lv2, U.t);
-    const kn = side * 0.26;
-    aKitten(g, x0 + side / 2, y0 + side + kn * 0.18, kn, { stage: 0, loops: 4, flinch: 0, freeT: -1, breed: 0, coat: 0, golden: false, t: U.t, loopColors: [0, 3, 1, 2] });
+    const ks = Math.min(bh * 0.42, bw * 0.28);
+    const bwid = Math.min(bw - ks * 0.9, bh * 0.92);
+    const x0 = bx + (bw - bwid - ks * 0.9) / 2;
+    const r = aMini(g, { x: x0, y: by, w: bwid, h: bh }, lv2, U.t, { loops: 4 });
+    const fr = r && r.B ? r.B : { x: x0, y: by, w: bwid, h: bh * 0.8 };
     const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
-    aKitty(g, x0 + side + ks * 0.42, y0 + side + ledge * 0.6, ks, 'idle', U.t, wear);
+    aKitty(g, Math.min(bx + bw - ks * 0.45, fr.x + fr.w + ks * 0.5), fr.y + fr.h + ks * 0.1, ks, 'idle', U.t, wear);
   };
   if (!land) {
     const logoH0 = Math.min(H * 0.24, 170 * d);
@@ -1112,10 +1113,10 @@ function drawMap(g, S) {
   if (reach >= f) { g.save(); g.setLineDash([3 * d, 7 * d]); strokePath(f, Math.min(l, reach), 'rgba(0,0,0,0)', TOMATO_D, 2 * d, [3 * d, 7 * d]); g.restore(); }
   // chests + world labels
   for (let w = 1; w <= 6; w++) {
-    const cy = nY(mm, mm.yc(10 * w) + (w < 6 ? 0.4 * span : 70 * d));
+    const cy = nY(mm, mm.yc(10 * w) + (w < 6 ? 0.3 * span : 70 * d));
     const cx = w < 6 ? lerp(nX(mm, 10 * w), nX(mm, 10 * w + 1), 0.42) : mm.cx + mm.amp * 0.65;
     if (cy > -40 * d && cy < H + 40 * d) chestIcon(g, cx, cy, 34 * d, safe(() => M.chestClaimed(w), false));
-    const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * d) : nY(mm, mm.yc(10 * (w - 1)) + 0.78 * span);
+    const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * d) : nY(mm, mm.yc(10 * (w - 1)) + 0.64 * span);
     if (ly > -30 * d && ly < H + 30 * d) {
       const locked = cur < (w - 1) * PER_WORLD + 1;
       const label = `World ${w} · ${WORLDS[w].name}`;
