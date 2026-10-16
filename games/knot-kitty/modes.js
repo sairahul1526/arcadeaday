@@ -140,7 +140,7 @@ function prepShowcaseSave(lv) {
   d.giftsClaimed = Math.floor((total + 3) / 15); // no star-milestone gift pops on the showcase win
   d.chests = (1 << 6) - 1;
   d.tut = { ...(d.tut || {}) };
-  for (const k of [...Object.values(TEACH), 'pull', 'over', 'basket', 'next', 'undo', 'hint', 'slot', 'snip', 'idle', 'full'])
+  for (const k of [...Object.values(TEACH), 'pull', 'over', 'basket', 'next', 'undo', 'hint', 'slot', 'snip', 'idle', 'full', 'b_undo', 'b_hint', 'b_slot', 'b_snip'])
     d.tut[k] = 1;
 }
 
@@ -602,6 +602,7 @@ function installOG() {
     await fontsReady();
     prepShowcaseSave(LV);
     try {
+      A.resize(1200, 630, 1);
       A.go('play', { kind: 'level', id: LV });
       const s = A.S.sess;
       if (s && s.puz) {
@@ -633,7 +634,7 @@ function installQA() {
   W.__qa = () => {
     const S = A.S, s = S.sess;
     return {
-      t: S.T, mode: S.screen,
+      t: S.TL != null ? S.TL : S.T, T: S.T, mode: S.screen, // t = loop clock (host pause freezes it); T = gameplay time
       level: s ? (s.kind === 'level' ? s.id : 0) : safe(() => M.cur(), 1),
       progress: safe(() => M.progress(), 0) | 0,
       score: P.data ? P.data.best | 0 : 0,
@@ -641,6 +642,7 @@ function installQA() {
     };
   };
   W.__qaInput = qaInput;
+  W.__S = A.S; W.__api = A; // QA-only: state peek + api for test drivers
   W.__qaOldSave = () => (M.qaOldSave ? M.qaOldSave() : { save: '{"v":0,"best":0,"at":3}', progress: 3 });
   W.__qaLevel = (id, kind = 'level') => { A.go('play', { kind, id }); return W.__qa(); };
   W.__qaSolve = () => {

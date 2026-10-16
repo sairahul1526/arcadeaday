@@ -496,7 +496,7 @@ function attnNext(S, delay = 0) {
   const L = layoutOf(S), rs = safe(() => rackSlots(L), null);
   if (!rs || !rs.next || !rs.next[0]) return;
   const n = rs.next[0];
-  U.attn.push({ x: n.x, y: n.y, r: n.h * 0.75, t0: U.t + delay, dur: 1.4 });
+  U.attn.push({ x: n.x, y: n.y, h: n.h, r: n.h * 0.75, t0: U.t + delay, dur: 1.4 });
 }
 function startGhost(S, id) {
   const i = basketRoom(S);
@@ -729,6 +729,7 @@ export function update(dt, S) {
 
 function onScreen(prev, next, S) {
   U.scr = next;
+  U.toast = null; // a toast belongs to the screen that raised it
   if (DIALOGS.includes(next) && !DIALOGS.includes(prev)) U.ret = HOMES.includes(prev) ? prev : (safe(() => M.cur(), 1) > LEVELS ? 'allbeaten' : 'title');
   if (next === 'map' && !DIALOGS.includes(prev)) mapFocus(S, true);
   if ((prev === 'win' || prev === 'lose') && next !== 'win' && next !== 'lose') {
@@ -851,7 +852,7 @@ function toast(text) { U.toast = { text, t0: U.t }; }
 export function draw(g, S) {
   if (!S) return;
   U.S = S;
-  U.btns = []; U.sliders = []; U.reg = true;
+  U.btns = []; U.sliders = []; U.reg = true; U.dlg = null;
   runTimers();
   g.save();
   try {
@@ -1281,8 +1282,12 @@ function drawAttn(g) {
     const p = t / a.dur, bounce = Math.abs(Math.sin(p * Math.PI * 2)) * (1 - p);
     g.save();
     g.globalAlpha = Math.min(1, (1 - p) * 2);
-    g.beginPath(); g.arc(a.x, a.y - bounce * a.r * 0.25, a.r * (1 + 0.12 * bounce), 0, 7);
-    g.lineWidth = Math.max(2.5, a.r * 0.12); g.strokeStyle = GOLD; g.stroke();
+    // Integration fix: a rounded frame around the spool that never rises above its top, so it clears the
+    // "NEXT" label drawn just above the spool (the old circle crossed the label at small sizes).
+    const h = a.h || a.r / 0.75, grow = h * 0.08 * bounce;
+    const top = a.y - h * 0.56, bot = a.y + h * 0.66 + grow, hw = h * 0.6 + grow;
+    rr(g, a.x - hw, top, hw * 2, bot - top, Math.min(hw, h * 0.3));
+    g.lineWidth = Math.max(2.5, h * 0.09); g.strokeStyle = GOLD; g.stroke();
     g.lineWidth = Math.max(1, a.r * 0.04); g.strokeStyle = INK; g.stroke();
     g.restore();
   }
@@ -1379,6 +1384,7 @@ function dialogFrame(g, S, maxW, list, opt = {}) {
   const lay = rows(list(pw - 2 * pad, px + pad), d, H - 20 * d - 2 * pad);
   const ph = opt.full ? H - 20 * d : lay.h + 2 * pad * lay.k, py = (H - ph) / 2;
   panel(g, px, py, pw, ph, d);
+  if (U.reg) U.dlg = { x: px, y: py, w: pw, h: ph };
   lay.run(py + pad * lay.k + (opt.full ? (ph - lay.h - 2 * pad * lay.k) / 2 : 0));
   return { px, py, pw, ph, k: lay.k };
 }
@@ -1419,6 +1425,7 @@ function drawShop(g, S) {
   const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
   const pw = Math.min(W - 16 * d, 560 * d), ph = Math.min(H - 16 * d, 760 * d), px = (W - pw) / 2, py = (H - ph) / 2;
   panel(g, px, py, pw, ph, d);
+  U.dlg = { x: px, y: py, w: pw, h: ph };
   const pad = 16 * d, ix = px + pad, iw = pw - 2 * pad;
   // header
   const hy = py + pad + 20 * d;
@@ -1829,7 +1836,14 @@ function drawToast(g, S) {
   if (a <= 0) return;
   const s = 15 * d, maxW = S.W - 40 * d, size = fitSize(g, U.toast.text, maxW - 28 * d, s, FB, '800');
   const w = tw(g, U.toast.text, size, FB, '800') + 28 * d, h = size * 2.2;
-  const y = S.H - (layoutOf(S).inset || 0) - 90 * d - h;
+  let y = S.H - (layoutOf(S).inset || 0) - 90 * d - h;
+  const dl = U.dlg;
+  if (dl) { // over a dialog: sit in the gap above (or below) the panel, never over its text or buttons
+    const sb = S.H - (layoutOf(S).inset || 0);
+    if (dl.y - h - 4 * d >= 2 * d) y = Math.max(2 * d, dl.y - h - 8 * d);
+    else if (dl.y + dl.h + h + 4 * d <= sb) y = dl.y + dl.h + 6 * d;
+    else y = dl.y + 4 * d;
+  }
   g.save(); g.globalAlpha = a;
   rr(g, S.W / 2 - w / 2, y, w, h, h / 2); g.fillStyle = INK; g.fill();
   txt(g, U.toast.text, S.W / 2, y + h / 2, size, { f: FB, w: '800', col: '#fff' });

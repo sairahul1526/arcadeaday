@@ -1833,7 +1833,7 @@ function drawRack(g, S, sess, rs, ui, T) {
   // next queue (NEXT larger, next-next smaller), with label + "+N" chip
   if (hasNext) {
     const n0 = rs.next[0];
-    text(g, 'NEXT', n0.x, n0.y - n0.h * 0.5 - Math.max(9, 11 * ui), Math.max(10, 11 * ui), { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
+    text(g, 'NEXT', n0.x, n0.y - n0.h * 0.5 - n0.h * 0.16 - Math.max(8, 10 * ui), Math.max(10, 11 * ui), { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
     sess.nextQ.slice(0, 2).forEach((q, i) => {
       const p = rs.next[i];
       if (!p || !q) return;

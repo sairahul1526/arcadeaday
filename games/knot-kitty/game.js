@@ -21,6 +21,8 @@
 // DECISION: S.noHaptics = record || og || qa (haptics never fire for bots / capture).
 // DECISION: ui.init(api) runs before the title is built; modes.init(api) runs after it so ?lv / ?record / ?og can
 //   redirect the first screen. Font loads are raced against a 2.5 s timeout so a blocked font never stalls boot.
+// DECISION: S.T is gameplay time (frozen on the in-game pause card); S.TL is the loop clock (frozen only while the
+//   host pauses us). __qa().t reports S.TL so a host resume is visible even when Esc had opened the pause card.
 // DECISION: a throwing frame is reported once per message through P.error (console.warn) and the loop keeps going.
 
 import P from '../shared/platform.js';
@@ -40,7 +42,7 @@ const SESSION_SCREENS = new Set(['play', 'pause', 'win', 'lose']);
 const KEEP_SESSION = new Set(['play', 'pause', 'win', 'lose', 'shop', 'kittens', 'settings']);
 const MAX_PIXELS = 4096 * 4096;
 
-const S = { W: 1, H: 1, dpr: 1, T: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false };
+const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false };
 
 const istKey = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const seasonWorld = () => (istKey() < SEASON_END ? 2 : 1);
@@ -110,6 +112,7 @@ function frame(now) {
 }
 
 function advance(dt) {
+  S.TL += dt; // loop clock: runs whenever the rAF loop runs (also on the pause card); stops only on a host pause
   if (S.screen === 'loading') { S.T += dt; return; }
   S.outfit = (P.data && P.data.wear) || 'tabby'; // render reads the worn outfit from S
   if (S.screen !== 'pause') {
