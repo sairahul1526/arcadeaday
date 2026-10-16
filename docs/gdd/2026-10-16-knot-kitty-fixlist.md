@@ -56,3 +56,4 @@ No BLOCKERs.
 - META/AUDIO done: daily/bonus exploits, kittenName(i), chain/combo ladder, spool thunk, star-synced bells, lose sting.
 - PLAY done: tap queue (0 lost in 6/6 bursts), chain/spoolDone events, canUseBooster, host-pause input, win beat, MAX_PIXELS 6.0M. Left: at 4K dpr1 (8.3M px) the scene.js bake gets re-copied each frame in software Chromium; tile or cap the bake.
 - UI done: nearest-centre booster hits (44–46 px phone), uncapped board (~66% safe height at 1440), hover + cursors, booster guard, tappable trophy, map strips, Esc→title, lose card docked + ✕, CHAIN/COMBO pops, kitten names, L1 no basket. Spools ~1.55× (not 2×) to keep the board size.
+- MODES done: 20-strand deterministic showcase, hook on frame 0, gaps ≤1.2 s, CHAIN ×3 at ~16 s, 3★ win, 520 px end-card Kitty, one callout at a time. Left for UI: in normal play the CHAIN pop overlaps the HUD subtitle, and COMBO overwrites CHAIN ×3 in the same frame (queue pops).

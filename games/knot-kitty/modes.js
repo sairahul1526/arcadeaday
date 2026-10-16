@@ -152,7 +152,7 @@ function prepShowcaseSave(lv) {
 // ================================================================== showcase board (record / og)
 // 18 strands on a 9x10 pumpkin, cap 4, par 3, 6 colours, no knots (tools/knot-kitty generator, picked by planShow:
 // CHAIN x3 at peak 3 = 3 stars). Applied only when no ?lv= is given.
-export const SHOWCASE = {"cols":10,"rows":10,"cap":4,"shape":"pumpkin","strands":[{"pegs":[[5,3.5],[3,4.5]],"bow":0.077,"c":1,"d":2},{"pegs":[[4,3],[5,7]],"bow":-0.065,"c":1,"d":7},{"pegs":[[6.5,5.5],[3,3.5]],"bow":-0.098,"c":0,"d":0},{"pegs":[[3.5,6],[6.5,7]],"bow":-0.088,"c":3,"d":10},{"pegs":[[1.5,7.5],[4,7],[4,5]],"bow":0,"c":2,"d":15},{"pegs":[[1.5,4.5],[2.5,5.5],[2.5,8]],"bow":0,"c":3,"d":11},{"pegs":[[1.5,6],[4.5,8.5]],"bow":-0.094,"c":3,"d":19},{"pegs":[[5.5,6],[6.5,8.5]],"bow":0.111,"c":0,"d":8},{"pegs":[[2.5,2],[1,3]],"bow":0.077,"c":1,"d":13},{"pegs":[[3.5,1],[5.5,0.5]],"bow":-0.079,"c":0,"d":9},{"pegs":[[4,0],[6,3.5]],"bow":-0.085,"c":0,"d":18},{"pegs":[[7.5,3.5],[6.5,2.5],[5,2.5]],"bow":0,"c":2,"d":1},{"pegs":[[8.5,6.5],[7.5,7.5],[5.5,8]],"bow":0,"c":2,"d":3},{"pegs":[[6.5,4.5],[7.5,2.5]],"bow":-0.098,"c":1,"d":6},{"pegs":[[4.5,1.5],[6.5,1.5]],"bow":0.07,"c":0,"d":16},{"pegs":[[8.5,4],[7.5,5.5]],"bow":0.109,"c":3,"d":4},{"pegs":[[0.5,4],[0.5,6]],"bow":-0.088,"c":3,"d":17},{"pegs":[[3.5,9],[5.5,9]],"bow":0.065,"c":1,"d":12},{"pegs":[[0,5],[2,3]],"bow":0.073,"c":1,"d":5},{"pegs":[[9,5.5],[7.5,6.5]],"bow":0.062,"c":0,"d":14}],"queue":[3,2,1,3,0,1,0],"par":3,"sol":[6,4,3,5,1,0,8,15,16,7,12,10,13,11,2,17,18,9,14,19]};
+export const SHOWCASE = {"cols":9,"rows":10,"cap":4,"shape":"pumpkin","strands":[{"pegs":[[8,5],[6,6]],"bow":-0.072,"c":1,"d":3},{"pegs":[[5,8],[4,6]],"bow":0.06,"c":2,"d":18},{"pegs":[[6.5,7],[4,8]],"bow":0.117,"c":2,"d":19},{"pegs":[[4,7],[5,5]],"bow":0.107,"c":0,"d":4},{"pegs":[[5.5,3],[7.5,6.5]],"bow":-0.105,"c":3,"d":14},{"pegs":[[7.5,4],[4.5,4]],"bow":-0.054,"c":1,"d":2},{"pegs":[[4,5],[6,8.5]],"bow":-0.056,"c":3,"d":5},{"pegs":[[4,0],[3.5,2.5]],"bow":0.109,"c":1,"d":17},{"pegs":[[2,3],[4.5,1]],"bow":-0.051,"c":2,"d":8},{"pegs":[[1.5,2],[3.5,3.5]],"bow":-0.119,"c":2,"d":0},{"pegs":[[1.5,5.5],[0.5,4]],"bow":0.058,"c":2,"d":1},{"pegs":[[2.5,4],[0.5,5.5]],"bow":0.057,"c":0,"d":7},{"pegs":[[1.5,4],[3,6.5]],"bow":-0.105,"c":0,"d":10},{"pegs":[[2,8.5],[3,5]],"bow":-0.116,"c":2,"d":11},{"pegs":[[1.5,7],[3,9]],"bow":-0.081,"c":3,"d":15},{"pegs":[[4.5,3],[6,5]],"bow":-0.07,"c":0,"d":12},{"pegs":[[6.5,3],[5.5,1.5]],"bow":-0.112,"c":3,"d":13},{"pegs":[[6.5,2],[4.5,2]],"bow":-0.084,"c":3,"d":9},{"pegs":[[3,8],[4.5,9]],"bow":0.114,"c":0,"d":16},{"pegs":[[5,0],[2.5,1.5]],"bow":-0.062,"c":0,"d":6}],"queue":[3,2,3,1,2,0,0],"par":3,"sol":[2,1,4,6,14,13,0,7,16,17,8,9,15,5,12,11,10,3,18,19],"show":[16,14,2,13,1,17,7,6,15,4,5,0,8,9,12,11,10,3,18,19]};
 const SHOW_ON = (REC_ON || on('og')) && !LV_PARAM && !on('real');
 function applyShowcase() {
   if (!SHOW_ON || !SHOWCASE || !Array.isArray(LVDATA)) return false;
@@ -169,7 +169,7 @@ const MUTED = new Set(['basketWarn', 'full', 'doomed', 'hint', 'thaw', 'booster'
 
 // ================================================================== ?record=1  (GDD §12.1)
 const REC = { ready: false, t: 0, frames: 0, items: [], held: null, log: [], plan: null, hand: null, lastTapT: 0,
-  keyT: null, cap2On: null, cap2Off: null, pulls0: 0, pop: null, chainMax: 0, miss: null, hover: null };
+  keyT: null, cap2On: null, cap2Off: null, pulls0: 0, lastFire: -9, pop: null, chainMax: 0, miss: null, hover: null };
 
 function installRecord() {
   window.__rec = { step: recStep, frame: recFrame, audio: recAudio };
@@ -532,6 +532,7 @@ function runScript() {
     glideTo(p.x, p.y);
   }
   if (REC.t < it.t || !it.pt || S.screen !== 'play' || !sessFree(s)) return;
+  if (!it.key && !it.cover && REC.t < REC.lastFire + 0.4) return; // after a spool wait, taps resume at a readable pace
   if (!it.cover && !canPullOk(s.puz, s.st, it.id)) {
     // Rule state diverged from the plan (should not happen): re-plan from here, keep the timing.
     const L = lineFrom(s, s.st).line, rest = REC.items.filter(x => !x.cover && !x.hover);
@@ -542,6 +543,7 @@ function runScript() {
     return;
   }
   REC.items.shift();
+  REC.lastFire = REC.t;
   if (it.key) REC.keyT = REC.t;
   if (it.cover) REC.miss = { x: it.pt.x, y: it.pt.y, t: REC.t };
   A.pointer('down', it.pt.x, it.pt.y, 1);
