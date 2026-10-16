@@ -9,7 +9,10 @@ import { readFile, writeFile, stat } from 'node:fs/promises';
 import { SITE, NAME, INDEXNOW_KEY, DROP_UTC_HOUR } from './site.mjs';
 
 const ROOT = 'games/';
-const games = JSON.parse(await readFile(ROOT + 'games.json', 'utf8'));
+// games/shared/ (platform layer, fonts) and games/yt/ (Playables builds) are not site pages:
+// never list them in the hub or sitemap, and keep /yt/ out of search (robots.txt + _headers noindex).
+const NOT_GAMES = new Set(['shared', 'yt']);
+const games = JSON.parse(await readFile(ROOT + 'games.json', 'utf8')).filter(g => !NOT_GAMES.has(g.slug));
 games.forEach((g, i) => (g.order = i));
 const byDate = [...games].sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order);
 byDate.forEach((g, i) => (g.day = i + 1));
@@ -369,7 +372,7 @@ for (const g of games) {
 }
 await put('index.html', hub);
 await put('404.html', notFound);
-await put('robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n`);
+await put('robots.txt', `User-agent: *\nAllow: /\nDisallow: /yt/\n\nSitemap: ${SITE}sitemap.xml\n`);
 await put(`${INDEXNOW_KEY}.txt`, INDEXNOW_KEY);
 
 const urls = [{ loc: SITE, last: await mdate('index.html'), img: SITE + 'og.jpg' }];

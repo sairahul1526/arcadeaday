@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- Fixture for tools/build-playables.mjs + tools/playables-check.mjs. Not a site game (no build markers). -->
+<title>Hello Playable</title>
+<link rel="stylesheet" href="../shared/fonts.css">
+<style>
+  html, body { margin: 0; background: #1d1240; }
+  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
+</style>
+</head>
+<body>
+<!-- yt:body -->
+<canvas id="game"></canvas>
+<!-- /yt:body -->
+<script type="module" src="game.js"></script>
+</body>
+</html>
