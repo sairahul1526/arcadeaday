@@ -42,6 +42,7 @@ import * as R from './render.js';
 import * as SC from './scene.js';
 import * as M from './meta.js';
 import * as LV from './levels.js';
+import { canPull } from './rules.js';
 
 // ---------- style ----------
 const INK = '#2B2440', CREAM = '#FFF4E4', STITCH = '#E9D3B5', SHADE = '#D9BF9C', TOMATO = '#E8463A', TOMATO_D = '#B8322A';
@@ -71,7 +72,9 @@ const e3 = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const eBack = t => { t = clamp(t, 0, 1) - 1; return 1 + 2.70158 * t * t * t + 1.70158 * t * t; };
 const safe = (f, d) => { try { const v = f(); return v === undefined ? d : v; } catch (e) { return d; } };
 const breedOf = id => (id - 1) % 6, coatOf = id => Math.floor((id - 1) / 6);
-const hasVibrate = () => P.env === 'web' && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+// fix 1 (desktop m4): the haptics toggle needs a vibrate API AND a touch screen (desktop Chrome has navigator.vibrate)
+const hasVibrate = () => P.env === 'web' && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
+  && ((typeof window !== 'undefined' && 'ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
 function rr(g, x, y, w, h, r) {
   r = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -338,7 +341,7 @@ function pill(g, b) {
   const down = isDown(b) && !b.disabled;
   const lip = Math.max(2, Math.min(4 * d, b.h * 0.12));
   const h = b.h - lip, push = down ? Math.min(3 * d, lip) : 0;
-  const x = b.x + shakeX(b.id, d), y = b.y + push, lv = lip - push;
+  const hv = hov(b), x = b.x + shakeX(b.id, d), y = b.y + push - (hv ? 2 : 0), lv = lip - push + (hv ? 2 : 0);
   const [top, bot, fg] = b.kind === 'primary' ? [TOMATO, TOMATO_D, '#fff'] : b.kind === 'secondary' ? [TEAL, TEAL_D, '#fff'] : [CREAM, SHADE, INK];
   g.save();
   if (b.disabled) g.globalAlpha *= 0.45;
@@ -348,6 +351,7 @@ function pill(g, b) {
   rr(g, x, y, b.w, h, r); g.fillStyle = top; g.fill();
   rr(g, x, y, b.w, h + lv, r); g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
   rr(g, x + r * 0.6, y + h * 0.12, Math.max(0, b.w - r * 1.2), h * 0.28, h * 0.14); g.fillStyle = 'rgba(255,255,255,0.22)'; g.fill();
+  if (hv) { rr(g, x, y, b.w, h, r); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill(); }
   const cy = y + h / 2;
   let ix = 0, iw = 0;
   const pad = r * 0.7;
@@ -390,7 +394,7 @@ function iconBtn(g, b) {
   const d = b.d || U.du;
   const R0 = Math.min(b.w, b.h) / 2, cx = b.x + b.w / 2 + shakeX(b.id, d), cy0 = b.y + b.h / 2;
   const down = isDown(b) && !b.disabled;
-  const lip = Math.max(1.5, R0 * 0.1), cy = cy0 - lip / 2 + (down ? lip * 0.8 : 0);
+  const hv = hov(b), lip = Math.max(1.5, R0 * 0.1), cy = cy0 - lip / 2 + (down ? lip * 0.8 : 0) - (hv ? 2 : 0);
   g.save();
   if (b.disabled) g.globalAlpha *= 0.45;
   if (b.ring) {
@@ -400,6 +404,7 @@ function iconBtn(g, b) {
   }
   g.beginPath(); g.arc(cx, cy0 + lip / 2, R0 - lip / 2, 0, 7); g.fillStyle = SHADE; g.fill();
   g.beginPath(); g.arc(cx, cy, R0 - lip / 2, 0, 7); g.fillStyle = b.fill || CREAM; g.fill();
+  if (hv) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fill(); }
   g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
   aIcon(g, b.icon, cx, cy, R0 * 1.05, b.iconCol || ICOL[b.icon] || CREAM);
   g.restore();
@@ -451,7 +456,16 @@ function clearSay(text) {
   U.queue = U.queue.filter(q => text && q.text !== text);
 }
 function clearCallouts() { U.callout = null; U.queue = []; U.pop = null; }
-function popAt(text, slot) { U.pop = { text, slot: slot == null ? -1 : slot, t: 0, dur: 0.9 }; }
+/** Celebratory pop at a spool. o: { col, size (u px), big (beats a "+1"), ball (yarn-ball icon) }. */
+function popAt(text, slot, o = {}) {
+  U.pop = { text, slot: slot == null ? -1 : slot, t: 0, dur: o.big ? 1.05 : 0.8, col: o.col || GOLD, size: o.size || 26, big: !!o.big,
+    ball: !!o.ball, sub: 0, burst: !!o.burst };
+}
+const chainN = d => (d ? (d.n != null ? d.n : d.m) | 0 : 0);
+// DECISION (fix 1): pops escalate: +1 cream 22u → CHAIN ×2 gold 28u → ×3 amber 32u → ×4+ tomato 36u with a burst;
+//   COMBO is teal-on-gold, 32u + 3u per step (max 44u). All scale in with a 1.35× overshoot.
+const chainStyle = n => ({ col: n >= 4 ? TOMATO : n >= 3 ? AMBER : GOLD, size: Math.min(36, 24 + 4 * n), big: true, burst: n >= 3 });
+const comboStyle = c => ({ col: TEAL, size: Math.min(44, 26 + 3 * c), big: true, burst: true });
 function rateOk(key, gap) { const t = U.rate[key]; if (t != null && U.t - t < gap) return false; U.rate[key] = U.t; return true; }
 
 // ---------- strand helpers for the director ----------
@@ -559,7 +573,7 @@ function dirL3() {
     on(type, d, S) {
       if ((type === 'basket' || (type === 'pull' && d && d.dest && d.dest.kind === 'basket')) && !attn) { attn = true; attnNext(S, 0.5); }
       if (type === 'spoolEnter' && !chained && d && (S.sess.basket || []).some(b => b && b.c === d.c)) { chained = true; popAt('CHAIN!', d.slot); }
-      if (type === 'chain' && !chained) { chained = true; if (!(d && d.m >= 2)) popAt('CHAIN!', d && d.slot); }
+      if (type === 'chain' && !chained) { chained = true; if (!(d && chainN(d) >= 2)) popAt('CHAIN!', d && d.slot, { col: GOLD, size: 30 }); }
       if (type === 'pull') { if (U.ghost) U.ghost.loops = 0; clearSay(LINE); }
     },
     tick(dt, S) {
@@ -629,8 +643,17 @@ function onBus(type, d) {
   if (U.tut && U.tutOn) safe(() => U.tut.on(type, d, S));
   if (type === 'pull') clearHand('idle');
   switch (type) {
-    case 'chain': if (d && d.m >= 2) popAt(`CHAIN ×${d.m}!`, d.slot); break;
-    case 'coins': if (d && d.n > 0) popAt(`+${d.n}`, U.pop ? U.pop.slot : -1); break;
+    case 'chain': { // contract 1: {n, combo} (old shape {m}); "+1" for one ball, "CHAIN ×n!" from two
+      const n = chainN(d);
+      if (n >= 2) popAt(`CHAIN ×${n}!`, d.slot, chainStyle(n));
+      else if (n === 1 && !(U.pop && U.pop.big && U.pop.t < 0.5)) popAt('+1', d.slot, { col: CREAM, size: 26 });
+      break;
+    }
+    case 'spoolDone': { const c = d ? d.combo | 0 : 0; if (c >= 2) popAt(`COMBO ×${c}!`, d.slot != null ? d.slot : -1, comboStyle(c)); break; }
+    case 'coins': // yarn-ball reward rides under the current pop as a sub-line; alone only when nothing is popping
+      if (d && d.n > 0) { if (U.pop && U.pop.t < 0.6) U.pop.sub = d.n; else popAt(`+${d.n}`, -1, { col: GOLD, size: 24, ball: true }); }
+      break;
+    case 'boosterRefused': if (d && d.reason) refuse(d.kind, d.reason); break;
     case 'full': if (rateOk('full', 3)) say('Basket full: pick yarn that fits a spool', { pri: 1, dur: 2 }); break;
     case 'basketWarn': if (rateOk('warn', 4)) say('Basket almost full!', { pri: 1, dur: 1.6 }); break;
     case 'blocked':
@@ -647,13 +670,13 @@ function onBus(type, d) {
       if (d && d.kind === 'snip') say('Tap any strand to snip it', { pri: 2, dur: 2.6 });
       if (d && d.kind === 'slot') say('Basket +1 slot!', { pri: 2, dur: 1.6 });
       break;
-    case 'hint': if (d && d.id != null && d.id < 0) { U.undoPulse = U.t + 4; say('Undo a pull first', { pri: 2, dur: 2.2 }); } break;
+    case 'hint': if (d && d.id != null && d.id < 0) { U.undoPulse = U.t + 4; if (U.t - (U.rate.refuse || -9) > 1.5) say('Undo a pull first', { pri: 2, dur: 2.2 }); } break;
     case 'doomed':
       if (safe(() => M.boosterUnlocked('undo'), false) && rateOk('doomed', 8)) say('Tight spot! Undo can help', { pri: 1, dur: 2.2 });
       break;
   }
 }
-const BUS = ['press', 'pull', 'blocked', 'full', 'basketWarn', 'chain', 'coins', 'spoolEnter', 'basket', 'reveal', 'unlock',
+const BUS = ['press', 'pull', 'blocked', 'full', 'basketWarn', 'chain', 'spoolDone', 'boosterRefused', 'coins', 'spoolEnter', 'basket', 'reveal', 'unlock',
   'paw', 'thaw', 'kittenFree', 'win', 'stuck', 'doomed', 'undo', 'booster', 'hint'];
 
 // ---------- init ----------
@@ -680,9 +703,15 @@ export function update(dt, S) {
   if (!S) return;
   U.S = S;
   U.t += dt;
-  U.du = clamp(isLand(S) ? Math.min(S.W / 700, S.H / 520) : Math.min(S.W / 390, S.H / 700), 0.55, 2.6);
+  U.du = clamp(isLand(S) ? Math.min(S.W / 700, S.H / 520) : Math.min(S.W / 390, S.H / 700), 0.55, 4.4); // fix 1: 4K scales
   if (S.screen !== U.scr) onScreen(U.scr, S.screen, S);
   if (S.sess !== U.sessRef) onSession(S);
+  // GDD §10 (fix 1, phone m3): no basket on L1. Only while it is empty and nothing is flying to it (L1 can't use it).
+  if (S.L) {
+    const s = S.sess;
+    S.L.hideBasket = !!(s && s.kind === 'level' && s.id === 1 && s.st && s.st.basket && s.st.basket.every(c => c < 0)
+      && !(s.flights || []).some(f => f && f.dest && f.dest.kind === 'basket'));
+  }
   const playing = S.screen === 'play' && !U.card;
 
   // director starts once the level is on screen
@@ -730,6 +759,7 @@ export function update(dt, S) {
 function onScreen(prev, next, S) {
   U.scr = next;
   U.toast = null; // a toast belongs to the screen that raised it
+  U.hover = null; setCursor('default');
   if (DIALOGS.includes(next) && !DIALOGS.includes(prev)) U.ret = HOMES.includes(prev) ? prev : (safe(() => M.cur(), 1) > LEVELS ? 'allbeaten' : 'title');
   if (next === 'map' && !DIALOGS.includes(prev)) mapFocus(S, true);
   if ((prev === 'win' || prev === 'lose') && next !== 'win' && next !== 'lose') {
@@ -827,8 +857,31 @@ function loseBooster(k) {
 }
 
 // ---------- boosters ----------
+/** Contract 3: api.canUseBooster(key) → {ok, reason}; local fallback while the api lacks it. */
+function canUse(k) {
+  if (api && typeof api.canUseBooster === 'function') return safe(() => api.canUseBooster(k), { ok: true, reason: '' }) || { ok: true, reason: '' };
+  const s = U.S && U.S.sess;
+  if (!s) return { ok: false, reason: '' };
+  if (k === 'undo' && !(s.hist && s.hist.length)) return { ok: false, reason: 'Nothing to undo yet' };
+  if (k === 'slot' && s.slotUsed) return { ok: false, reason: '+1 Slot already used this level' };
+  if ((k === 'hint' || k === 'snip') && s.stuck && s.boosterArm !== k) return { ok: false, reason: 'No moves left. Try Undo' };
+  return { ok: true, reason: '' };
+}
+function refuse(k, reason) {
+  if (!reason || U.t - (U.rate['r:' + reason] || -9) < 1) return;
+  U.rate['r:' + reason] = U.rate.refuse = U.t;
+  U.shakes['b-' + k] = U.t; U.shakes['l-' + k] = U.t;
+  if (U.card) toast(reason); else say(reason, { pri: 2, dur: 1.8 });
+}
 function tapBooster(k) {
   if (!safe(() => M.boosterUnlocked(k), false)) return false;
+  // contract 3: ask first; a refusal charges nothing (no buy, no stock) and says why
+  const can = canUse(k);
+  if (!can.ok) {
+    refuse(k, can.reason || 'Not right now');
+    if (can.doomed) safe(() => api.useBooster(k)); // refuses again, but flags doomed + pulses Undo (no charge)
+    return false;
+  }
   if (safe(() => M.booster(k), 0) <= 0) {
     if (safe(() => M.balance(), 0) < BOOSTERS[k].price) {
       U.shakes['b-' + k] = U.t; U.shakes['l-' + k] = U.t;
@@ -842,11 +895,13 @@ function tapBooster(k) {
   const ok = safe(() => api.useBooster(k), false);
   if (!ok) {
     const S = U.S, msg = k === 'slot' ? 'Only one +1 Slot per try' : k === 'undo' ? 'Nothing to undo yet' : k === 'hint' && S && S.sess && S.sess.hint ? 'Hint is showing' : '';
-    if (msg) say(msg, { pri: 2, dur: 1.6 });
+    if (msg) refuse(k, msg);
   }
   return !!ok;
 }
 function toast(text) { U.toast = { text, t0: U.t }; }
+/** meta.kittenName(i) is 0-based (i = kittenId - 1); '' when meta lacks it. */
+const kName = i => (typeof M.kittenName === 'function' ? safe(() => M.kittenName(i), '') : '') || '';
 
 // ---------- draw ----------
 export function draw(g, S) {
@@ -939,7 +994,8 @@ function drawLoading(g, S) {
 // ---------- title ----------
 function drawTitle(g, S) {
   const d = U.du, W = S.W, inset = layoutOf(S).inset || 0, H = S.H - inset;
-  const land = isLand(S), canLink = !!P.canLink;
+  // fix 1 (desktop m6): the web page's fixed nav.back chips already link to more games; no duplicate in the canvas
+  const land = isLand(S), canLink = !!P.canLink && !safe(() => !!document.querySelector('nav.back'), false);
   const cur = safe(() => M.cur(), 1), prog = safe(() => M.progress(), 0);
   const dl = safe(() => M.daily(), { unlocked: false, won: true });
   const lv2 = safe(() => LV.getLevel(2), null);
@@ -1025,13 +1081,27 @@ function mapFocus(S, snap) {
   const mm = mapM(S), cur = Math.min(LEVELS, safe(() => M.cur(), 1));
   U.map.sel = cur;
   const s = clamp(mm.yc(cur) - mm.baseY + mm.topH + (mm.H - mm.topH - mm.botH) * 0.55, 0, mm.maxScroll);
-  if (snap) { U.map.scroll = s; U.map.v = 0; U.map.target = null; } else U.map.target = s;
+  if (snap) { U.map.scroll = s; U.map.v = 0; U.map.target = null; U.map.key = null; } else U.map.target = s;
+}
+// fix 1 (desktop m2): the map keeps the content point at the view's centre, in du units, across a resize
+function mapKeep(mm) {
+  const m = U.map, key = mm.W + 'x' + mm.H, mid = mm.topH + (mm.H - mm.topH - mm.botH) / 2;
+  if (m.key && m.key !== key && m.anchor != null) {
+    const s = m.anchor * mm.d - mm.baseY + mid;
+    m.scroll = clamp(s, 0, mm.maxScroll);
+    if (m.target != null) m.target = clamp(m.tAnchor * mm.d - mm.baseY + mid, 0, mm.maxScroll);
+  }
+  m.key = key;
+  m.anchor = (m.scroll + mm.baseY - mid) / mm.d;
+  m.tAnchor = m.target != null ? (m.target + mm.baseY - mid) / mm.d : null;
 }
 function mapUpdate(dt, S) {
   const mm = mapM(S), m = U.map;
+  mapKeep(mm);
   if (m.target != null) { m.scroll = lerp(m.scroll, m.target, 1 - Math.exp(-8 * dt)); if (Math.abs(m.scroll - m.target) < 0.5) m.target = null; }
   else if (!m.drag && Math.abs(m.v) > 1) { m.scroll += m.v * dt; m.v *= Math.exp(-3.5 * dt); }
   if (m.scroll < 0 || m.scroll > mm.maxScroll) { m.scroll = clamp(m.scroll, 0, mm.maxScroll); m.v = 0; }
+  mapKeep(mm);
 }
 function mapSelect(id) {
   const S = U.S, mm = mapM(S);
@@ -1074,6 +1144,7 @@ function trophy(g, x, y, s) {
 }
 function drawMap(g, S) {
   const mm = mapM(S), d = mm.d, W = mm.W, H = mm.H;
+  mapKeep(mm);
   const cur = safe(() => M.cur(), 1), sel = clamp(U.map.sel || 1, 1, Math.min(cur, LEVELS));
   U.map.sel = sel;
   const span = mm.dy + mm.gap;
@@ -1128,8 +1199,15 @@ function drawMap(g, S) {
     }
   }
   // trophy
+  // fix 1 (state M2): the trophy is a button: All Beaten / Bonus Tangles once every level is beaten
   const ty = nY(mm, mm.yc(LEVELS) + 130 * d);
-  if (ty > -60 * d && ty < H + 60 * d) trophy(g, mm.cx - mm.amp * 0.3, ty, 54 * d);
+  if (ty > -60 * d && ty < H + 60 * d) {
+    const tx = mm.cx - mm.amp * 0.3, done = cur > LEVELS, ts = 54 * d;
+    if (done) { const p = 0.5 + 0.5 * Math.sin(U.t * 3); g.save(); g.globalAlpha = 0.35 + 0.3 * p; g.beginPath(); g.arc(tx, ty - ts * 0.1, ts * (0.62 + 0.06 * p), 0, 7); g.fillStyle = GOLD; g.fill(); g.restore(); }
+    const tb = reg({ id: 'm-trophy', label: done ? 'All beaten' : 'Trophy', x: tx - ts * 0.5, y: ty - ts * 0.6, w: ts, h: ts * 1.1,
+      act: () => { if (done) api.go('allbeaten'); else toast(`Beat all ${LEVELS} levels to win the trophy`); } });
+    if (hov(tb)) { g.save(); g.translate(0, -2); trophy(g, tx, ty, ts); g.restore(); } else trophy(g, tx, ty, ts);
+  }
   // nodes
   U.map.nodes = [];
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
@@ -1183,8 +1261,12 @@ function drawMap(g, S) {
   rr(g, bx2, cy - 15 * d, bw2, 30 * d, 15 * d); g.fillStyle = '#fff'; g.fill(); g.lineWidth = Math.max(1, 2 * d); g.strokeStyle = INK; g.stroke();
   aIcon(g, 'ball', bx2 + 15 * d, cy, 20 * d);
   txt(g, bal, bx2 + 28 * d + (bw2 - 34 * d) / 2, cy + 1 * d, 17 * d, { maxW: bw2 - 34 * d });
-  // bottom PLAY
+  // bottom PLAY on a backing strip (fix 1, desktop m1): nodes and world banners scroll under the strip, not the button
   const pw = Math.min(W - 24 * d, 300 * d), py = H - mm.inset - 12 * d - mm.playH;
+  const stripY = py - 10 * d;
+  g.fillStyle = CREAM; g.fillRect(0, stripY, W, H - stripY);
+  g.fillStyle = INK; g.fillRect(0, stripY, W, 3 * d);
+  g.save(); g.setLineDash([6 * d, 5 * d]); g.strokeStyle = STITCH; g.lineWidth = 1.6 * d; g.beginPath(); g.moveTo(0, stripY + 9 * d); g.lineTo(W, stripY + 9 * d); g.stroke(); g.restore();
   pill(g, { id: 'map-play', label: `PLAY L${sel}`, kind: 'primary', x: (W - pw) / 2, y: py, w: pw, h: mm.playH, act: () => api.go('play', { kind: 'level', id: sel }) });
 }
 
@@ -1266,13 +1348,30 @@ function drawPop(g, S, L) {
   const rs = safe(() => rackSlots(L), null);
   if (!rs) return;
   const sl = p.slot >= 0 && rs.active[p.slot] ? rs.active[p.slot] : rs.active[0];
-  const u = L.u, k = p.t / p.dur;
-  const x = clamp(sl.x, L.rack.x + 60 * u, L.rack.x + L.rack.w - 60 * u), y = sl.y - sl.h * 0.55 - 14 * u * e3(k);
+  const u = L.u, k = p.t / p.dur, size = (p.size || 26) * u;
+  const x = clamp(sl.x, L.rack.x + 70 * u, L.rack.x + L.rack.w - 70 * u);
+  const y = Math.max(L.rack.y + size * 0.6, sl.y - sl.h * 0.5 - size * 0.2) - 16 * u * e3(k);
+  // punchy scale-in: 0.3 → 1.35 in 0.1 s, settle to 1 by 0.28 s (overshoot), then drift up and fade
+  const t = p.t, sc = t < 0.1 ? lerp(0.3, 1.35, t / 0.1) : t < 0.28 ? lerp(1.35, 1, e3((t - 0.1) / 0.18)) : 1;
   g.save();
   g.globalAlpha = Math.min(1, (1 - k) / 0.25);
-  const sc = eBack(p.t / 0.22);
-  g.translate(x, y); g.scale(sc, sc);
-  txt(g, p.text, 0, 0, 26 * u, { col: GOLD, stroke: INK, sk: 0.24, maxW: Math.min(L.rack.w * 0.7, 220 * u) });
+  g.translate(x, y); g.rotate(p.big ? -0.06 : 0); g.scale(sc, sc);
+  if (p.burst) { // sunburst behind the big ones
+    const r = size * 1.25, n = 10;
+    g.save(); g.rotate(U.t * 1.5); g.globalAlpha *= 0.55 * (1 - k);
+    g.fillStyle = p.col === TEAL ? GOLD : CREAM;
+    g.beginPath();
+    for (let i = 0; i < n * 2; i++) { const a = i * Math.PI / n, q = i % 2 ? r * 0.45 : r; g.lineTo(Math.cos(a) * q * 1.6, Math.sin(a) * q * 0.8); }
+    g.closePath(); g.fill(); g.restore();
+  }
+  const maxW = Math.min(L.rack.w * 0.8, 260 * u);
+  const sz = txt(g, p.text, 0, 0, size, { col: p.col || GOLD, stroke: INK, sk: 0.26, maxW });
+  if (p.ball) aIcon(g, 'ball', -tw(g, p.text, sz, FT) / 2 - sz * 0.55, 0, sz * 0.8);
+  if (p.sub) {
+    const ss = sz * 0.55, label = '+' + p.sub, w = tw(g, label, ss, FT);
+    aIcon(g, 'ball', -w / 2 - ss * 0.15, sz * 0.78, ss * 0.95);
+    txt(g, label, ss * 0.45, sz * 0.8, ss, { col: GOLD, stroke: INK, sk: 0.26 });
+  }
   g.restore();
 }
 function drawAttn(g) {
@@ -1317,11 +1416,22 @@ function drawFly(g, S, L) {
   const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
   const rs = boosterRects(L, keys);
   const from = { x: L.board.x + L.board.w / 2, y: L.board.y + L.board.h * 0.45 };
+  // DECISION (fix 1, phone m6): the gift flies on a quadratic curve whose last leg comes in from OUTSIDE the booster
+  //   cluster (away from its centre, biased upward; from the board side in the column layout), so it never
+  //   crosses another booster button on the way in.
+  const cl = keys.map(k => rs[k]).filter(Boolean);
+  const ccx = cl.reduce((a, r) => a + r.x + r.w / 2, 0) / Math.max(1, cl.length);
+  const ccy = cl.reduce((a, r) => a + r.y + r.h / 2, 0) / Math.max(1, cl.length);
   for (const f of U.fly) {
     const r = rs[f.k], t = (U.t - f.t0) / f.dur;
     if (!r || t < 0 || t > 1.3) continue;
     const to = { x: r.x + r.w / 2, y: r.y + r.h / 2 }, p = e3(Math.min(1, t));
-    const x = lerp(from.x, to.x, p), y = lerp(from.y, to.y, p) - Math.sin(p * Math.PI) * 80 * L.u;
+    let dx, dy;
+    if (L.boostDir === 'col') { dx = -1; dy = 0; } else { dx = Math.abs(to.x - ccx) < 2 ? 0 : Math.sign(to.x - ccx) * 0.6; dy = -1; }
+    const dl = Math.hypot(dx, dy) || 1, K = Math.max(r.w, 40 * L.u) * 2.2;
+    const c = { x: clamp(to.x + dx / dl * K, 0, S.W), y: clamp(to.y + dy / dl * K, 0, S.H) };
+    const x = (1 - p) * (1 - p) * from.x + 2 * (1 - p) * p * c.x + p * p * to.x;
+    const y = (1 - p) * (1 - p) * from.y + 2 * (1 - p) * p * c.y + p * p * to.y;
     const s = Math.min(r.w, 46 * L.u) * (t > 1 ? 1 + (t - 1) * 1.5 : lerp(1.4, 0.9, p));
     g.save(); g.globalAlpha = t > 1 ? Math.max(0, 1 - (t - 1) / 0.3) : 1;
     g.beginPath(); g.arc(x, y, s * 0.55, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 2.5 * L.u; g.strokeStyle = INK; g.stroke();
@@ -1568,6 +1678,12 @@ function drawKittens(g, S) {
     U.kc = { key, cv: c };
   }
   if (U.kc.cv) g.drawImage(U.kc.cv, gx, gy2, gw, gh2);
+  // tap a portrait → its name (or how to meet it); invisible buttons over the cached grid
+  for (let i = 0; i < LEVELS; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    reg({ id: 'k-cell' + i, x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell, hit: { x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell },
+      act: () => { const nm = kName(i); toast(ks[i] > 0 ? (nm ? `${nm}${ks[i] > 1 ? ' (golden!)' : ''}, rescued on level ${i + 1}` : `Rescued on level ${i + 1}`) : `Beat level ${i + 1} to meet this kitten`); } });
+  }
   const fw = Math.min(iw, 240 * d);
   pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: py + ph - pad - 52 * d, w: fw, h: 52 * d, act: () => api.go(U.ret) });
 }
@@ -1629,7 +1745,9 @@ function drawDaily(g, S) {
     { h: 6 },
     { h: 56, fn: (y, hh, e) => {
       const bw = Math.min(iw, 300 * e);
-      pill(g, { id: 'd-play', label: info.won ? 'Done! See you tomorrow' : "PLAY TODAY'S KNOT", kind: 'primary', disabled: !!info.won, x: W / 2 - bw / 2, y, w: bw, h: 52 * e, d: e,
+      // fix 1 (GDD: "Replays allowed, reward once"): a won daily can be replayed; meta pays only once
+      pill(g, { id: 'd-play', label: info.won ? 'PLAY AGAIN' : "PLAY TODAY'S KNOT", sub: info.won ? 'Just for fun: reward already won' : null,
+        kind: info.won ? 'secondary' : 'primary', x: W / 2 - bw / 2, y, w: bw, h: 52 * e, d: e,
         act: () => api.go('play', { kind: 'daily', id: key }) });
     } },
   ]);
@@ -1682,7 +1800,7 @@ function cardRect(S, type) {
     return { x: L.rack.x, y: L.rack.y, w: L.rack.w, h: sf.y + sf.h - m - L.rack.y };
   }
   const x = sf.x + m, w = sf.w - 2 * m;
-  if (type === 'lose') { const y = L.callout.y; return { x, y, w, h: Math.max(L.callout.h, L.tray.y - m - y) }; }
+  if (type === 'lose') { const y = L.callout.y; return { x, y, w, h: Math.max(L.callout.h, sf.y + sf.h - m * 0.5 - y) }; }
   const B = S.sess && S.sess.B, y = L.rack.y;
   const bottom = B && B.kitten ? B.kitten.y - B.kitten.s * 1.12 - m : L.tray.y - m;
   return { x, y, w, h: Math.max(bottom - y, Math.min(S.H - y - m, 300 * L.u)) };
@@ -1702,7 +1820,13 @@ function cardAnim(g, c, rect) {
 function drawWinCard(g, S, c) {
   const d = U.du, area = cardRect(S, 'win'), res = c.data || {}, sess = S.sess || {};
   const kind = sess.kind || 'level', st = clamp(res.stars || 0, 0, 3);
-  const title = kind === 'daily' ? 'Daily Knot done!' : kind === 'bonus' ? 'Tangle cleared!' : 'Kitten rescued!';
+  // fix 1: warmer copy. Title by kind and stars; the stats line says what 3★ means instead of "3★ at N".
+  const title = kind === 'daily' ? 'Daily Knot untied!' : kind === 'bonus' ? (st >= 3 ? 'Purr-fect tangle!' : 'Tangle cleared!')
+    : st >= 3 ? 'Purr-fect rescue!' : 'Kitten rescued!';
+  const peak = res.peak ?? 0, par = res.par ?? 0;
+  const statLine = sess.capped && st < 3 ? 'Snip / +1 Slot used: 2★ max'
+    : st >= 3 ? (peak ? `Tidy basket! Peak ${peak} of ${par} for 3★` : 'Spotless! The basket stayed empty')
+      : `Basket peaked at ${peak}. Keep it to ${par} for 3★`;
   const kid = res.kittenId || 0;
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
@@ -1718,7 +1842,7 @@ function drawWinCard(g, S, c) {
       }
     } },
     { h: 24, fn: (y, hh, e) => {
-      const line = `Basket peak ${res.peak ?? 0} · 3★ at ${res.par ?? 0}`, s = 15 * e;
+      const line = statLine, s = 15 * e;
       const lw = tw(g, line, s, FB, '800'), ic = 18 * e, total = Math.min(iw0, lw + ic + 6 * e);
       const x0 = area.x + area.w / 2 - total / 2;
       aIcon(g, 'slot', x0 + ic / 2, y + hh / 2, ic);
@@ -1735,7 +1859,8 @@ function drawWinCard(g, S, c) {
       if (kid) {
         portrait(g, kid, cx - s * 0.6, y + s / 2 + 2 * e, s, res.golden ? 2 : 1, S.dpr || 1);
         aKitty(g, cx + s * 0.75, y + s + 2 * e, s * 0.95, 'celebrate', U.t, wear);
-        txt(g, 'joined your Kitten Corner', cx, y + hh - 9 * e, 14 * e, { f: FB, w: '800', maxW: iw0 });
+        const nm = kName(kid - 1);
+        txt(g, nm ? (res.golden ? `Golden ${nm} joins your Kitten Corner!` : `${nm} is safe in your Kitten Corner`) : (res.golden ? 'A golden kitten! Off to your Kitten Corner' : 'Safe and sound in your Kitten Corner'), cx, y + hh - 9 * e, 14 * e, { f: FB, w: '800', maxW: iw0 });
       } else aKitty(g, cx, y + hh - 6 * e, s * 1.1, 'celebrate', U.t, wear);
     } },
     { h: 6 },
@@ -1765,6 +1890,37 @@ function drawWinCard(g, S, c) {
   }
   g.restore();
 }
+/** Free (pullable) strands while stuck: each gets a ✕ at its tap point. Cached per rule state. */
+function stuckMarks(S) {
+  const sess = S.sess;
+  if (!sess || !sess.stuck || !sess.puz || !sess.st || !api || typeof api.tapPointFor !== 'function') return [];
+  const st = sess.st, key = String(st.removed) + ':' + st.moves + ':' + S.W + 'x' + S.H;
+  if (U.marks && U.marks.key === key && U.marks.sess === sess) return U.marks.pts;
+  const pts = [];
+  for (let i = 0; i < (sess.puz.n | 0); i++) {
+    if (isRemoved(st, i)) continue;
+    const cp = safe(() => canPull(sess.puz, st, i), null); // free = not covered / locked / paw-gated; 'full' is why we're stuck
+    if (!cp || !(cp.ok || cp.why === 'full')) continue;
+    const p = safe(() => api.tapPointFor(i), null);
+    if (p) pts.push({ x: p.x, y: p.y });
+  }
+  U.marks = { key, sess, pts };
+  return pts;
+}
+function drawMarks(g, S, pts) {
+  if (!pts.length) return;
+  const B = S.sess && S.sess.B, r = Math.max(10, Math.min(26, ((B && B.unit) || 40) * 0.3));
+  const t = U.t - ((U.card && U.card.t0) || 0), a = clamp(t / 0.25, 0, 1), pulse = 1 + 0.08 * Math.sin(U.t * 6);
+  g.save();
+  for (const p of pts) {
+    const s = r * eBack(a) * pulse;
+    g.beginPath(); g.arc(p.x, p.y, s, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(2, s * 0.16); g.strokeStyle = INK; g.stroke();
+    g.lineCap = 'round'; g.lineWidth = Math.max(2.5, s * 0.26); g.strokeStyle = TOMATO;
+    g.beginPath(); g.moveTo(p.x - s * 0.42, p.y - s * 0.42); g.lineTo(p.x + s * 0.42, p.y + s * 0.42);
+    g.moveTo(p.x + s * 0.42, p.y - s * 0.42); g.lineTo(p.x - s * 0.42, p.y + s * 0.42); g.stroke();
+  }
+  g.restore();
+}
 function shareWin(sess, res) {
   const st = '★'.repeat(clamp(res.stars || 1, 1, 3));
   const text = sess.kind === 'daily' ? `I untangled today's Daily Knot in Knot Kitty ${st}` : sess.kind === 'level' ? `I rescued the kitten on level ${sess.id} of Knot Kitty ${st}` : `I cleared a bonus tangle in Knot Kitty ${st}`;
@@ -1779,17 +1935,27 @@ function drawLoseCard(g, S, c) {
   if (unU) btns.push({ id: 'l-undo', label: 'Undo', icon: 'undo', badge: nU > 0 ? { n: nU } : { price: BOOSTERS.undo.price }, kind: undoPrimary ? 'primary' : 'secondary', act: () => loseBooster('undo') });
   if (unS) btns.push({ id: 'l-slot', label: '+1 Slot', icon: 'slot', badge: nS > 0 ? { n: nS } : { price: BOOSTERS.slot.price }, kind: 'secondary', act: () => loseBooster('slot') });
   btns.push({ id: 'l-retry', label: 'Retry', icon: 'retry', kind: undoPrimary ? 'secondary' : 'primary', act: () => { U.loseDone = true; U.card = null; api.retry(); } });
+  // fix 1: free strands that have nowhere to go get a ✕ (drawn under the card, which is docked low so the board
+  //   top stays visible), and the copy is warm: "So close!" + how few strands were left.
+  const marks = stuckMarks(S);
+  drawMarks(g, S, marks);
+  const sess = S.sess || {}, left = sess.puz && sess.st ? Math.max(0, (sess.puz.n | 0) - (sess.st.count | 0)) : 0;
+  const close = left > 0 && left <= Math.max(6, ((sess.puz && sess.puz.n) | 0) * 0.4);
+  const warm = close ? `So close! Only ${left} strand${left === 1 ? '' : 's'} to go` : 'Out of room! Undo a pull or try again';
+  const why = marks.length ? 'Strands marked ✕ have no spool or basket room' : 'No strand fits a spool or the basket';
   const list = [
-    { h: 38, fn: (y, hh, e) => txt(g, 'Out of room!', area.x + area.w / 2, y + hh / 2, 30 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
-    { h: 24, fn: (y, hh, e) => txt(g, 'No strand fits a spool', area.x + area.w / 2, y + hh / 2, 15 * e, { f: FB, w: '800', maxW: iw }) },
-    { h: 10 },
+    { h: 36, fn: (y, hh, e) => txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 30 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
+    { h: 22, fn: (y, hh, e) => txt(g, warm.slice(warm.indexOf('!') + 2), area.x + area.w / 2, y + hh / 2, 16 * e, { f: FB, w: '900', col: TOMATO_D, maxW: iw }) },
+    { h: 20, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, 13 * e, { f: FB, w: '800', col: '#5A5066', maxW: iw }) },
+    { h: 8 },
     { h: 54, fn: (y, hh, e) => {
       const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length;
       btns.forEach((b, i) => pill(g, { ...b, x: area.x + pad + i * (bw + gap), y, w: bw, h: 50 * e, d: e, icon: bw > 120 * e ? b.icon : null }));
     } },
   ];
   const lay = rows(list, d, area.h - 2 * pad);
-  const rect = { x: area.x, y: area.y, w: area.w, h: lay.h + 2 * pad * lay.k };
+  const rh = lay.h + 2 * pad * lay.k;
+  const rect = { x: area.x, y: area.y + Math.max(0, area.h - rh), w: area.w, h: rh }; // docked to the bottom of its area
   g.save();
   cardAnim(g, c, rect);
   panel(g, rect.x, rect.y, rect.w, rect.h, d * Math.max(0.7, lay.k));
@@ -1852,7 +2018,47 @@ function drawToast(g, S) {
 
 // ---------- input ----------
 function findBtn(id) { for (let i = U.btns.length - 1; i >= 0; i--) if (U.btns[i].id === id) return U.btns[i]; return null; }
-function hitBtn(x, y) { for (let i = U.btns.length - 1; i >= 0; i--) { const b = U.btns[i]; if (inR(hitOf(b), x, y)) return b; } return null; }
+// DECISION (fix 1, phone M1): hits resolve by z-order only when the point is inside a button's drawn shape; in the
+//   ≥ 44 px expanded margins the nearest centre wins, so neighbouring small buttons never steal each other's taps.
+function hitBtn(x, y) {
+  let best = null, bd = Infinity;
+  for (let i = U.btns.length - 1; i >= 0; i--) {
+    const b = U.btns[i];
+    if (!inR(hitOf(b), x, y)) continue;
+    if (inR(b, x, y)) return b;
+    const d = Math.hypot(b.x + b.w / 2 - x, b.y + b.h / 2 - y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+// ---------- desktop hover + cursor (fix 1, desktop M2) ----------
+let cvsEl = null, curCursor = '';
+function setCursor(c) {
+  if (c === curCursor) return;
+  curCursor = c;
+  try {
+    if (!cvsEl && typeof document !== 'undefined') cvsEl = document.getElementById('c');
+    if (cvsEl) cvsEl.style.cursor = c;
+  } catch (e) { /* no DOM */ }
+}
+function hoverAt(x, y, S) {
+  const b = hitBtn(x, y);
+  U.hover = b && !b.disabled ? b.id : null;
+  let c = U.hover ? 'pointer' : '';
+  if (!c && S.screen === 'map' && !U.card) {
+    for (const n of U.map.nodes) if (Math.hypot(n.x - x, n.y - y) < n.r + 12 * U.du) { c = n.locked ? 'not-allowed' : 'pointer'; break; }
+  }
+  if (!c && S.screen === 'play' && !U.card && S.sess && !S.sess.result && api && typeof api.pickStrand === 'function') {
+    const id = safe(() => api.pickStrand(x, y), -1);
+    if (id >= 0) {
+      const sess = S.sess;
+      const ok = sess.boosterArm === 'snip' || safe(() => canPull(sess.puz, sess.st, id).ok, false);
+      c = ok ? 'pointer' : 'not-allowed';
+    }
+  }
+  setCursor(c || 'default');
+}
+const hov = b => U.hover === b.id && !b.disabled && !(U.press && U.press.id === b.id);
 function hitSlider(x, y) {
   for (const s of U.sliders) { const cy = s.y + s.h / 2, hh = Math.max(44, s.h); if (x >= s.x && x <= s.x + s.w && y >= cy - hh / 2 && y <= cy + hh / 2) return s; }
   return null;
@@ -1875,6 +2081,7 @@ export function pointer(type, x, y, S) {
   if (type === 'down') {
     if (scr === 'play') { U.idle = 0; clearHand('idle'); if (U.ghost) U.ghost.loops = 0; }
     const b = hitBtn(x, y);
+    U.hover = null;
     if (b) { U.press = { id: b.id, x, y, over: true }; if (scr === 'map' && !U.card) m.down = { x, y, s0: m.scroll, t: now(), moved: false, btn: true }; return true; }
     if (!U.card) {
       const sl = hitSlider(x, y);
@@ -1895,7 +2102,8 @@ export function pointer(type, x, y, S) {
         return true;
       }
     }
-    if (U.press) { const b = findBtn(U.press.id); U.press.over = !!b && inR(hitOf(b), x, y); return true; }
+    if (U.press) { const b = findBtn(U.press.id), h = hitBtn(x, y); U.press.over = !!b && !!h && h.id === b.id; return true; }
+    if (!m.down) hoverAt(x, y, S); // no gesture: mouse hover (desktop)
     return modal;
   }
   if (type === 'up' || type === 'cancel') {
@@ -1908,8 +2116,8 @@ export function pointer(type, x, y, S) {
     }
     if (U.press) {
       const p = U.press; U.press = null;
-      const b = findBtn(p.id);
-      if (type === 'up' && b && inR(hitOf(b), x, y)) press(b);
+      const b = findBtn(p.id), h = hitBtn(x, y);
+      if (type === 'up' && b && h && h.id === b.id) press(b);
       return true;
     }
     return modal;
@@ -1938,6 +2146,7 @@ export function key(e, S) {
     if (scr === 'pause') { api.resume(); return true; }
     if (DIALOGS.includes(scr)) { if (U.reset) { U.reset = 0; return true; } api.go(U.ret); return true; }
     if (scr === 'play') { api.pause(); return true; }
+    if (scr === 'map') { api.go('title'); return true; } // fix 1 (desktop m5): Esc on the map goes back to the title
     return false;
   }
   if ((k === 'Enter' || k === ' ' || k === 'Spacebar') && !e.repeat) {

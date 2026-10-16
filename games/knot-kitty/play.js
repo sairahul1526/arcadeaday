@@ -18,13 +18,23 @@
 // DECISION: nextQ holds at most the 2 visible upcoming spools; the rest is sess.moreN.
 // DECISION: events that describe something arriving (wind, basket, chain, spoolDone, spoolEnter, thaw) fire on
 //   visual arrival so audio matches the picture; pull / unlock / paw / reveal fire on the tap. pull also carries dur.
-// DECISION: a tap is buffered while spoolBusy, which also covers a spool that is full in the rules but still
-//   waiting for its last strand to land (it is about to roll off). The buffered tap resolves the frame the incoming
-//   spool lands.
+// DECISION: taps are queued (sess.queue, FIFO, max QUEUE_MAX) while spoolBusy, which also covers a spool that is full
+//   in the rules but still waiting for its last strand to land (it is about to roll off). A tap is queued when it is
+//   legal at its turn, i.e. after the taps already queued (checked on a scratch copy of the rule state), so a burst
+//   A then B (B under A) is kept. Queued ids are mirrored in S.pending (Set) for render's pending pulse, and
+//   sess.buffered = queue[0] ?? null stays for older readers (modes.sessFree). The queue drains one tap per
+//   QUEUE_GAP s once nothing is busy; a queued tap that is no longer legal gets the normal blocked feedback.
+// DECISION: combo = spools completed back to back (a pull that completes no spool resets it). Each completed spool
+//   remembers the combo it reached; 'spoolDone' {i, combo} and 'chain' {n, combo} carry it at visual arrival.
+//   'chain' fires on every ball that lands on a spool (n = balls that spool has absorbed so far, ≥ 1; m = n kept for
+//   older listeners). combo ≥ 2 calls render.shake / render.hitStop when RENDER provides them.
+// DECISION: canUseBooster(S, key) → {ok, reason} is the single check; applyBooster calls it first and returns false
+//   with no side effects (no charge, no state change, no events) when it says no.
 // DECISION: a press on a covered/locked/pawed strand shows the blocker rings right away (§3.6); the release then adds
 //   the wiggle, flinch and 'blocked' event (§3.3) unless the hold became a peek (≥ 0.35 s), which does nothing.
 // DECISION: Snip arms on the booster tap and is consumed (meta.useBooster) only when a snipped pull happens.
-// DECISION: Hint runs hintMove first; −1 (doomed) pulses Undo, emits hint {id:-1} and consumes nothing.
+// DECISION: Hint runs hintMove first (cached per rule state); −1 (doomed) makes canUseBooster refuse, so nothing is
+//   consumed. game.js turns a refused Hint into hint {id:-1} (pulses Undo) for the keyboard path.
 // DECISION: the doomed check runs once flights have landed (or 0.8 s after the pull), so its main-thread cost never
 //   lands mid-flight. It is solve(puz, st, 40000)'s exact DP (rules.makeSolver) without solve's beam fallback, since
 //   only an exact "no win" may pulse Undo and the beam can cost far more than the 40000-state budget.
@@ -43,11 +53,13 @@ import * as levels from './levels.js';
 import * as meta from './meta.js';
 import { fitBoard, rackSlots, basketSlots } from './layout.js';
 import { buildGeo } from './render.js';
+import * as RN from './render.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const bit = i => (1 << i) >>> 0;
 const has = (mask, i) => ((mask >>> i) & 1) === 1;
 const ease = p => (p <= 0 ? 0 : p >= 1 ? 1 : p * p * (1.6 - 0.6 * p));
+const QUEUE_MAX = 3, QUEUE_GAP = 0.09;
 
 // ------------------------------------------------------------------ session
 export function createSession(kind, id, S) {
@@ -73,7 +85,7 @@ export function createSession(kind, id, S) {
     slots: [], nextQ: [], visNext: st.next, moreN: 0, spoolVis: new Map(),
     basket: st.basket.map(() => null),
     flights: [], parts: [], rings: [], wiggles: new Map(), lifted: new Set(), flash: new Map(),
-    press: null, buffered: null, spoolBusy: false,
+    press: null, buffered: null, queue: [], queueT: -9, spoolBusy: false, combo: 0,
     kitten: { stage: 0, loops: 4, flinch: 0, freeT: -1, golden: false },
     kitty: { anim: 'idle', t0: S.T },
     revealT: new Map(), unlockFx: [], pawFx: [], snipFx: [],
@@ -84,6 +96,7 @@ export function createSession(kind, id, S) {
     rng: R.rng((kind === 'level' ? id : 7919) * 2654435761),
   };
   for (let k = 0; k < ACTIVE; k++) sess.slots.push({ cur: null, leaving: null, leaveT: -9, enterT: -9, pend: [] });
+  S.pending = new Set();
   snapVisuals(sess, S);
   // mystery strands already on top at the start show their colour from frame one
   for (let i = 0; i < puz.n; i++) if (puz.strands[i].m && sess.lifted.has(i)) sess.revealT.set(i, S.T - 1);
@@ -97,7 +110,7 @@ function spoolOf(sess, q) {
   let sv = sess.spoolVis.get(q);
   if (!sv) {
     const sp = sess.puz.spools[q];
-    sv = { c: sp.c, n: sp.n, shown: 0, spin: 0, bounce: 0, id: q, done: false, enterT: -9, thaw: null };
+    sv = { c: sp.c, n: sp.n, shown: 0, spin: 0, bounce: 0, id: q, done: false, enterT: -9, thaw: null, combo: 0 };
     sess.spoolVis.set(q, sv);
   }
   return sv;
@@ -222,6 +235,16 @@ function haptic(S, pattern) {
 
 function kittyAnim(sess, S, anim) { sess.kitty.anim = anim; sess.kitty.t0 = S.T; }
 
+/** Combo escalation (back-to-back spools): screen shake + hit-stop from RENDER's helpers, when present. */
+function comboFx(S, combo) {
+  if (combo < 2) return;
+  const k = Math.min(combo, 6);
+  try {
+    if (typeof RN.shake === 'function') RN.shake(S, 2 + 1.5 * k, 0.16 + 0.03 * k);
+    if (typeof RN.hitStop === 'function') RN.hitStop(S, 35 + 12 * k);
+  } catch (e) { console.warn(e); }
+}
+
 // ------------------------------------------------------------------ input (§3.6, §3.7)
 export function pickStrand(x, y, S) {
   const sess = S.sess;
@@ -291,17 +314,49 @@ export function release(x, y, S) {
   commit(p.id, S, true);
 }
 
-/** A committed tap on strand id. Buffered (one slot, newest wins) while a spool is rolling (§3.4). */
+/** A committed tap on strand id. Queued (FIFO, max QUEUE_MAX) while a spool is rolling or earlier taps wait (§3.4). */
 export function commit(id, S, fromPress = false) {
   const sess = S.sess;
   if (!canPlay(sess) || id < 0 || id >= sess.puz.n) return;
   sess.lastTapT = S.T;
-  if (sess.spoolBusy) {
-    // feedback-only taps (covered etc.) are cheap to show now; real pulls wait for the incoming spool
-    const r = R.canPull(sess.puz, sess.st, id, { snip: sess.boosterArm === 'snip' });
-    if (r.ok) { sess.buffered = id; return; }
+  if (sess.spoolBusy || sess.queue.length) {
+    if (sess.queue.includes(id)) return; // a double tap on a queued strand is the same pull
+    // legal at its turn = legal once the taps ahead of it have been pulled (scratch copy of the rule state)
+    const snip = sess.boosterArm === 'snip' && !sess.queue.length;
+    let st = sess.st;
+    if (sess.queue.length) {
+      st = R.cloneState(sess.st);
+      for (const q of sess.queue) if (R.canPull(sess.puz, st, q, {}).ok) R.pull(sess.puz, st, q, [], {});
+    }
+    const r = R.canPull(sess.puz, st, id, { snip });
+    if (r.ok) {
+      if (sess.queue.length >= QUEUE_MAX) return;
+      sess.queue.push(id);
+      syncPending(sess, S);
+      bus.emit('queued', { id, n: sess.queue.length });
+      haptic(S, 8);
+      return;
+    }
+    // not legal at its turn: feedback only (covered etc.), never a pull that jumps the queue
+    if (r.why !== 'removed') feedback(sess, S, id, r, fromPress);
+    return;
   }
   resolve(id, S, fromPress);
+}
+
+function syncPending(sess, S) {
+  sess.buffered = sess.queue.length ? sess.queue[0] : null;
+  if (S.sess === sess || !S.sess) S.pending = new Set(sess.queue);
+}
+function clearQueue(sess, S) {
+  if (!sess.queue.length && !(S.pending && S.pending.size)) return;
+  sess.queue.length = 0;
+  syncPending(sess, S);
+}
+function slotsBusy(sess, T) {
+  for (const s of sess.slots)
+    if (s.leaving || s.pend.length || (s.cur && T - s.cur.enterT < DUR.spoolEnter) || (s.cur && s.cur.done)) return true;
+  return false;
 }
 
 function ringBlockers(sess, S, id, r) {
@@ -323,24 +378,28 @@ function resolve(id, S, fromPress) {
   const snip = sess.boosterArm === 'snip';
   const r = R.canPull(puz, sess.st, id, { snip });
   if (!r.ok) {
-    if (r.why === 'removed') return;
-    sess.wiggles.set(id, S.T);
-    if (r.why === 'full') {
-      sess.basketShake = S.T;
-      bus.emit('full', {});
-    } else {
-      // a press already ringed the blockers (§3.6); a tap without a press (bots, buffered) rings them now
-      if (fromPress) for (const b of r.blockers || []) sess.flash.set(b, S.T);
-      else ringBlockers(sess, S, id, r);
-      sess.kitten.flinch = 1;
-      if (r.why === 'locked') sess.unlockFx.push({ id, t0: S.T, kind: 'jiggle' });
-      if (r.why === 'paw') sess.pawFx.push({ id, t0: S.T, kind: 'twitch' });
-      bus.emit('blocked', { id, why: r.why, blockers: r.blockers.slice() });
-    }
+    if (r.why !== 'removed') feedback(sess, S, id, r, fromPress);
     return;
   }
   if (snip && !meta.useBooster('snip')) { sess.boosterArm = null; return resolve(id, S, fromPress); }
   doPull(sess, S, id, snip);
+}
+
+/** Blocked / full feedback for a tap that cannot pull (§3.3, §3.6). */
+function feedback(sess, S, id, r, fromPress) {
+  sess.wiggles.set(id, S.T);
+  if (r.why === 'full') {
+    sess.basketShake = S.T;
+    bus.emit('full', {});
+    return;
+  }
+  // a press already ringed the blockers (§3.6); a tap without a press (bots, queued) rings them now
+  if (fromPress) for (const b of r.blockers || []) sess.flash.set(b, S.T);
+  else ringBlockers(sess, S, id, r);
+  sess.kitten.flinch = 1;
+  if (r.why === 'locked') sess.unlockFx.push({ id, t0: S.T, kind: 'jiggle' });
+  if (r.why === 'paw') sess.pawFx.push({ id, t0: S.T, kind: 'twitch' });
+  bus.emit('blocked', { id, why: r.why, blockers: (r.blockers || []).slice() });
 }
 
 function doPull(sess, S, id, snip) {
@@ -357,9 +416,8 @@ function doPull(sess, S, id, snip) {
   }
   sess.hint = null;
   sess.press = null;
-  sess.buffered = null;
   const dest = [];
-  let lastDur = 0, lastComplete = null;
+  let lastDur = 0, lastComplete = null, completes = 0;
   for (const e of ev) {
     if (e.t === 'wind' || e.t === 'basket') {
       const d = e.t === 'wind' ? { kind: 'spool', slot: e.slot, spool: e.spool } : { kind: 'basket', b: e.b };
@@ -369,6 +427,8 @@ function doPull(sess, S, id, snip) {
     } else if (e.t === 'complete') {
       const sv = spoolOf(sess, e.spool);
       sv.done = true;
+      sv.combo = ++sess.combo;
+      completes++;
       lastComplete = sv;
       if (e.n > 3) sess.jumboLog.push(st.moves);
     } else if (e.t === 'thaw') {
@@ -387,6 +447,9 @@ function doPull(sess, S, id, snip) {
       bus.emit('paw', { id: e.id, left: e.left });
     }
   }
+  if (!completes) sess.combo = 0;
+  // ball flights remember the combo of the pull that sent them (for 'chain' at arrival)
+  for (const f of sess.flights) if (f.kind === 'ball' && f.combo == null) f.combo = sess.combo;
   // chain bookkeeping: balls absorbed per arriving spool (paid by meta.recordWin on a win)
   const absorbed = new Map();
   for (const e of ev) if (e.t === 'unbasket') absorbed.set(e.spool, (absorbed.get(e.spool) || 0) + 1);
@@ -405,8 +468,9 @@ function doPull(sess, S, id, snip) {
   const cap = R.effectiveCap(puz, st);
   if (st.bt > before.bt && cap >= 2 && st.bt === cap - 1) bus.emit('basketWarn', {});
 
-  if (R.isWon(puz, st)) win(sess, S);
+  if (R.isWon(puz, st)) { clearQueue(sess, S); win(sess, S); }
   else if (R.isStuck(puz, st)) {
+    clearQueue(sess, S);
     sess.stuck = true;
     sess.stuckT = S.T;
     kittyAnim(sess, S, 'sad');
@@ -482,7 +546,8 @@ export function undo(S) {
   sess.st = prev;
   sess.chainLog = sess.chainLog.filter(x => x.mv <= prev.moves);
   sess.jumboLog = sess.jumboLog.filter(mv => mv <= prev.moves);
-  sess.press = null; sess.buffered = null; sess.hint = null;
+  sess.press = null; sess.hint = null; sess.combo = 0;
+  clearQueue(sess, S);
   sess.stuck = false; sess.stuckT = -1; sess.lose = false; sess.doomed = false;
   sess.wiggles.clear(); sess.rings.length = 0; sess.flash.clear();
   snapVisuals(sess, S);
@@ -494,25 +559,50 @@ export function undo(S) {
   return true;
 }
 
+/** Can booster key be used right now? → {ok, reason}. Pure apart from caching the hint search for this state. */
+export function canUseBooster(S, key) {
+  const sess = S && S.sess;
+  if (!sess || !sess.st) return { ok: false, reason: 'Not in a level' };
+  if (sess.result) return { ok: false, reason: 'Level already solved' };
+  if (key === 'undo') {
+    if (!sess.hist.length) return { ok: false, reason: 'Nothing to undo yet' };
+  } else if (key === 'hint') {
+    if (sess.stuck) return { ok: false, reason: 'No moves left. Try Undo' };
+    if (sess.hint && S.T < sess.hint.until) return { ok: false, reason: 'Hint is already showing' };
+    if (hintFor(sess) < 0) return { ok: false, reason: 'No way out from here. Try Undo', doomed: true };
+  } else if (key === 'slot') {
+    if (sess.slotUsed) return { ok: false, reason: '+1 Slot already used this level' };
+  } else if (key === 'snip') {
+    if (sess.boosterArm === 'snip') return { ok: true, reason: '' }; // tap again = disarm
+    if (sess.stuck) return { ok: false, reason: 'No room to snip into. Try Undo' };
+  } else return { ok: false, reason: 'Unknown booster' };
+  return { ok: true, reason: '' };
+}
+
+/** hintMove for the current rule state, cached so canUseBooster + applyBooster search once. */
+function hintFor(sess) {
+  const st = sess.st;
+  const key = st.removed + ':' + st.moves + ':' + st.basket.join(',') + ':' + st.next;
+  if (sess.hintCache && sess.hintCache.key === key) return sess.hintCache.h;
+  if (sess.doomed) { sess.hintCache = { key, h: -1 }; return -1; }
+  const h = R.hintMove(sess.puz, st, 150000);
+  sess.hintCache = { key, h };
+  return h;
+}
+
 export function applyBooster(kind, S) {
   const sess = S.sess;
-  if (!sess || sess.result) return false;
+  if (!canUseBooster(S, kind).ok) return false; // refuse with no side effects: nothing charged, nothing changed
   if (kind === 'undo') {
-    if (!sess.hist.length || !meta.useBooster('undo')) return false;
+    if (!meta.useBooster('undo')) return false;
     undo(S);
   } else if (kind === 'hint') {
-    if (sess.stuck) return false;
-    const h = R.hintMove(sess.puz, sess.st, 150000);
-    if (h < 0) {
-      if (!sess.doomed) { sess.doomed = true; bus.emit('doomed', {}); }
-      bus.emit('hint', { id: -1 });
-      return false; // refund = never consumed
-    }
-    if (!meta.useBooster('hint')) return false;
+    const h = hintFor(sess);
+    if (h < 0 || !meta.useBooster('hint')) return false;
     sess.hint = { id: h, until: S.T + 4 };
     bus.emit('hint', { id: h });
   } else if (kind === 'slot') {
-    if (sess.slotUsed || !meta.useBooster('slot')) return false;
+    if (!meta.useBooster('slot')) return false;
     sess.slotUsed = true;
     sess.capped = true;
     sess.st.basket.push(-1);
@@ -520,14 +610,43 @@ export function applyBooster(kind, S) {
     for (const f of sess.flights) if (f.kind === 'strand') buildFlightPath(S, sess, f); // basket slots moved
     if (sess.stuck && !R.isStuck(sess.puz, sess.st)) { sess.stuck = false; sess.stuckT = -1; sess.lose = false; kittyAnim(sess, S, 'idle'); }
     sess.doomed = false;
+    sess.hintCache = null;
     sess.doomCheck = { key: sess.st.removed + ':' + sess.st.moves + ':s', at: S.T };
   } else if (kind === 'snip') {
     if (sess.boosterArm === 'snip') { sess.boosterArm = null; return false; } // tap again = disarm (nothing spent)
-    if (sess.stuck || meta.booster('snip') <= 0) return false;
+    if (meta.booster('snip') <= 0) return false;
     sess.boosterArm = 'snip';
   } else return false;
   bus.emit('booster', { kind });
   return true;
+}
+
+/** True while a win is recorded but its card has not been shown yet (strands landing + the kitten-free beat). */
+export function winPending(S) {
+  const sess = S && S.sess;
+  return !!(sess && sess.result && !sess.winShown);
+}
+
+/** Cut the kitten-free beat short (the player is leaving): free the kitten now and emit 'win'. Returns true if it
+ *  did, and game.js then shows the win card so the stars and gifts are always seen. */
+export function finishWinNow(S) {
+  const sess = S.sess;
+  if (!winPending(S)) return false;
+  if (sess.kitten.freeT < 0) freeKitten(sess, S);
+  sess.winShown = true;
+  bus.emit('win', { result: sess.result });
+  return true;
+}
+
+function freeKitten(sess, S) {
+  sess.kitten.freeT = S.T;
+  sess.kitten.stage = 4; sess.kitten.loops = 0;
+  kittyAnim(sess, S, 'celebrate');
+  const B = sess.B, k = B.kitten;
+  burst(sess, 'heart', k.x, k.y - k.s * 0.6, 12, -1, S);
+  burst(sess, 'conf', B.x + B.w / 2, B.y + B.h / 2, 40, [0, 1, 2, 3, 4, 5], S);
+  sess.shake = 0.4;
+  bus.emit('kittenFree', {});
 }
 
 // ------------------------------------------------------------------ resize
@@ -596,11 +715,12 @@ export function update(dt, S) {
       s.leaving = sv; s.leaveT = T; s.cur = null;
       const p = slotPoint(S, k);
       burst(sess, 'conf', p.x, p.y, 16, [sv.c, -1], S);
-      bus.emit('spoolDone', { slot: k, c: sv.c, n: sv.n });
+      bus.emit('spoolDone', { i: sv.id, combo: sv.combo | 0, slot: k, c: sv.c, n: sv.n });
+      comboFx(S, sv.combo | 0);
       if (sv.n > 3) bus.emit('coins', { n: 5 });
       if (sv.thaw !== null) { sess.iceLeft = sv.thaw; bus.emit('thaw', { left: sv.thaw }); }
       haptic(S, 30);
-      if (!sess.result || sess.kitten.freeT < 0) kittyAnim(sess, S, 'cheer');
+      if (!sess.stuck && (!sess.result || sess.kitten.freeT < 0)) kittyAnim(sess, S, 'cheer');
     }
     if (s.leaving && T - s.leaveT >= DUR.spoolLeave) s.leaving = null;
     if (!s.cur && s.pend.length && (!s.leaving || T - s.leaveT >= 0.15)) {
@@ -614,11 +734,14 @@ export function update(dt, S) {
   }
   sess.spoolBusy = busy;
 
-  // buffered tap resolves the frame the incoming spool lands (§3.4)
-  if (sess.buffered !== null && !busy && canPlay(sess)) {
-    const id = sess.buffered;
-    sess.buffered = null;
+  // queued taps resolve in order once the incoming spool has landed (§3.4), one per QUEUE_GAP
+  if (sess.queue.length && !canPlay(sess)) clearQueue(sess, S);
+  while (sess.queue.length && !sess.spoolBusy && T - sess.queueT >= QUEUE_GAP && canPlay(sess)) {
+    const id = sess.queue.shift();
+    syncPending(sess, S);
+    sess.queueT = T;
     resolve(id, S, false);
+    sess.spoolBusy = slotsBusy(sess, T);
   }
 
   // decays and timers
@@ -670,16 +793,7 @@ export function update(dt, S) {
 
   // end states
   if (sess.result) {
-    if (sess.kitten.freeT < 0 && !sess.flights.some(f => f.kind === 'strand')) {
-      sess.kitten.freeT = T;
-      sess.kitten.stage = 4; sess.kitten.loops = 0;
-      kittyAnim(sess, S, 'celebrate');
-      const B = sess.B, k = B.kitten;
-      burst(sess, 'heart', k.x, k.y - k.s * 0.6, 12, -1, S);
-      burst(sess, 'conf', B.x + B.w / 2, B.y + B.h / 2, 40, [0, 1, 2, 3, 4, 5], S);
-      sess.shake = 0.4;
-      bus.emit('kittenFree', {});
-    }
+    if (sess.kitten.freeT < 0 && !sess.flights.some(f => f.kind === 'strand')) freeKitten(sess, S);
     if (sess.kitten.freeT >= 0 && T - sess.kitten.freeT >= DUR.kittenFree && !sess.winShown) {
       sess.winShown = true;
       bus.emit('win', { result: sess.result });
@@ -689,6 +803,7 @@ export function update(dt, S) {
   }
   if (sess.stuck && !sess.lose && (!sess.flights.length || T - sess.stuckT >= DUR.stuckCard)) {
     sess.lose = true;
+    kittyAnim(sess, S, 'sad');
     return 'lose';
   }
   return null;
@@ -704,9 +819,10 @@ function arrive(sess, S, f) {
     bus.emit('wind', { slot: f.dest.slot, k: sv.shown, n: sv.n, c: sv.c });
     if (f.kind === 'ball') {
       const a = (sv.balls = (sv.balls || 0) + 1);
-      if (a >= 2) { bus.emit('chain', { m: a, slot: f.dest.slot }); bus.emit('coins', { n: 1 }); }
+      bus.emit('chain', { n: a, m: a, combo: f.combo | 0, slot: f.dest.slot, c: sv.c });
+      if (a >= 2) bus.emit('coins', { n: 1 });
     }
-    if (!sess.result) kittyAnim(sess, S, 'swat');
+    if (!sess.result && !sess.stuck) kittyAnim(sess, S, 'swat');
   } else {
     const b = sess.basket[f.dest.b];
     if (b) { b.arrived = true; b.bounce = 1; }

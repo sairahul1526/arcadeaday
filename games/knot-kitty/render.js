@@ -31,13 +31,16 @@ export const TOMATO = '#E8463A', TOMATO_D = '#B8322A', TEAL = '#1FB0A0', TEAL_D 
 export const AMBER = '#FFB23F', GOLD = '#FFC93C', GOLD_D = '#B9811A';
 export const FONT_T = '"Lilita One", system-ui, sans-serif', FONT_B = 'Nunito, system-ui, sans-serif';
 
+// DECISION (fix1, contract 6): colour-blind glyphs are friendly non-UI shapes, drawn upright as cream
+//   "stickers" with an ink outline so they read on every yarn colour, covered or not, down to 320×480 @1×.
+//   Never play / pause / record / chevron / bars shapes (they read as media controls).
 export const YARN = [
-  { base: '#E8463A', name: 'Tomato', glyph: 'dot' },
-  { base: '#1FB0A0', name: 'Teal', glyph: 'chevron' },
-  { base: '#F5B82E', name: 'Mustard', glyph: 'bars' },
-  { base: '#3D86EE', name: 'Sky', glyph: 'rail' },
-  { base: '#8C55D3', name: 'Plum', glyph: 'ring' },
-  { base: '#86C440', name: 'Lime', glyph: 'cross' },
+  { base: '#E8463A', name: 'Tomato', glyph: 'heart' },
+  { base: '#1FB0A0', name: 'Teal', glyph: 'diamond' },
+  { base: '#F5B82E', name: 'Mustard', glyph: 'star' },
+  { base: '#3D86EE', name: 'Sky', glyph: 'drop' },
+  { base: '#8C55D3', name: 'Plum', glyph: 'moon' },
+  { base: '#86C440', name: 'Lime', glyph: 'leaf' },
   { base: '#F5B82E', name: 'Rainbow', glyph: 'sparkle' },
 ];
 const RAIN = [0, 2, 5, 1, 3, 4].map(i => YARN[i].base); // stripe order reads as a rainbow
@@ -185,25 +188,58 @@ function offsetPoly(pts, d) {
   return out;
 }
 
-/** Glyph shapes appended to Path2Ds. kind per §7.2. (x,y) centre, (tx,ty) unit tangent, s glyph size. */
-function glyphInto(kind, fill, stroke, x, y, tx, ty, s) {
-  const nx = -ty, ny = tx;
+// crescent geometry (unit outer radius): inner circle centre + radius, and the two horn angles
+const MOON = (() => {
+  const cx = 0.42, cy = -0.32, r2 = 0.8, d = Math.hypot(cx, cy);
+  const a = (1 + d * d - r2 * r2) / (2 * d), h = Math.sqrt(Math.max(0, 1 - a * a));
+  const mx = (a * cx) / d, my = (a * cy) / d;
+  const p1 = [mx + (h * -cy) / d, my + (h * cx) / d], p2 = [mx - (h * -cy) / d, my - (h * cx) / d];
+  return { cx, cy, r2, o1: Math.atan2(p1[1], p1[0]), o2: Math.atan2(p2[1], p2[0]), i1: Math.atan2(p1[1] - cy, p1[0] - cx), i2: Math.atan2(p2[1] - cy, p2[0] - cx) };
+})();
+/**
+ * Glyph shapes appended to Path2Ds, always upright. (x,y) centre, s = overall glyph height.
+ * fill gets the silhouette (filled + outlined), vein gets interior detail lines (stroked only).
+ */
+function glyphInto(kind, fill, vein, x, y, s) {
   switch (kind) {
-    case 'dot': fill.moveTo(x + s * 0.5, y); fill.arc(x, y, s * 0.5, 0, TAU); break;
-    case 'chevron':
-      stroke.moveTo(x - tx * s * 0.28 + nx * s * 0.45, y - ty * s * 0.28 + ny * s * 0.45);
-      stroke.lineTo(x + tx * s * 0.3, y + ty * s * 0.3);
-      stroke.lineTo(x - tx * s * 0.28 - nx * s * 0.45, y - ty * s * 0.28 - ny * s * 0.45); break;
-    case 'bars':
-      for (const o of [-0.26, 0.26]) {
-        stroke.moveTo(x + tx * s * o + nx * s * 0.55, y + ty * s * o + ny * s * 0.55);
-        stroke.lineTo(x + tx * s * o - nx * s * 0.55, y + ty * s * o - ny * s * 0.55);
-      } break;
-    case 'ring': stroke.moveTo(x + s * 0.42, y); stroke.arc(x, y, s * 0.42, 0, TAU); break;
-    case 'cross': {
-      const a = 0.42;
-      stroke.moveTo(x + (tx + nx) * s * a, y + (ty + ny) * s * a); stroke.lineTo(x - (tx + nx) * s * a, y - (ty + ny) * s * a);
-      stroke.moveTo(x + (tx - nx) * s * a, y + (ty - ny) * s * a); stroke.lineTo(x - (tx - nx) * s * a, y - (ty - ny) * s * a); break;
+    case 'heart': {
+      const r = s * 0.52, oy = y + s * 0.04;
+      fill.moveTo(x, oy + r * 0.86);
+      fill.bezierCurveTo(x - r * 1.55, oy - r * 0.05, x - r * 0.78, oy - r * 1.32, x, oy - r * 0.48);
+      fill.bezierCurveTo(x + r * 0.78, oy - r * 1.32, x + r * 1.55, oy - r * 0.05, x, oy + r * 0.86);
+      fill.closePath(); break;
+    }
+    case 'diamond':
+      fill.moveTo(x, y - s * 0.56); fill.lineTo(x + s * 0.42, y); fill.lineTo(x, y + s * 0.56); fill.lineTo(x - s * 0.42, y); fill.closePath();
+      break;
+    case 'star': {
+      const r = s * 0.6, q = r * 0.46, oy = y + s * 0.05;
+      for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, d = i % 2 ? q : r; fill[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * d, oy + Math.sin(a) * d); }
+      fill.closePath(); break;
+    }
+    case 'drop': {
+      const r = s * 0.36, cy = y + s * 0.2;
+      fill.moveTo(x, y - s * 0.56);
+      fill.bezierCurveTo(x + r * 0.35, y - s * 0.3, x + r, cy - r * 0.55, x + r, cy);
+      fill.arc(x, cy, r, 0, Math.PI);
+      fill.bezierCurveTo(x - r, cy - r * 0.55, x - r * 0.35, y - s * 0.3, x, y - s * 0.56);
+      fill.closePath(); break;
+    }
+    case 'moon': {
+      const R = s * 0.52, M = MOON;
+      fill.moveTo(x + Math.cos(M.o1) * R, y + Math.sin(M.o1) * R);
+      fill.arc(x, y, R, M.o1, M.o2, false);
+      fill.arc(x + M.cx * R, y + M.cy * R, M.r2 * R, M.i2, M.i1, true);
+      fill.closePath(); break;
+    }
+    case 'leaf': {
+      const h = s * 0.5;
+      fill.moveTo(x - h * 0.9, y + h * 0.9);
+      fill.quadraticCurveTo(x - h * 1.05, y - h * 0.95, x + h * 0.9, y - h * 0.9);
+      fill.quadraticCurveTo(x + h * 1.05, y + h * 0.95, x - h * 0.9, y + h * 0.9);
+      fill.closePath();
+      vein.moveTo(x - h * 0.55, y + h * 0.55); vein.lineTo(x + h * 0.42, y - h * 0.42);
+      break;
     }
     case 'sparkle': {
       const r = s * 0.62, q = s * 0.17;
@@ -214,7 +250,7 @@ function glyphInto(kind, fill, stroke, x, y, tx, ty, s) {
 }
 
 /** Screen-space Path2Ds for a polyline strand of width sw and colour c. unitPx = peg spacing. */
-function strandPaths(pts, sw, c, unitPx) {
+function strandPaths(pts, sw, c, unitPx, pegs = null) {
   const at = arcLen(pts), len = at[at.length - 1];
   const path = polyPath(pts);
   // ply: diagonal twist dashes, dash period 0.9 sw
@@ -230,37 +266,41 @@ function strandPaths(pts, sw, c, unitPx) {
   for (let i = 0; i < pts.length; i++) {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
     const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
-    let nx = -dy / l, ny = dx / l;
-    if (nx * -0.6 + ny * -0.8 < 0) { nx = -nx; ny = -ny; }
-    hiPts.push([pts[i][0] + nx * sw * 0.22, pts[i][1] + ny * sw * 0.22]);
+    // DECISION (fix1, Z kink): offset toward the lamp by the lamp vector's component across the strand
+    // (L − (L·t)t). It is continuous along the curve, so the highlight eases through the middle of the yarn
+    // where the strand turns toward the lamp instead of jumping sides (the old sign flip made a Z step).
+    const tx = dx / l, ty = dy / l, Lx = -0.6, Ly = -0.8, dt = Lx * tx + Ly * ty;
+    const ox = Lx - dt * tx, oy = Ly - dt * ty;
+    hiPts.push([pts[i][0] + ox * sw * 0.24, pts[i][1] + oy * sw * 0.24]);
   }
   const hi = polyPath(hiPts.slice(1, -1).length > 1 ? hiPts.slice(1, -1) : hiPts);
-  // glyphs every 1.1 units, centred on the strand
+  // glyph stickers every ~1.5 units, centred on the strand (upright, bigger than the old marks)
   const gf = new Path2D(), gs = new Path2D();
-  const kind = c === RAINBOW ? 'sparkle' : c >= 0 ? YARN[c].glyph : null;
-  const gsz = sw * 0.62;
+  const kind = c === RAINBOW ? 'sparkle' : c >= 0 && YARN[c] ? YARN[c].glyph : null;
+  const gsz = Math.max(sw * 1.02, 11.5);
   const marks = [];
-  if (kind && kind !== 'rail') {
-    const gap = unitPx * (kind === 'sparkle' ? 2 : 1.1);
+  if (kind) {
+    const gap = Math.max(unitPx * (kind === 'sparkle' ? 2 : 1.45), gsz * 2.4);
     const n = Math.max(1, Math.floor((len - unitPx * 0.5) / gap) + 1);
     const s0 = (len - (n - 1) * gap) / 2;
-    for (let k = 0; k < n; k++) { const p = pointAt(pts, at, s0 + k * gap); glyphInto(kind, gf, gs, p.x, p.y, p.tx, p.ty, gsz); }
+    // keep stickers off the brass pegs: nudge along the strand, drop only if nothing fits
+    const clear = gsz * 0.55 + Math.max(3.5, unitPx * 0.16) + sw * 0.3;
+    const free = q => !pegs || pegs.every(e => Math.hypot(e[0] - q.x, e[1] - q.y) > clear);
+    for (let k = 0; k < n; k++) {
+      let best = null;
+      for (const d of [0, 0.22, -0.22, 0.4, -0.4]) {
+        const sAt = s0 + k * gap + d * gap;
+        if (sAt < clear * 0.8 || sAt > len - clear * 0.8) continue;
+        const q = pointAt(pts, at, sAt);
+        if (free(q)) { best = q; break; }
+      }
+      if (best) glyphInto(kind, gf, gs, best.x, best.y, gsz);
+    }
   }
   // '?' stitch marks for mystery yarn
   { const gap = unitPx * 1.1, n = Math.max(1, Math.floor((len - unitPx * 0.5) / gap) + 1), s0 = (len - (n - 1) * gap) / 2;
     for (let k = 0; k < n; k++) { const p = pointAt(pts, at, s0 + k * gap); marks.push([p.x, p.y]); } }
-  let rail = null;
-  if (kind === 'rail' && len > sw) {
-    rail = new Path2D();
-    const s0 = Math.min(len * 0.2, sw * 0.9), s1 = len - s0;
-    const sub = [];
-    for (let s = s0; s < s1; s += Math.max(2, sw * 0.5)) { const p = pointAt(pts, at, s); sub.push([p.x, p.y]); }
-    if (sub.length > 1) for (const o of [-0.24, 0.24]) {
-      const op = offsetPoly(sub, sw * o);
-      rail.moveTo(op[0][0], op[0][1]);
-      for (let i = 1; i < op.length; i++) rail.lineTo(op[i][0], op[i][1]);
-    }
-  }
+  const rail = null;
   return { pts, at, len, path, ply, hi, gf, gs, rail, marks };
 }
 
@@ -273,8 +313,9 @@ export function buildGeo(puz, B) {
   const geo = puz.strands.map(s => {
     const src = s.pts || curve(s.pegs, s.bow || 0);
     const pts = src.map(p => [B.ox + p[0] * u, B.oy + p[1] * u]);
-    const o = strandPaths(pts, sw, s.c, u);
-    o.pegs = s.pegs.map(p => [B.ox + p[0] * u, B.oy + p[1] * u]);
+    const pegs = s.pegs.map(p => [B.ox + p[0] * u, B.oy + p[1] * u]);
+    const o = strandPaths(pts, sw, s.c, u, pegs);
+    o.pegs = pegs;
     o.c = s.c; o.d = s.d; o.gaps = []; o.sw = sw;
     return o;
   });
@@ -284,25 +325,16 @@ export function buildGeo(puz, B) {
 }
 
 // ------------------------------------------------------------------ glyph + strand
-/** A glyph stamp (spool labels, basket balls, legend). size = overall glyph height. */
+/** A glyph stamp (spool labels, basket balls, legend) for a cream backing: yarn-coloured shape, ink outline. */
 export function drawGlyph(g, c, x, y, size, ang = 0) {
   const kind = c === RAINBOW ? 'sparkle' : c >= 0 && YARN[c] ? YARN[c].glyph : null;
   if (!kind) return;
-  const col = c === RAINBOW ? CREAM : mix(YARN[c].base, INK, 0.45);
-  const tx = Math.cos(ang), ty = Math.sin(ang);
+  void ang;
+  const f = new Path2D(), v = new Path2D();
+  glyphInto(kind, f, v, x, y, size);
   g.lineCap = 'round'; g.lineJoin = 'round';
-  if (kind === 'rail') {
-    g.strokeStyle = col; g.lineWidth = Math.max(1.2, size * 0.16);
-    g.beginPath();
-    for (const o of [-0.22, 0.22]) { g.moveTo(x - tx * size * 0.5 - ty * size * o, y - ty * size * 0.5 + tx * size * o); g.lineTo(x + tx * size * 0.5 - ty * size * o, y + ty * size * 0.5 + tx * size * o); }
-    g.stroke();
-    return;
-  }
-  const f = new Path2D(), s = new Path2D();
-  glyphInto(kind, f, s, x, y, tx, ty, size);
-  g.fillStyle = col; g.fill(f);
-  if (kind === 'sparkle') { g.strokeStyle = INK; g.lineWidth = Math.max(1, size * 0.08); g.stroke(f); }
-  g.strokeStyle = col; g.lineWidth = Math.max(1.2, size * 0.17); g.stroke(s);
+  g.fillStyle = c === RAINBOW ? GOLD : YARN[c].base; g.fill(f);
+  g.strokeStyle = INK; g.lineWidth = Math.max(1, size * 0.1); g.stroke(f); g.stroke(v);
 }
 
 let feltPattern = null; // pattern of the board bake: the felt gap at under-crossings shows real felt
@@ -405,26 +437,23 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
   g.stroke(gi.ply);
   g.restore();
   g.lineCap = 'round';
-  // (5) glyphs, (5b) mystery marks
+  // (5) highlight on the light side (free strands only)
+  if (!opt.dim) {
+    g.strokeStyle = col.hi;
+    g.lineWidth = Math.max(0.8, sw * 0.18);
+    g.stroke(gi.hi);
+  }
+  // (6) glyphs, (6b) mystery marks
   if (myst) {
     g.fillStyle = mix(MYST, INK, 0.5);
     g.font = `900 ${Math.round(sw * 0.95)}px ${FONT_B}`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const p of gi.marks) g.fillText('?', p[0], p[1] + sw * 0.04);
-  } else if (rainbow) {
-    g.fillStyle = CREAM; g.fill(gi.gf);
-    g.strokeStyle = INK; g.lineWidth = Math.max(0.8, sw * 0.08); g.stroke(gi.gf);
   } else {
-    g.fillStyle = col.glyph; g.fill(gi.gf);
-    g.strokeStyle = col.glyph; g.lineWidth = Math.max(1.1, sw * 0.13);
-    g.stroke(gi.gs);
-    if (gi.rail) { g.lineWidth = Math.max(1, sw * 0.12); g.stroke(gi.rail); }
-  }
-  // (6) highlight on the light side (free strands only)
-  if (!opt.dim) {
-    g.strokeStyle = col.hi;
-    g.lineWidth = Math.max(0.8, sw * 0.18);
-    g.stroke(gi.hi);
+    // cream sticker + ink outline: full contrast on every colour, covered strands included
+    g.fillStyle = opt.dim ? '#F4E9DA' : CREAM; g.fill(gi.gf);
+    g.strokeStyle = INK; g.lineWidth = Math.max(1.35, sw * 0.1);
+    g.stroke(gi.gf); g.stroke(gi.gs);
   }
   g.restore();
 }
@@ -700,89 +729,146 @@ function drawPaw(g, x, y, s, n, t, lift = 0, twitch = 0) {
 
 // ------------------------------------------------------------------ spool + ball
 /**
- * drawSpool(g, x, y, h, c, shown, n, opt) — (x,y) centre, h height. Fill is exactly proportional:
- * round(16·shown/n) yarn bands (§7.3). opt { spin, bounce, alpha, scale, rot, pips (default true),
- * label (default true), want (0..1 soft halo), ghost }.
+ * drawSpool(g, x, y, h, c, shown, n, opt) — a turned wooden bobbin seen from slightly above. (x,y) centre,
+ * h height. Fill is exactly proportional to shown/n (fill-by-thirds for n = 3); opt.fill (0..n) overrides the
+ * drawn level for smooth wind-on easing. opt { w (total width; default 0.8 h), spin, bounce, alpha, scale,
+ * rot, pips (default true), label (default true), want (0..1 soft halo), glint (0..1 completion shine),
+ * fresh (0..1 flash on the newest wound band) }.
+ * DECISION (fix1): spools draw to the slot they are given (h, optional w) and fill it; layout owns the size.
  */
+const WOOD = { lo: '#B9834F', mid: '#E2B47A', hi: '#F6D9A8', dk: '#8A5A2E' };
 export function drawSpool(g, x, y, h, c, shown, n = 3, opt = {}) {
   const jumbo = n > 3;
   // A jumbo is drawn 1.4× taller (layout.js), standing on the same shelf line (bottom edge fixed).
   const H = jumbo ? h * 1.4 : h;
-  const w = h * (jumbo ? 0.78 : 0.68), fl = H * (jumbo ? 0.1 : 0.12), core = w * 0.5, coreH = H - fl * 2;
-  const col = c >= 0 && YARN[c] ? YARN[c].base : '#BBB';
+  const W = Math.min(opt.w || h * 0.8, H * 1.05) * (jumbo ? 1.1 : 1);
+  const col = c === RAINBOW ? YARN[RAINBOW].base : c >= 0 && YARN[c] ? YARN[c].base : '#BBB';
+  const ry = W * 0.15, th = Math.max(2.5, H * 0.075);        // flange: ellipse half-height + rim thickness
+  const yTop = -H / 2 + ry, yBot = H / 2 - ry - th;           // centres of each flange's top face
+  const core = W * 0.44, cry = ry * (core / W);
+  const lw = Math.max(1.3, H * 0.014);
   g.save();
   g.translate(x, y - (H - h) / 2 * (opt.scale || 1));
   if (opt.rot) g.rotate(opt.rot);
   if (opt.scale && opt.scale !== 1) g.scale(opt.scale, opt.scale);
   if (opt.alpha != null) g.globalAlpha *= opt.alpha;
   const b = opt.bounce || 0;
-  g.scale(1 + b * 0.08, 1 - b * 0.06);
+  if (b) { g.translate(0, H / 2); g.scale(1 + b * 0.08, 1 - b * 0.07); g.translate(0, -H / 2); }
+  g.lineJoin = 'round'; g.lineCap = 'round';
   if (opt.want) {
-    g.fillStyle = `rgba(255,244,228,${0.3 * opt.want})`;
-    g.beginPath(); g.ellipse(0, 0, w * 0.85, H * 0.65, 0, 0, TAU); g.fill();
+    g.fillStyle = `rgba(255,244,228,${0.32 * opt.want})`;
+    g.beginPath(); g.ellipse(0, 0, W * 0.78, H * 0.62, 0, 0, TAU); g.fill();
   }
   // floor shadow
-  g.fillStyle = 'rgba(30,14,20,0.28)';
-  g.beginPath(); g.ellipse(w * 0.06, H * 0.5 + fl * 0.15, w * 0.56, fl * 0.5, 0, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(30,14,20,0.3)';
+  g.beginPath(); g.ellipse(W * 0.05, yBot + th + ry * 0.35, W * 0.54, ry * 0.75, 0, 0, TAU); g.fill();
+  const flangeCols = jumbo ? [BRASS_HI, BRASS, BRASS_SH, '#7A5216'] : [WOOD.hi, WOOD.mid, WOOD.lo, WOOD.dk];
+  const flange = (fy, top) => {
+    // rim (side band) then the top face ellipse
+    const sg = g.createLinearGradient(-W / 2, 0, W / 2, 0);
+    sg.addColorStop(0, flangeCols[2]); sg.addColorStop(0.3, flangeCols[1]); sg.addColorStop(0.75, flangeCols[2]); sg.addColorStop(1, flangeCols[3]);
+    g.fillStyle = sg;
+    g.beginPath(); g.ellipse(0, fy, W / 2, ry, 0, Math.PI, 0, true); g.lineTo(W / 2, fy + th); g.ellipse(0, fy + th, W / 2, ry, 0, 0, Math.PI); g.closePath();
+    g.fill(); g.strokeStyle = INK; g.lineWidth = lw; g.stroke();
+    const fg = g.createLinearGradient(0, fy - ry, 0, fy + ry);
+    fg.addColorStop(0, flangeCols[0]); fg.addColorStop(1, flangeCols[1]);
+    g.fillStyle = fg;
+    g.beginPath(); g.ellipse(0, fy, W / 2, ry, 0, 0, TAU); g.fill(); g.stroke();
+    // turned rings on the face
+    g.strokeStyle = alpha(flangeCols[3], 0.45); g.lineWidth = Math.max(0.8, lw * 0.6);
+    g.beginPath(); g.ellipse(0, fy, W * 0.36, ry * 0.72, 0, 0, TAU); g.stroke();
+    if (top) {
+      g.fillStyle = mix(flangeCols[3], INK, 0.35);
+      g.beginPath(); g.ellipse(0, fy, core * 0.26, cry * 0.5, 0, 0, TAU); g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.beginPath(); g.ellipse(-W * 0.18, fy - ry * 0.35, W * 0.16, ry * 0.18, -0.08, 0, TAU); g.fill();
+  };
+  flange(yBot, false);
   // wooden core
   const cg = g.createLinearGradient(-core / 2, 0, core / 2, 0);
-  cg.addColorStop(0, '#C79A6B'); cg.addColorStop(0.35, '#EBCB9D'); cg.addColorStop(1, '#A87C50');
+  cg.addColorStop(0, WOOD.lo); cg.addColorStop(0.35, WOOD.hi); cg.addColorStop(1, WOOD.dk);
   g.fillStyle = cg;
-  g.fillRect(-core / 2, -H / 2 + fl * 0.5, core, H - fl);
-  // the empty core is tinted with its colour so even an empty spool says what it wants
-  g.fillStyle = mix(col, '#FFFFFF', 0.5, 0.55);
-  g.fillRect(-core / 2, -H / 2 + fl, core, coreH);
-  g.strokeStyle = mix(col, INK, 0.25); g.lineWidth = 1; g.setLineDash([2.5, 2.5]);
-  g.strokeRect(-core / 2 + 1.5, -H / 2 + fl + 1.5, core - 3, coreH - 3);
-  g.setLineDash([]);
-  // wound bands from the bottom up
-  const total = 16, bands = Math.round(total * clamp(shown, 0, n) / n);
-  if (bands > 0) {
-    const bh = coreH / total, top = H / 2 - fl - bands * bh;
-    const bulge = (w - core) * 0.42;
-    const ww = core + bulge * Math.min(1, 0.35 + bands / total);
-    g.save();
-    g.beginPath(); g.rect(-ww / 2 - 2, top, ww + 4, bands * bh); g.clip();
-    rr(g, -ww / 2, top, ww, bands * bh, Math.min(bh * 1.2, ww * 0.2));
-    g.fillStyle = col; g.fill();
-    g.strokeStyle = mix(col, INK, 0.35); g.lineWidth = Math.max(0.8, bh * 0.32);
-    const off = ((opt.spin || 0) * bh * 4) % (bh * 2);
-    for (let yy = top - bh * 2 + off; yy < H / 2; yy += bh) {
-      g.beginPath(); g.moveTo(-ww / 2, yy); g.quadraticCurveTo(0, yy + bh * 0.7, ww / 2, yy + bh * 0.15); g.stroke();
-    }
-    g.fillStyle = 'rgba(255,255,255,0.28)'; g.fillRect(-ww / 2 + ww * 0.14, top, ww * 0.12, bands * bh);
-    g.fillStyle = 'rgba(43,36,64,0.18)'; g.fillRect(ww / 2 - ww * 0.2, top, ww * 0.2, bands * bh);
+  g.fillRect(-core / 2, yTop, core, yBot - yTop);
+  // DECISION: empty core stays bare wood (a full tint read as 'already filled' in QA crops);
+  // the colour cue is the label tag plus colour-coded thirds ticks below.
+  g.strokeStyle = INK; g.lineWidth = lw;
+  g.beginPath(); g.moveTo(-core / 2, yTop); g.lineTo(-core / 2, yBot); g.moveTo(core / 2, yTop); g.lineTo(core / 2, yBot); g.stroke();
+  // thirds ticks on the empty core: where each ball's worth of yarn will reach
+  const span = yBot - yTop - th;
+  g.strokeStyle = mix(col, INK, 0.15); g.lineWidth = Math.max(1.2, lw * 0.9);
+  for (let i = 1; i < n; i++) { const ty = yBot - span * i / n; g.beginPath(); g.ellipse(0, ty, core / 2, cry, 0, 0.15, Math.PI - 0.15); g.stroke(); }
+  // wound yarn: a plump barrel rising from the bottom flange, cross-wound threads
+  const lev = clamp(opt.fill != null ? opt.fill : shown, 0, n) / n;
+  if (lev > 0.001) {
+    const top = yBot - span * lev;
+    const ww = core + (W * 0.86 - core) * (0.55 + 0.45 * Math.min(1, lev * 1.6));
+    const bulge = ww * 0.06, rTop = ry * (ww / W);
+    const mass = new Path2D();
+    mass.moveTo(-ww / 2, yBot);
+    mass.quadraticCurveTo(-ww / 2 - bulge, (yBot + top) / 2, -ww / 2, top);
+    mass.ellipse(0, top, ww / 2, rTop, 0, Math.PI, 0, false);
+    mass.quadraticCurveTo(ww / 2 + bulge, (yBot + top) / 2, ww / 2, yBot);
+    mass.ellipse(0, yBot, ww / 2, rTop, 0, 0, Math.PI, false);
+    mass.closePath();
+    const yg = g.createLinearGradient(-ww / 2, 0, ww / 2, 0);
+    yg.addColorStop(0, mix(col, INK, 0.3)); yg.addColorStop(0.28, mix(col, '#FFFFFF', 0.18)); yg.addColorStop(0.55, col); yg.addColorStop(1, mix(col, INK, 0.38));
+    g.fillStyle = yg; g.fill(mass);
+    g.save(); g.clip(mass);
+    if (c === RAINBOW) for (let k = 0; k < 6; k++) { g.fillStyle = alpha(RAIN[k], 0.75); g.fillRect(-ww / 2 - bulge, top - rTop + k * (yBot - top + rTop * 2) / 6, ww + bulge * 2, (yBot - top + rTop * 2) / 6 + 0.5); }
+    // cross-wound threads (two diagonal families), scrolling with spin
+    const pitch = Math.max(3, H * 0.055), off = ((opt.spin || 0) * pitch * 3) % pitch;
+    g.lineWidth = Math.max(0.9, pitch * 0.32);
+    g.strokeStyle = mix(col, INK, 0.32);
+    g.beginPath();
+    for (let yy = top - ww - pitch + off; yy < yBot + rTop + pitch; yy += pitch) { g.moveTo(-ww / 2 - bulge, yy); g.lineTo(ww / 2 + bulge, yy + ww * 0.32); }
+    g.stroke();
+    g.strokeStyle = mix(col, '#FFFFFF', 0.35, 0.55);
+    g.beginPath();
+    for (let yy = top - ww - pitch - off; yy < yBot + rTop + pitch; yy += pitch * 1.6) { g.moveTo(-ww / 2 - bulge, yy + ww * 0.24); g.lineTo(ww / 2 + bulge, yy); }
+    g.stroke();
+    // rim light + newest band flash
+    g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(-ww * 0.3, top - rTop, ww * 0.1, yBot - top + rTop * 2);
+    if (opt.fresh > 0) { g.fillStyle = `rgba(255,250,235,${0.55 * opt.fresh})`; g.fillRect(-ww, top - rTop, ww * 2, Math.min(yBot - top, span / n) + rTop); }
     g.restore();
-    g.strokeStyle = INK; g.lineWidth = 1.4;
-    rr(g, -ww / 2, top, ww, bands * bh, Math.min(bh * 1.2, ww * 0.2)); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = lw; g.stroke(mass);
+    // top face of the yarn (a lighter disc with the wrap spiral)
+    g.fillStyle = mix(col, '#FFFFFF', 0.12);
+    g.beginPath(); g.ellipse(0, top, ww / 2, rTop, 0, 0, TAU); g.fill(); g.stroke();
+    g.strokeStyle = mix(col, INK, 0.25); g.lineWidth = Math.max(0.8, lw * 0.7);
+    g.beginPath(); g.ellipse(0, top, ww * 0.34, rTop * 0.68, 0, 0, TAU); g.stroke();
+    if (top - yTop > th * 1.2) { // core still showing above the yarn
+      g.fillStyle = WOOD.mid; g.beginPath(); g.ellipse(0, top, core / 2, cry, 0, 0, TAU); g.fill();
+      g.strokeStyle = INK; g.lineWidth = lw * 0.8; g.stroke();
+    }
   }
-  // flanges
-  for (const fy of [-H / 2, H / 2 - fl]) {
-    const fg = g.createLinearGradient(0, fy, 0, fy + fl);
-    if (jumbo) { fg.addColorStop(0, BRASS_HI); fg.addColorStop(0.5, BRASS); fg.addColorStop(1, BRASS_SH); }
-    else { fg.addColorStop(0, WALNUT_L); fg.addColorStop(1, WALNUT_D); }
-    g.fillStyle = fg;
-    rr(g, -w / 2, fy, w, fl, fl * 0.45); g.fill();
-    g.strokeStyle = INK; g.lineWidth = 1.5; g.stroke();
-    g.fillStyle = 'rgba(255,240,210,0.35)';
-    rr(g, -w / 2 + fl * 0.4, fy + fl * 0.16, w - fl * 0.8, fl * 0.2, fl * 0.1); g.fill();
+  flange(yTop, true);
+  // completion glint: a diagonal shine sweeping across the full bobbin
+  if (opt.glint > 0 && opt.glint < 1) {
+    g.save();
+    g.beginPath(); g.rect(-W / 2, yTop - ry, W, H); g.clip();
+    const gx = -W + opt.glint * W * 2;
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.beginPath(); g.moveTo(gx, yTop - ry); g.lineTo(gx + W * 0.22, yTop - ry); g.lineTo(gx - W * 0.2, H / 2); g.lineTo(gx - W * 0.42, H / 2); g.closePath(); g.fill();
+    g.restore();
   }
-  // label disc with glyph on the top flange
+  // label tag with glyph, sitting on the top flange
   if (opt.label !== false) {
-    const lr = Math.max(5, w * 0.24), ly = -H / 2 - lr * 0.15;
-    g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 1.4;
+    const lr = Math.max(7, W * 0.2), ly = yTop - ry * 0.4 - lr * 0.55;
+    g.fillStyle = 'rgba(30,14,20,0.25)'; g.beginPath(); g.arc(lr * 0.12, ly + lr * 0.18, lr, 0, TAU); g.fill();
+    g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = Math.max(1.4, lr * 0.12);
     g.beginPath(); g.arc(0, ly, lr, 0, TAU); g.fill(); g.stroke();
-    g.strokeStyle = col; g.lineWidth = lr * 0.26;
-    g.beginPath(); g.arc(0, ly, lr * 0.74, 0, TAU); g.stroke();
-    drawGlyph(g, c, 0, ly, lr * 0.95, 0);
+    g.strokeStyle = col; g.lineWidth = lr * 0.2;
+    g.beginPath(); g.arc(0, ly, lr * 0.76, 0, TAU); g.stroke();
+    drawGlyph(g, c, 0, ly, lr * 1.05, 0);
   }
   g.restore();
   // fill pips under the spool
   if (opt.pips !== false) {
     const s = (opt.scale || 1);
-    const pr = Math.max(2.2, h * 0.05) * s, gap = pr * 2.7;
+    const pr = Math.max(2.6, h * 0.045) * s, gap = pr * 2.8;
     for (let i = 0; i < n; i++) {
-      const px = x + (i - (n - 1) / 2) * gap, py = y + (H / 2) * s + pr * 2.4;
+      const px = x + (i - (n - 1) / 2) * gap, py = y + (H / 2) * s + pr * 2.2;
       g.beginPath(); g.arc(px, py, pr, 0, TAU);
       g.fillStyle = i < shown ? col : 'rgba(255,244,228,0.6)';
       g.fill();
@@ -879,7 +965,8 @@ export function drawCat(g, x, y, s, o) {
   const tw = o.tail || 0;
   const tail = new Path2D();
   tail.moveTo(16, -6);
-  tail.bezierCurveTo(44, -2, 48 + tw * 6, -26, 36 + tw * 14, -44 - Math.abs(tw) * 2);
+  if (o.tailDown) tail.bezierCurveTo(36, 0, 48, 2, 60 + tw * 4, -1 + Math.abs(tw) * 2); // droopy: lies flat on the floor
+  else tail.bezierCurveTo(44, -2, 48 + tw * 6, -26, 36 + tw * 14, -44 - Math.abs(tw) * 2);
   g.lineWidth = 12 + lw * 2 * 0.5; g.strokeStyle = line; g.stroke(tail);
   g.lineWidth = 12 - lw * 0.6; g.strokeStyle = o.pattern === 'siamese' ? desat(o.point, D) : fur; g.stroke(tail);
   if (stripe && o.pattern === 'tabby') {
@@ -927,6 +1014,9 @@ export function drawCat(g, x, y, s, o) {
   if (o.under) o.under(g, { fur, line, lw });
   if (arms === 'up') { legs(-1, 2.6); legs(1, -2.6); }
   else if (arms === 'swat') legs(1, -0.4 - sw * 2.0);
+  // head group (ears, head, face, over-hook) can hang and tilt for the sad pose; pivot at the neck
+  const headPose = !!(o.headDy || o.headTilt);
+  if (headPose) { g.save(); g.translate(0, -40 + (o.headDy || 0)); g.rotate(o.headTilt || 0); g.translate(0, 40); }
   // ears
   const ear = (side) => {
     g.save();
@@ -1028,6 +1118,7 @@ export function drawCat(g, x, y, s, o) {
     g.fillStyle = desat(BRASS, D); g.beginPath(); g.arc(0, -35, 3.6, 0, TAU); g.fill(); g.strokeStyle = line; g.lineWidth = 1.4; g.stroke();
   }
   if (o.over) o.over(g, { fur, line, lw });
+  if (headPose) g.restore();
   if (o.golden) {
     g.fillStyle = '#FFF6C8';
     const t = o.t || 0;
@@ -1292,7 +1383,15 @@ export function drawKitty(g, x, y, s, anim = 'idle', t = 0, outfit = 'tabby') {
       if (t > 0.8) { dy = -Math.abs(Math.sin(t * 6)) * 6; }
       break;
     }
-    case 'sad': { o.ears = 'down'; o.eyes = 'sad'; o.mouth = 'sad'; o.tear = t * 0.8; o.sy = 0.96; o.tail = Math.sin(t) * 0.15; break; }
+    case 'sad': {
+      // contract 4: droopy ears, hung + tilted head, tail flat on the floor, slow sigh; holds until the next anim
+      const p = clamp(t / 0.35, 0, 1), e = ease(p);
+      o.ears = 'down'; o.eyes = 'sad'; o.mouth = 'sad'; o.tear = t * 0.8; o.look = [0, 2.5 * e];
+      o.sy = 1 - 0.07 * e + Math.sin(t * 1.6) * 0.012; o.sx = 1 + 0.03 * e;
+      o.headDy = 7 * e + Math.sin(t * 1.6) * 0.8; o.headTilt = -0.13 * e;
+      o.tailDown = true; o.tail = Math.sin(t * 0.9) * 0.12; o.arms = 'down';
+      break;
+    }
     case 'sleep': { o.eyes = 'closed'; o.mouth = 'w'; o.ears = 'back'; o.sy = 0.95 + Math.sin(t * 1.5) * 0.015; o.tail = Math.sin(t * 0.6) * 0.3; break; }
   }
   const of = OUTFIT[outfit];
@@ -1541,6 +1640,37 @@ function isMyst(sess, i) {
   return !!(s.m && !(sess.revealT && sess.revealT.has(i)));
 }
 
+// ------------------------------------------------------------------ juice helpers (contract 1)
+// PLAY calls shake(S, amp px, dur s) and hitStop(S, ms). State lives in S.fx (created lazily) on the S.TL loop
+// clock so a shake keeps decaying through a hit-stop. game.js reads S.fx.stopUntil (capped 0.2 s) to hold S.T.
+const fxNow = S => (typeof S.TL === 'number' ? S.TL : S.T) || 0;
+function fxOf(S) { if (!S.fx || typeof S.fx !== 'object') S.fx = {}; return S.fx; }
+export function shake(S, amp = 3, dur = 0.2) {
+  if (!S) return;
+  const fx = fxOf(S), now = fxNow(S);
+  amp = Math.min(Math.max(0, +amp || 0), 14); dur = Math.min(Math.max(0.05, +dur || 0.2), 0.8);
+  const cur = shakeLeft(fx, now);
+  if (amp >= cur) { fx.shakeAmp = amp; fx.shakeT0 = now; fx.shakeDur = dur; }
+}
+export function hitStop(S, ms = 40) {
+  if (!S) return;
+  const fx = fxOf(S), now = fxNow(S);
+  const until = now + Math.min(200, Math.max(0, +ms || 0)) / 1000;
+  fx.stopUntil = Math.max(typeof fx.stopUntil === 'number' && fx.stopUntil > now ? fx.stopUntil : 0, until);
+}
+export function isHitStopped(S) { return !!(S && S.fx && typeof S.fx.stopUntil === 'number' && S.fx.stopUntil > fxNow(S)); }
+function shakeLeft(fx, now) {
+  if (!fx || !fx.shakeAmp || !fx.shakeDur) return 0;
+  const p = (now - fx.shakeT0) / fx.shakeDur;
+  return p >= 1 || p < 0 ? 0 : fx.shakeAmp * (1 - p) * (1 - p);
+}
+function shakeOffset(S) {
+  const fx = S.fx, now = fxNow(S), k = shakeLeft(fx, now);
+  if (!k) return { x: 0, y: 0 };
+  const t = now - fx.shakeT0;
+  return { x: Math.sin(t * 71) * k, y: Math.cos(t * 53 + 1.3) * k * 0.8 };
+}
+
 /** Everything inside a level session (§13.5). Called after scene.drawScene. */
 export function drawPlay(g, S) {
   const sess = S.sess;
@@ -1556,6 +1686,7 @@ export function drawPlay(g, S) {
   for (const gi of geo) gi.B = B;
   g.save();
   if (sess.shake) { const k = sess.shake; g.translate((hash((T * 60) | 0, 1) - 0.5) * k * 2, (hash((T * 60) | 0, 2) - 0.5) * k * 2); }
+  { const o = shakeOffset(S); if (o.x || o.y) g.translate(o.x, o.y); }
 
   // ---- static board + covered strands (baked)
   const box = boardBox(B, puz.cols, puz.rows);
@@ -1625,6 +1756,34 @@ export function drawPlay(g, S) {
       const m = pointAt(gi.pts, gi.at, gi.len / 2);
       g.strokeStyle = `rgba(255,255,255,${1 - rv})`; g.lineWidth = 2;
       g.beginPath(); g.arc(m.x, m.y + dy, sw * (1 + rv * 3), 0, TAU); g.stroke();
+    }
+  }
+
+  // ---- contract 2: queued (pending) strands pulse: gold rings on both end pegs + queue number badge
+  if (S.pending instanceof Set && S.pending.size) {
+    let qi = 0;
+    for (const i of S.pending) {
+      qi++;
+      const gi = geo[i];
+      if (!gi || !gi.pts || ((ss.removed >>> i) & 1)) continue;
+      const ph = 0.5 + 0.5 * Math.sin(T * 9 - qi * 0.9);
+      const ends = [gi.pts[0], gi.pts[gi.pts.length - 1]];
+      g.save();
+      g.lineCap = 'round';
+      g.setLineDash([sw * 0.55, sw * 0.45]); g.lineDashOffset = -T * sw * 3;
+      g.strokeStyle = alpha(GOLD, 0.35 + 0.35 * ph); g.lineWidth = Math.max(2, sw * 0.32);
+      g.stroke(gi.path);
+      g.setLineDash([]);
+      for (const e of ends) {
+        const R = pegR * (1.9 + 0.5 * ph);
+        g.strokeStyle = INK; g.lineWidth = Math.max(3, sw * 0.32); g.beginPath(); g.arc(e[0], e[1], R, 0, TAU); g.stroke();
+        g.strokeStyle = GOLD; g.lineWidth = Math.max(2, sw * 0.2); g.stroke();
+      }
+      const m = pointAt(gi.pts, gi.at, gi.len / 2), br = Math.max(9, sw * 0.62) * (1 + 0.08 * ph);
+      g.fillStyle = GOLD; g.strokeStyle = INK; g.lineWidth = Math.max(1.6, br * 0.16);
+      g.beginPath(); g.arc(m.x, m.y - sw * 0.9, br, 0, TAU); g.fill(); g.stroke();
+      text(g, String(qi), m.x, m.y - sw * 0.9 + br * 0.06, br * 1.25, { color: INK });
+      g.restore();
     }
   }
 
@@ -1806,6 +1965,7 @@ function drawTwists(g, S, sess, ss, mem, u, sw) {
   });
 }
 
+const spoolMem = new WeakMap(); // per spool object: eased fill level, last wind time, completion time
 function drawRack(g, S, sess, rs, ui, T) {
   const st = sess.st, puz = sess.puz;
   const act = rs.active.slice(0, Math.max(1, Math.min(2, (sess.slots || []).length || 2)));
@@ -1837,7 +1997,7 @@ function drawRack(g, S, sess, rs, ui, T) {
     sess.nextQ.slice(0, 2).forEach((q, i) => {
       const p = rs.next[i];
       if (!p || !q) return;
-      drawSpool(g, p.x, p.y, p.h, q.c, 0, q.n || 3, { pips: false, alpha: i === 0 ? 1 : 0.85 });
+      drawSpool(g, p.x, p.y, p.h, q.c, 0, q.n || 3, { w: p.w, pips: false, alpha: i === 0 ? 1 : 0.85 });
     });
     const total = puz.spools ? puz.spools.length : (sess.level && sess.level.queue ? sess.level.queue.length : 0);
     const more = sess.moreN != null ? sess.moreN : total - (st.next || 0) - Math.min(2, sess.nextQ.length);
@@ -1857,7 +2017,7 @@ function drawRack(g, S, sess, rs, ui, T) {
       const hop = Math.sin(Math.min(1, a * 2.2) * Math.PI) * p.h * 0.35;
       const dx = a * a * p.h * 2.6;
       g.save(); g.globalAlpha = 1 - Math.max(0, (a - 0.6) / 0.4);
-      drawSpool(g, p.x + dx, p.y - hop, p.h, s.leaving.c, s.leaving.n || 3, s.leaving.n || 3, { rot: a * 5, pips: false, spin: T * 6 });
+      drawSpool(g, p.x + dx, p.y - hop, p.h, s.leaving.c, s.leaving.n || 3, s.leaving.n || 3, { w: p.w, rot: a * 5, pips: false, spin: T * 6 });
       g.restore();
     }
     if (s.cur) {
@@ -1867,13 +2027,28 @@ function drawRack(g, S, sess, rs, ui, T) {
       const x = from.x + (p.x - from.x) * ee, y = from.y + (p.y - from.y) * ee - Math.sin(e * Math.PI) * p.h * 0.25;
       const sc = (from.h + (p.h - from.h) * ease(e)) / p.h;
       const want = sess.lifted ? [...sess.lifted].some(i => sess.puz.strands[i].c === s.cur.c) : false;
-      drawSpool(g, x, y, p.h, s.cur.c, s.cur.shown || 0, s.cur.n || 3, { scale: sc, bounce: s.cur.bounce || 0, spin: s.cur.spin || 0, pips: e >= 1, want: want ? 0.6 + 0.4 * Math.sin(T * 4) : 0 });
+      // smooth wind-on: the drawn level eases up to the true fill; the newest band flashes; a full bobbin glints
+      const tgt = s.cur.shown || 0;
+      let fm = spoolMem.get(s.cur);
+      if (!fm) { fm = { v: tgt, last: tgt, T, at: -9, full: tgt >= (s.cur.n || 3) ? -9 : null }; spoolMem.set(s.cur, fm); }
+      const dt = clamp(T - fm.T, 0, 0.1); fm.T = T;
+      if (tgt > fm.last) fm.at = T;
+      fm.last = tgt;
+      if (tgt > fm.v) fm.v = Math.min(tgt, fm.v + Math.max(dt * 2.5, (tgt - fm.v) * (1 - Math.exp(-dt * 14))));
+      else fm.v = tgt;
+      if (tgt >= (s.cur.n || 3) && fm.full == null) fm.full = T;
+      const fresh = clamp(1 - (T - fm.at) / 0.35, 0, 1);
+      const glint = fm.full != null && fm.full > 0 ? (T - fm.full) / 0.5 : 0;
+      drawSpool(g, x, y, p.h, s.cur.c, tgt, s.cur.n || 3, { w: p.w, fill: fm.v, fresh, glint, scale: sc, bounce: s.cur.bounce || 0, spin: s.cur.spin || 0, pips: e >= 1, want: want ? 0.6 + 0.4 * Math.sin(T * 4) : 0 });
     }
   });
   // Kitty
   if (rs.kitty) {
     const ky = sess.kitty || { anim: 'idle', t0: 0 };
-    drawKitty(g, rs.kitty.x, rs.kitty.y, rs.kitty.s, ky.anim || 'idle', T - (ky.t0 || 0), S.outfit || 'tabby');
+    let ka = ky.anim || 'idle', kt = T - (ky.t0 || 0);
+    // contract 4 safety net: while stuck/lost, Kitty stays sad even if a late swat/cheer overwrote the anim
+    if (sess.stuck && !sess.result && ka !== 'sad') { ka = 'sad'; kt = sess.stuckT >= 0 ? T - sess.stuckT : 0; }
+    drawKitty(g, rs.kitty.x, rs.kitty.y, rs.kitty.s, ka, kt, S.outfit || 'tabby');
   }
 }
 
@@ -2027,7 +2202,7 @@ export function drawMiniBoard(g, rect, level, t = 0, opt = {}) {
   const mid = miniId(level);
   let ent = miniCache.get(mid);
   const cols = level.cols, rows = level.rows;
-  const unit = Math.min(90, rect.w / (cols - 1 + 1.2), rect.h / (rows - 1 + 1.2 + 1.4));
+  const unit = Math.min(rect.w / (cols - 1 + 1.2), rect.h / (rows - 1 + 1.2 + 1.4)); // contract 5: no 90px cap
   const bwid = (cols - 1 + 1.2) * unit, bhei = (rows - 1 + 1.2) * unit;
   const x0 = rect.x + (rect.w - bwid) / 2, y0 = rect.y + (rect.h - bhei - 1.4 * unit) / 2;
   const B = { ox: x0 + 0.6 * unit, oy: y0 + 0.6 * unit, unit, sw: clamp(0.27 * unit, 2.5, 22), x: x0, y: y0, w: bwid, h: bhei,
@@ -2057,9 +2232,10 @@ export function drawMiniBoard(g, rect, level, t = 0, opt = {}) {
     const prevPat = feltPattern; feltPattern = null;
     for (const s of live.sort((a, b) => a.d - b.d)) {
       const pts = s.pts.map(p => [ox + p[0] * unit, oy + p[1] * unit]);
-      const gi = strandPaths(pts, B.sw, s.c, unit);
+      const pegs = s.pegs.map(p => [ox + p[0] * unit, oy + p[1] * unit]);
+      const gi = strandPaths(pts, B.sw, s.c, unit, pegs);
       gi.gaps = gaps.get(s.i) || []; gi.B = B;
-      gi.pegs = s.pegs.map(p => [ox + p[0] * unit, oy + p[1] * unit]);
+      gi.pegs = pegs;
       const dim = covered.has(s.i);
       drawStrand(cg, gi, s.c, B.sw, { dim, lift: dim ? 0 : 1, glow: dim ? 0 : 1, noPattern: true });
       drawStrandPegs(cg, gi, s.c, B.sw, Math.max(2, unit * 0.16), dim);

@@ -22,17 +22,24 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const GAME = join(ROOT, 'games', 'knot-kitty');
 const OUT = join(ROOT, 'studio', '2026-10-16', 'prod-levels');
-const PARTS = join(OUT, 'parts');
+// KK_PARTS: alternate parts dir (v2 work dir); KK_NOMERGE=1: don't rebuild the game data files after each level.
+const PARTS = process.env.KK_PARTS || join(OUT, 'parts');
 
 const MIN_ANG = 38, END_CLEAR = 0.5, X_SEP = 0.62, NEAR = 0.5, PEG_CLEAR = 0.45;
 const RAINBOW = 6;
 export const MINX = n => Math.round(0.6 * n);
 // DECISION: free0 may exceed the band's upper bound by 2 (sparser weaves leave a few uncrossed strands free).
 const FREE_SLACK = 2;
+// DECISION (v2): denser boards are mostly 2-peg strands, which cross ~0.65x their count, so a board may start with
+//   up to PIECE_SLACK free strands beyond its crossing-graph piece count, and at most MAX_EXTRA_FREE over the band's free0 + slack.
+const PIECE_SLACK = 1, MAX_EXTRA_FREE = 3;
 // segment lengths (proto: 2.2–4.6 for 2-peg strands, 1.7–3.2 per segment otherwise)
 // DECISION: shorter segments (2-peg 1.6–3.6, else 1.4–2.6 per segment) and a length penalty in placement
 //   so strands pack; the proto lengths could not fit even 12 strands on 6×7 under the §3.1 geometry rules.
-export const GEO = { min2: 1.6, max2: 3.6, minS: 1.4, maxS: 2.6, lenW: 0.2, bt: 200 };
+// DECISION (v2): placement score favours crossings (xW 3, −4 for a strand crossing nothing) over shortness, with
+//   2-peg strands up to 4.2 long, so dense boards still weave (~0.6–0.7 crossings per strand).
+export const GEO = { min2: 1.6, max2: 4.2, minS: 1.4, maxS: 2.6, lenW: 0.1, bt: 200, xW: 3, zeroPen: 4, tries: 300, early: 100, over: 3, btOver: 60, covW: 0.5 };
+const COV_R = 0.6;
 
 // ------------------------------------------------------------------ level plan
 const NAMES = [null,
@@ -43,12 +50,26 @@ const NAMES = [null,
   'Dusty Trunk', 'Big Spool', 'Old Lantern', 'Owl Feathers', 'Moth Wings', 'Cobweb Lace', 'Rocking Chair', 'Hatbox', 'Cold Snap', 'Star Tangle',
   'Chimney Pots', 'Comet Tail', 'Night Lock', 'Owl Watch', 'Milky Way', 'Satellite', 'Aurora', 'Meteor Shower', 'Last Light', 'Kitten Knot'];
 
-// DECISION: strand counts lowered one step (−3) from the GDD table to what the GDD board sizes can hold
-//   under the §3.1 geometry rules (measured: 8×10 packs ~19–21, 7×8 ~13–15, 6×7 ~11–12). genOne also
-//   drops 3 more strands automatically if a level finds no valid candidate in 45 % of its budget.
-const STRANDS = [0, 3, 6, 9, 12, 12, 12, 12, 12, 12, 15, 12, 12, 15, 12, 15, 15, 15, 15, 15, 18,
-  15, 15, 18, 15, 18, 18, 18, 15, 18, 18, 15, 18, 18, 18, 15, 18, 18, 18, 21, 18,
-  18, 18, 18, 21, 18, 21, 18, 21, 18, 18, 18, 21, 18, 21, 21, 21, 21, 21, 21, 21];
+// DECISION (v2): strand counts back up to the GDD §4.2 bands (rounded to multiples of 3), made packable by a
+//   mostly 2-peg strand mix (see GEO / segsFor). Teach levels −3 vs their band (§5.1). Bosses and 8×10 caps below.
+//   genOne still drops 3 strands if a level finds no valid level in 30 % of its budget.
+// DECISION (v2): boss masks (even widened by one grid step) hold 18 strands at most under §3.1, so bosses get 18
+//   and are made peaks by the dressing (tighter basket, deeper stacks, harder queues), not by size. 8×10 levels
+//   cap at 21: 24 packs on ~60 % of seeds but then fails the crossings / free-at-start gates almost always.
+const STRANDS = [0, 3, 6, 9, 12, 12, 15, 15, 12, 15, 15,
+  15, 15, 15, 12, 15, 18, 18, 18, 18, 18,
+  15, 18, 18, 18, 18, 18, 21, 18, 21, 18,
+  18, 21, 21, 21, 18, 21, 21, 21, 21, 18,
+  21, 18, 21, 21, 21, 21, 21, 21, 21, 18,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 18];
+// DECISION (v2): per-level casual first-try win-rate aim: a smooth ramp inside each GDD band, teach levels and
+//   post-boss breathers above the band middle, every boss below both neighbours, L60 the lowest.
+const AIM = [0, 1, 1, 0.92, 0.86, 0.80, 0.76, 0.72, 0.80, 0.68, 0.60,
+  0.74, 0.68, 0.64, 0.72, 0.60, 0.62, 0.58, 0.56, 0.53, 0.47,
+  0.64, 0.56, 0.53, 0.50, 0.47, 0.52, 0.48, 0.55, 0.45, 0.39,
+  0.52, 0.47, 0.44, 0.42, 0.50, 0.44, 0.42, 0.40, 0.38, 0.33,
+  0.50, 0.48, 0.42, 0.40, 0.38, 0.40, 0.38, 0.36, 0.42, 0.31,
+  0.44, 0.38, 0.36, 0.34, 0.33, 0.36, 0.34, 0.32, 0.31, 0.26];
 
 // twists per level: k knots, l locks, m mystery, p paws, r rainbow, j jumbo, i ice thaw
 const TW = {
@@ -70,10 +91,12 @@ function specFor(id) {
   const n = STRANDS[id];
   const s = { id, name: NAMES[id], n, tw: TW[id] || {}, shape: null, minChoice: id === 3 ? 1 : id <= 10 ? 2 : 3 };
   const row = (cols, rows, ncol, cap, jitter, segs, free0, par, cas, avg, exp) => Object.assign(s, { cols, rows, ncol, cap, jitter, segs, free0, par, tgt: { casual: cas, average: [avg, 1], expert: [exp, 1] } });
+  s.aim = AIM[id];
   if (id === 1) row(4, 4, 1, 3, 0, [1, 0, 0], [1, 1], [0, 0], [1, 1], 1, 1);
   else if (id === 2) row(5, 5, 2, 3, 0, [0.5, 0.5, 0], [1, 1], [0, 0], [1, 1], 1, 1);
   else if (id === 3) row(6, 6, 3, 3, 9, [0.5, 0.5, 0], [2, 2], [1, 1], [0.85, 1], 0.95, 1);
   else if (id <= 5) row(6, 7, 4, 4, 9, [0.5, 0.4, 0.1], [2, 3], [1, 1], [0.75, 0.9], 0.9, 1);
+  else if (id === 30) { row(8, 10, 4, 5, 12, [0.3, 0.5, 0.2], [3, 4], [2, 3], [0.35, 0.55], 0.65, 0.88); s.shape = 'heart'; }
   else if (id <= 9) row(7, 8, 4, 4, 9, [0.45, 0.4, 0.15], [2, 3], [1, 1], [0.65, 0.8], 0.85, 0.95);
   else if (id === 10) { row(7, 9, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.55, 0.7], 0.8, 0.95); s.shape = 'cathead'; }
   else if (id <= 15) row(7, 8, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.55, 0.75], 0.8, 0.92);
@@ -81,7 +104,6 @@ function specFor(id) {
   else if (id === 20) { row(8, 9, 4, 4, 11, [0.35, 0.45, 0.2], [2, 3], [2, 2], [0.45, 0.6], 0.7, 0.9); s.shape = 'pumpkin'; }
   else if (id <= 25) row(7, 9, 4, 4, 11, [0.35, 0.45, 0.2], [2, 4], [1, 2], [0.45, 0.65], 0.72, 0.9);
   else if (id <= 29) row(8, 9, 4, 4, 11, [0.35, 0.45, 0.2], [2, 4], [2, 2], [0.4, 0.6], 0.7, 0.88);
-  else if (id === 30) { row(8, 10, 4, 5, 12, [0.3, 0.5, 0.2], [3, 4], [2, 2], [0.35, 0.55], 0.65, 0.88); s.shape = 'heart'; }
   else if (id <= 35) row(8, 9, 5, 4, 12, [0.3, 0.5, 0.2], [2, 4], [2, 2], [0.38, 0.55], 0.65, 0.88);
   else if (id <= 39) row(8, 10, 5, 5, 12, [0.3, 0.5, 0.2], [3, 4], [2, 3], [0.35, 0.5], 0.62, 0.85);
   else if (id === 40) { row(8, 10, 5, 5, 12, [0.3, 0.5, 0.2], [3, 4], [2, 3], [0.3, 0.45], 0.6, 0.85); s.shape = 'moon'; }
@@ -94,6 +116,11 @@ function specFor(id) {
   // breather after each boss: casual target +10
   if ([11, 21, 31, 41, 51].includes(id)) s.tgt.casual = s.tgt.casual.map(x => Math.min(1, x + 0.1));
   if (id <= 30 && s.ncol > 4) s.ncol = 4;
+  s.segs = segsFor(s.n, s.segs);
+  s.boss = id % 10 === 0;
+  // DECISION (v2): late bosses may need a peak of 4 in the 5-slot basket; that tightness is what makes them peaks.
+  if (id === 40) s.par = [2, 4];
+  if (id >= 50 && s.boss) s.par = [3, 4];
   // DECISION: minX = round(0.6 × strands) (L3: 5, L4–5: 7), not 1.1 ×: measured on the GDD boards under the
   //   §3.1 geometry rules, 12 strands on 7×8 give a median of 7–8 crossings and 1.1 × was never reached.
   s.minX = id <= 2 ? (id === 2 ? 5 : 2) : id === 3 ? 5 : id <= 5 ? 7 : MINX(n);
@@ -101,10 +128,14 @@ function specFor(id) {
   return s;
 }
 
+// DECISION (v2): boards with 12+ strands use a mostly 2-peg mix (GDD .3/.5/.2 packs ~20 % fewer strands under §3.1).
+function segsFor(n, gdd) { return n >= 12 ? [0.85, 0.15, 0] : gdd; }
+
 const DAILY_TW = ['k', 'l', 'm', 'p', 'r'];
 function dailySpec(i) {
   const r = rng(777 + i * 31);
-  const n = r() < 0.5 ? 18 : 21;
+  // DECISION (v2): 24 strands on 8×10 pass the crossing / free-start gates too rarely; dailies use 21 (r() still drawn so twists keep their seeds).
+  const n = r() < 0.5 ? 21 : 21;
   const a = DAILY_TW[(r() * 5) | 0];
   let b = a; while (b === a) b = DAILY_TW[(r() * 5) | 0];
   const tw = {};
@@ -116,7 +147,7 @@ function dailySpec(i) {
     if (t === 'r') tw.r = 1;
   }
   return { id: 1000 + i, daily: i, name: 'Daily Knot', n, tw, shape: null, minChoice: 3, cols: 8, rows: 10, ncol: 5, cap: 5, jitter: 12,
-    segs: [0.3, 0.5, 0.2], free0: [3, 4], par: [2, 3], tgt: { casual: [0.35, 0.55], average: [0.55, 1], expert: [0.85, 1] }, minX: MINX(n) };
+    segs: segsFor(n, [0.3, 0.5, 0.2]), free0: [3, 4], par: [2, 3], aim: 0.45, tgt: { casual: [0.35, 0.55], average: [0.55, 1], expert: [0.85, 1] }, minX: MINX(n) };
 }
 
 // ------------------------------------------------------------------ shapes (§4.4)
@@ -148,13 +179,23 @@ function pegSet(spec, dil = 0) {
 }
 
 // ------------------------------------------------------------------ geometry (proto, + mask + segs probs)
+// DECISION (v2): geometry aims for n + GEO.over strands and keeps the best set reached; if it holds >= n strands
+//   the least-crossed strands are dropped down to n. Dropping uncrossed filler strands raises crossings per strand
+//   and lowers the free-at-start floor (crossing-graph pieces).
 function genGeometry(spec, r, pegs) {
-  const n = spec.n;
+  const n = spec.n, want = n + (n >= 12 ? GEO.over : 0);
   const strands = [], xsOf = [];
-  let backtracks = 0;
+  let backtracks = 0, bestSet = null;
   genGeometry.max = 0;
-  while (strands.length < n) {
+  // DECISION (v2, render review): strands spread over the whole board (or the boss silhouette). A candidate
+  //   earns GEO.covW per target point within COV_R of it that no strand covers yet.
+  const tgt = pegSet(spec, 0), cov = new Uint8Array(tgt.length);
+  const covers = (c, i) => { const p = tgt[i]; const b = c._bb || (c._bb = bbox(c)); return p[0] > b[0] - COV_R && p[0] < b[2] + COV_R && p[1] > b[1] - COV_R && p[1] < b[3] + COV_R && distPointPoly(p[0], p[1], c.pts) < COV_R; };
+  const recover = () => { cov.fill(0); for (const st of strands) for (let i = 0; i < tgt.length; i++) if (!cov[i] && covers(st, i)) cov[i] = 1; };
+  const gain = c => { let g = 0; for (let i = 0; i < tgt.length; i++) if (!cov[i] && covers(c, i)) g++; return g; };
+  while (strands.length < want) {
     if (strands.length > genGeometry.max) genGeometry.max = strands.length;
+    if (strands.length >= n && (!bestSet || strands.length > bestSet.s.length)) bestSet = { s: strands.slice(), x: xsOf.slice() };
     const allX = xsOf.flat();
     const avail = [];
     for (const [px, py] of pegs) {
@@ -165,26 +206,47 @@ function genGeometry(spec, r, pegs) {
     const u = r();
     const segCount = u < spec.segs[0] ? 1 : u < spec.segs[0] + spec.segs[1] ? 2 : 3;
     let best = null;
-    for (let tries = 0; tries < 300; tries++) {
-      const cand = makeCandidate(spec, r, avail, tries > 150 ? Math.max(1, segCount - 1) : segCount);
+    for (let tries = 0; tries < GEO.tries; tries++) {
+      const cand = makeCandidate(spec, r, avail, tries > GEO.tries / 2 ? Math.max(1, segCount - 1) : segCount);
       if (!cand) continue;
       const ok = check(cand, strands, allX);
       if (!ok) continue;
-      const score = ok.length - GEO.lenW * cand.at[cand.at.length - 1] + r() * 0.8;
+      const score = GEO.xW * ok.length - (ok.length ? 0 : strands.length >= 2 ? GEO.zeroPen : 0) - GEO.lenW * cand.at[cand.at.length - 1] + GEO.covW * gain(cand) + r() * 0.8;
       if (!best || score > best.score) best = { cand, xs: ok, score };
-      if (tries > 60 && best) break;
+      if (tries > GEO.early && best) break;
     }
     if (!best) {
-      if (++backtracks > GEO.bt) return null;
+      if (++backtracks > (bestSet ? GEO.btOver : GEO.bt)) break;
       const drop = Math.min(strands.length, 1 + ((r() * 3) | 0));
       strands.splice(strands.length - drop, drop);
       xsOf.splice(xsOf.length - drop, drop);
+      recover();
       continue;
     }
     strands.push(best.cand);
     xsOf.push(best.xs);
+    for (let i = 0; i < tgt.length; i++) if (!cov[i] && covers(best.cand, i)) cov[i] = 1;
   }
-  return { strands, xCount: xsOf.flat().length };
+  if (strands.length >= want) bestSet = { s: strands, x: xsOf };
+  if (!bestSet) return null;
+  genGeometry.max = Math.max(genGeometry.max, bestSet.s.length);
+  // prune to n: drop the strand with the fewest crossings (ties: shortest), repeat
+  let S = bestSet.s.slice();
+  let P = [];
+  bestSet.s.forEach((s, i) => bestSet.x[i].forEach(x => P.push([s, x.o])));
+  const len = s => s.at[s.at.length - 1];
+  while (S.length > n) {
+    const cnt = new Map(S.map(s => [s, 0]));
+    for (const [a, b] of P) { cnt.set(a, cnt.get(a) + 1); cnt.set(b, cnt.get(b) + 1); }
+    let w = S[0];
+    for (const s of S) if (cnt.get(s) < cnt.get(w) || (cnt.get(s) === cnt.get(w) && len(s) < len(w))) w = s;
+    S = S.filter(s => s !== w);
+    P = P.filter(([a, b]) => a !== w && b !== w);
+  }
+  const X = P;
+  const cv = new Uint8Array(tgt.length);
+  for (const st of S) for (let i = 0; i < tgt.length; i++) if (!cv[i] && covers(st, i)) cv[i] = 1;
+  return { strands: S, xCount: X.length, cover: cv.reduce((a, b) => a + b, 0) / tgt.length };
 }
 
 function makeCandidate(spec, r, free, segs) {
@@ -240,6 +302,7 @@ function check(c, strands, allX) {
       if (x.sb < END_CLEAR || x.sb > o.at[o.at.length - 1] - END_CLEAR) return null;
       for (const y of allX) if (Math.hypot(x.x - y.x, x.y - y.y) < X_SEP) return null;
       for (const y of mine) if (Math.hypot(x.x - y.x, x.y - y.y) < X_SEP) return null;
+      x.o = o;
       mine.push(x);
     }
     const near = (P, Q) => {
@@ -343,10 +406,10 @@ function makeQueue(puz, colorsOf, r, jitter) {
 }
 
 // ------------------------------------------------------------------ one candidate
-function tryLevel(spec, seed, pegs) {
+function tryLevel(spec, seed, pegs, geoIn = null) {
   const r = rng(seed);
   const tw = spec.tw;
-  const geo = genGeometry(spec, r, pegs);
+  const geo = geoIn || genGeometry(spec, r, pegs);
   if (!geo) return { fail: 'geo' };
   const n = geo.strands.length;
   const base = buildPuzzle({ cols: spec.cols, rows: spec.rows, cap: spec.cap, queue: [0], strands: geo.strands.map(s => ({ pegs: s.pegs, bow: s.bow, c: 0, d: 0 })) });
@@ -354,12 +417,19 @@ function tryLevel(spec, seed, pegs) {
   // depth: keep the stacking maximising 2*longestChain - free (proto), within free0
   let depth = null, bestD = -Infinity;
   const pairs = base.crossings.map(x => [x.top, x.under]);
+  // every connected piece of the crossing graph keeps >= 1 free strand, so free0 can't go below the piece count
+  const comp = [...Array(n).keys()];
+  const root = i => (comp[i] === i ? i : (comp[i] = root(comp[i])));
+  for (const [a, b] of pairs) comp[root(a)] = root(b);
+  const pieces = new Set([...Array(n).keys()].map(root)).size;
+  const freeHi = Math.max(spec.free0[1] + FREE_SLACK, pieces + PIECE_SLACK) + (tw.k ? 1 : 0);
+  if (pieces > spec.free0[1] + FREE_SLACK + MAX_EXTRA_FREE) return { fail: 'pieces' };
   for (let t = 0; t < (spec.id === 1 ? 40 : 150); t++) {
     const dp = shuffle([...Array(n).keys()], r);
     const under = Array.from({ length: n }, () => []);
     for (const [a, b] of pairs) { if (dp[a] > dp[b]) under[b].push(a); else under[a].push(b); }
     const free = under.filter(u => u.length === 0).length;
-    if (free < spec.free0[0] || free > spec.free0[1] + FREE_SLACK + (tw.k ? 1 : 0)) continue;
+    if (free < spec.free0[0] || free > freeHi) continue;
     const memo = new Array(n).fill(-1);
     const height = i => (memo[i] >= 0 ? memo[i] : (memo[i] = 1 + Math.max(0, ...under[i].map(height))));
     const longest = Math.max(...[...Array(n).keys()].map(height));
@@ -485,7 +555,7 @@ function tryLevel(spec, seed, pegs) {
   if (!level.knots) delete level.knots;
   puz = buildPuzzle(level);
   const f0 = freeGroups(puz).length;
-  if (f0 < spec.free0[0] || f0 > spec.free0[1] + FREE_SLACK + (tw.k ? 1 : 0)) return { fail: 'free0' };
+  if (f0 < spec.free0[0] || f0 > freeHi) return { fail: 'free0' };
   if (tw.teach === 'knot') {
     const fg = freeGroups(puz);
     if (fg.length > 2 || !fg.some(id => puz.members[id].length === 2)) return { fail: 'knot-teach' };
@@ -501,6 +571,9 @@ function tryLevel(spec, seed, pegs) {
 
 function band(v, [a, b]) { return v < a ? a - v : v > b ? v - b : 0; }
 
+// DECISION (v2): curation score adds a pull toward the level's casual aim (smooth ramp), keeps bot skill order
+//   (casual <= average + 5 %), keeps boss average-bot rates near their band floor (bosses are peaks for every
+//   skill level), and weights crossings a little more. 'pen' is the score without the crossing bonus.
 function evaluate(spec, o, seed) {
   const { puz } = o;
   const st = {};
@@ -510,6 +583,9 @@ function evaluate(spec, o, seed) {
   st.expert = botStats(puz, 'expert', 300, seed + 4);
   const par = o.level.par;
   let s = 10 * (band(st.casual.winRate, spec.tgt.casual) + band(st.average.winRate, spec.tgt.average) + band(st.expert.winRate, spec.tgt.expert));
+  if (spec.aim !== undefined) s += 8 * Math.abs(st.casual.winRate - spec.aim);
+  s += 5 * Math.max(0, st.casual.winRate - st.average.winRate - 0.05);
+  if (spec.boss) s += 4 * Math.max(0, st.average.winRate - spec.tgt.average[0] - 0.12);
   const cp = st.casual.avgPeak ?? par;
   if (spec.id >= 6) {
     s += 4 * Math.abs(cp - par - 1.2);
@@ -519,8 +595,7 @@ function evaluate(spec, o, seed) {
     if (c3 > 0.25) s += 4 * (c3 - 0.25);
     if (e3 < 0.6) s += 4 * (0.6 - e3);
   }
-  s -= 0.02 * puz.crossings.length;
-  return { s, bots: st };
+  return { s: s - 0.05 * puz.crossings.length, pen: s, bots: st };
 }
 
 /** Real decisions on the solver line: states with >= 2 legal moves where one of them raises the optimal peak. */
@@ -548,47 +623,71 @@ function choiceCount(puz, level, want) {
 }
 
 // ------------------------------------------------------------------ search one level
+// DECISION (v2): geometry is the slow part (0.1–2 s) and the dressing (depth, colours, twists, queue) decides
+//   difficulty, so each geometry gets up to DRESS dressings (~50 ms each). Dressings also vary the queue jitter
+//   (JIT × band jitter) to widen the difficulty spread; a quick 80-run casual screen skips far-off candidates.
+//   Search stops early once a candidate's score without the crossing bonus is under GOOD (after 40 % budget).
+const DRESS = 48, JIT = [1, 0.5, 1.5, 2, 0.75, 1.25], JIT_HARD = [1, 1.5, 2, 2.5, 3, 1.25], GOOD = 0.6, SCREEN = 0.2;
+const GEO_FAILS = new Set(['minX', 'pieces']);
 function genOne(spec, secs) {
   const t0 = Date.now();
-  let best = null, valid = 0, tried = 0;
+  if (spec.boss) secs *= spec.id === 60 ? 2.5 : 1.5;
+  const jits = spec.aim < 0.4 ? JIT_HARD : JIT;
+  const tag = spec.daily !== undefined ? 'D' + spec.daily : 'L' + spec.id;
+  let best = null, valid = 0, tried = 0, geos = 0;
   const fails = {};
+  const F = k => { fails[k] = (fails[k] || 0) + 1; };
   const baseSeed = (spec.daily !== undefined ? 7000003 + spec.daily * 100003 : spec.id * 100003) + OFF * 50021;
-  let dil = 0, pegs = pegSet(spec, 0), reduced = 0;
+  let dil = spec.shape && spec.n >= 18 ? 1 : 0, pegs = pegSet(spec, dil), reduced = 0;
+  const el = () => (Date.now() - t0) / 1000;
   for (let k = 0; ; k++) {
-    const el = (Date.now() - t0) / 1000;
-    if (el > secs || valid >= 60) break;
-    if (spec.shape && !best && !dil && el > secs * 0.3) { dil = 0.5; pegs = pegSet(spec, 0.5); }
-    // DECISION: boss shapes that still have no candidate at 55% of the budget widen the mask to 1.0 (silhouette kept, edges softer).
-    if (spec.shape && !best && dil === 0.5 && el > secs * 0.55) { dil = 1; pegs = pegSet(spec, 1); }
-    if (!best && valid === 0 && el > secs * 0.45 * (1 + reduced) && spec.n > 9 && reduced < 2) {
+    if (el() > secs) break;
+    if (best && best.pen < GOOD && el() > secs * 0.4) break;
+    if (spec.shape && !geos && dil === 0 && el() > secs * 0.1) { dil = 0.5; pegs = pegSet(spec, 0.5); }
+    // DECISION: boss shapes that still have no geometry widen the mask to 1.0 (silhouette kept, edges softer).
+    if (spec.shape && !geos && dil === 0.5 && el() > secs * 0.2) { dil = 1; pegs = pegSet(spec, 1); }
+    if (!valid && el() > secs * 0.3 * (1 + reduced) && spec.n > 9 && reduced < 2) {
       reduced++; spec = { ...spec, n: spec.n - 3, minX: MINX(spec.n - 3) };
-      console.log(`${spec.daily !== undefined ? 'D' + spec.daily : 'L' + spec.id}: no candidate yet, strands -> ${spec.n}`);
+      console.log(`${tag}: no valid level yet, strands -> ${spec.n}`);
     }
-    tried++;
-    const seed = baseSeed + k;
-    const o = tryLevel(spec, seed, pegs);
-    if (o.fail) { fails[o.fail] = (fails[o.fail] || 0) + 1; continue; }
-    valid++;
-    const ev = evaluate(spec, o, seed);
-    if (ev.bots.expert.winRate === 0) { fails.expert0 = (fails.expert0 || 0) + 1; continue; } // check.mjs hard gate
-    let sc = ev.s;
-    if (best && sc - 3 >= best.sc) continue;
-    const ch = choiceCount(o.puz, o.level, spec.minChoice);
-    if (ch < spec.minChoice) sc += 3;
-    if (!best || sc < best.sc) best = { ...o, ...ev, sc, seed, choices: ch, dil };
+    const gseed = (baseSeed + k) >>> 0;
+    const geo = spec.id <= 2 ? null : genGeometry(spec, rng(gseed), pegs);
+    if (spec.id > 2 && !geo) { F('geo'); continue; }
+    geos++;
+    let okHere = 0;
+    for (let d = 0; d < (spec.id <= 2 ? 1 : DRESS); d++) {
+      if (el() > secs) break;
+      const seed = spec.id <= 2 ? gseed : (Math.imul(gseed, 97) + d * 7919 + 1) >>> 0;
+      const jm = spec.id <= 2 ? 1 : jits[d % jits.length];
+      tried++;
+      const o = tryLevel(jm === 1 ? spec : { ...spec, jitter: spec.jitter * jm }, seed, pegs, geo);
+      if (o.fail) { F(o.fail); if (GEO_FAILS.has(o.fail) || (d >= 8 && !okHere)) break; continue; }
+      okHere++; valid++;
+      if (spec.aim < 1) {
+        const q = botStats(o.puz, 'casual', 80, seed + 9);
+        if (Math.abs(q.winRate - spec.aim) > SCREEN) { F('screen'); continue; }
+      }
+      const ev = evaluate(spec, o, seed);
+      if (ev.bots.expert.winRate === 0) { F('expert0'); continue; } // check.mjs hard gate
+      let sc = ev.s, pen = ev.pen;
+      if (best && sc - 3 >= best.sc) continue;
+      const ch = choiceCount(o.puz, o.level, spec.minChoice);
+      if (ch < spec.minChoice) { sc += 3; pen += 3; }
+      if (!best || sc < best.sc) best = { ...o, ...ev, sc, pen, seed, gseed, jm, choices: ch, dil, n: spec.n };
+    }
   }
-  if (!best) { console.error(`L${spec.id} ${spec.name}: NO LEVEL (${tried} tried)`, fails); return null; }
+  if (!best) { console.error(`${tag} ${spec.name}: NO LEVEL (${tried} tried)`, fails); return null; }
   const b = best, L = b.level, bt = b.bots;
   const pct = x => Math.round(x * 100);
   L.stats = {
-    seed: b.seed, crossings: b.puz.crossings.length, states: b.sol.states, exact: b.sol.exact,
+    seed: b.seed, gseed: b.gseed, jit: b.jm, crossings: b.puz.crossings.length, states: b.sol.states, exact: b.sol.exact,
     random: +bt.random.winRate.toFixed(3), casual: +bt.casual.winRate.toFixed(3), average: +bt.average.winRate.toFixed(3), expert: +bt.expert.winRate.toFixed(3),
     avgPeak: { casual: bt.casual.avgPeak == null ? null : +bt.casual.avgPeak.toFixed(2), expert: bt.expert.avgPeak == null ? null : +bt.expert.avgPeak.toFixed(2) },
     stars: { casual: bt.casual.stars, average: bt.average.stars, expert: bt.expert.stars },
-    choices: b.choices, free0: b.free0, reduced, score: +b.sc.toFixed(2), valid, tried, dil: b.dil,
+    choices: b.choices, free0: b.free0, reduced, aim: spec.aim, score: +b.sc.toFixed(2), valid, tried, geos, dil: b.dil,
     miss: [['casual', spec.tgt.casual], ['average', spec.tgt.average], ['expert', spec.tgt.expert]].filter(([k, t]) => band(bt[k].winRate, t) > 0).map(([k]) => k),
   };
-  console.log(`${spec.daily !== undefined ? 'D' + spec.daily : 'L' + spec.id} ${spec.name}: n ${b.puz.n} x ${b.puz.crossings.length} par ${L.par} free0 ${b.free0} ch ${b.choices} | rnd ${pct(bt.random.winRate)} cas ${pct(bt.casual.winRate)} avg ${pct(bt.average.winRate)} exp ${pct(bt.expert.winRate)} | pk cas ${L.stats.avgPeak.casual} exp ${L.stats.avgPeak.expert} [${valid}/${tried}, ${((Date.now() - t0) / 1000).toFixed(0)}s] ${JSON.stringify(fails)}`);
+  console.log(`${tag} ${spec.name}: n ${b.puz.n} x ${b.puz.crossings.length} par ${L.par} free0 ${b.free0} ch ${b.choices} | rnd ${pct(bt.random.winRate)} cas ${pct(bt.casual.winRate)} (aim ${pct(spec.aim)}) avg ${pct(bt.average.winRate)} exp ${pct(bt.expert.winRate)} | pk cas ${L.stats.avgPeak.casual} exp ${L.stats.avgPeak.expert} 3* c/e ${bt.casual.stars[3]}/${bt.expert.stars[3]} sc ${b.sc.toFixed(2)} [${valid}/${tried} g${geos}, ${el().toFixed(0)}s] ${JSON.stringify(fails)}`);
   return L;
 }
 
@@ -597,6 +696,12 @@ function writeAtomic(path, text) { const tmp = path + '.' + process.pid + '.tmp'
 function savePart(L) {
   mkdirSync(PARTS, { recursive: true });
   const name = L.id >= 1000 ? `D${String(L.id - 1000).padStart(2, '0')}.json` : `L${String(L.id).padStart(2, '0')}.json`;
+  // --keep-better: a redo only replaces the part when its curation score is lower (better)
+  if (args.includes('--keep-better') && existsSync(join(PARTS, name))) {
+    const old = JSON.parse(readFileSync(join(PARTS, name), 'utf8'));
+    if (old.stats && old.stats.score <= L.stats.score) { console.log(name, 'kept old', old.stats.score, '<=', L.stats.score); return; }
+    console.log(name, 'replaced', old.stats && old.stats.score, '->', L.stats.score);
+  }
   writeAtomic(join(PARTS, name), JSON.stringify(L));
 }
 export function merge() {
@@ -706,7 +811,7 @@ else {
   }
   for (const spec of specs) {
     const L = genOne(spec, spec.id <= 2 ? Math.min(secs, 20) : secs);
-    if (L) { savePart(L); merge(); }
+    if (L) { savePart(L); if (!process.env.KK_NOMERGE) merge(); }
   }
 }
 export { specFor, dailySpec, tryLevel, genGeometry };

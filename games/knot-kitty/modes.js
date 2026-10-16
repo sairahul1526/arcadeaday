@@ -6,8 +6,12 @@
 // DECISION: ?record=1 and ?og=1 never write the player's save: P.save / P.flush become no-ops in those
 //   modes, and the showcase save tweaks (L1-19 at 3 stars, Pumpkin Sweater worn, gifts/chests/tutorials
 //   marked done so no popup interrupts the take) live only in memory.
-// DECISION: L20's par is 2, so a CHAIN x3 (three balls waiting) can't also be a 3-star run. The record
-//   planner prefers the CHAIN x3 climax; the win card shows whatever stars the line really earns.
+// DECISION: ?record=1 / ?og=1 (default level only) swap L20's board in memory for SHOWCASE below: an 18-strand
+//   pumpkin with par 3, so the CHAIN x3 climax (three balls waiting in a cap-4 basket) is also a clean 3-star win.
+//   It is patched onto the levels-data.js object before the session is built; normal play never sees it.
+// DECISION: record/og swallow the events that raise UI band callouts (basketWarn, full, doomed, hint...) before they
+//   reach listeners (still logged for the soundtrack), so the take shows exactly one caption at a time. The CHAIN xn!
+//   pop is UI's (contract 1); modes draws its own only when UI didn't pop it (old ui.js), keyed off the chain event.
 // DECISION: cap2 ("1 slot left") is shown only while the basket really sits at cap-1 (PLAYBOOK lesson:
 //   a number caption must agree with the HUD on every frame), between the 3rd basket pull and the key pull.
 // DECISION: the scripted hand is drawn for every scripted tap (playable-ad style), not only the first.
@@ -28,6 +32,7 @@ import * as Rn from './render.js';
 import * as Sc from './scene.js';
 import * as M from './meta.js';
 import * as Au from './audio.js';
+import LVDATA from './levels-data.js';
 
 const Q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 const on = k => Q.get(k) === '1' || Q.get(k) === 'true';
@@ -98,7 +103,7 @@ const goesToBasket = (puz, st, id) => {
   return d ? d.some(x => x.kind === 'basket') : true;
 };
 const sigOf = st => `${st.removed}|${st.sc}|${st.sn}|${st.next}|${st.basket}|${st.moves}`;
-const sessFree = s => s && !s.spoolBusy && s.buffered == null && !s.press;
+const sessFree = s => s && !s.spoolBusy && s.buffered == null && !(s.queue && s.queue.length) && !s.press;
 const levelOver = (s) => !s || !s.st || s.stuck || s.st.dead || safe(() => R.isWon(s.puz, s.st), false) || safe(() => R.isStuck(s.puz, s.st), false);
 
 // Validated solver line from st: the level's stored `sol` from the start, else solve(), else hintMove.
@@ -144,35 +149,69 @@ function prepShowcaseSave(lv) {
     d.tut[k] = 1;
 }
 
+// ================================================================== showcase board (record / og)
+// 18 strands on a 9x10 pumpkin, cap 4, par 3, 6 colours, no knots (tools/knot-kitty generator, picked by planShow:
+// CHAIN x3 at peak 3 = 3 stars). Applied only when no ?lv= is given.
+export const SHOWCASE = {"cols":10,"rows":10,"cap":4,"shape":"pumpkin","strands":[{"pegs":[[5,3.5],[3,4.5]],"bow":0.077,"c":1,"d":2},{"pegs":[[4,3],[5,7]],"bow":-0.065,"c":1,"d":7},{"pegs":[[6.5,5.5],[3,3.5]],"bow":-0.098,"c":0,"d":0},{"pegs":[[3.5,6],[6.5,7]],"bow":-0.088,"c":3,"d":10},{"pegs":[[1.5,7.5],[4,7],[4,5]],"bow":0,"c":2,"d":15},{"pegs":[[1.5,4.5],[2.5,5.5],[2.5,8]],"bow":0,"c":3,"d":11},{"pegs":[[1.5,6],[4.5,8.5]],"bow":-0.094,"c":3,"d":19},{"pegs":[[5.5,6],[6.5,8.5]],"bow":0.111,"c":0,"d":8},{"pegs":[[2.5,2],[1,3]],"bow":0.077,"c":1,"d":13},{"pegs":[[3.5,1],[5.5,0.5]],"bow":-0.079,"c":0,"d":9},{"pegs":[[4,0],[6,3.5]],"bow":-0.085,"c":0,"d":18},{"pegs":[[7.5,3.5],[6.5,2.5],[5,2.5]],"bow":0,"c":2,"d":1},{"pegs":[[8.5,6.5],[7.5,7.5],[5.5,8]],"bow":0,"c":2,"d":3},{"pegs":[[6.5,4.5],[7.5,2.5]],"bow":-0.098,"c":1,"d":6},{"pegs":[[4.5,1.5],[6.5,1.5]],"bow":0.07,"c":0,"d":16},{"pegs":[[8.5,4],[7.5,5.5]],"bow":0.109,"c":3,"d":4},{"pegs":[[0.5,4],[0.5,6]],"bow":-0.088,"c":3,"d":17},{"pegs":[[3.5,9],[5.5,9]],"bow":0.065,"c":1,"d":12},{"pegs":[[0,5],[2,3]],"bow":0.073,"c":1,"d":5},{"pegs":[[9,5.5],[7.5,6.5]],"bow":0.062,"c":0,"d":14}],"queue":[3,2,1,3,0,1,0],"par":3,"sol":[6,4,3,5,1,0,8,15,16,7,12,10,13,11,2,17,18,9,14,19]};
+const SHOW_ON = (REC_ON || on('og')) && !LV_PARAM && !on('real');
+function applyShowcase() {
+  if (!SHOW_ON || !SHOWCASE || !Array.isArray(LVDATA)) return false;
+  const o = LVDATA.find(l => l && l.id === LV);
+  if (!o || Object.isFrozen(o)) return false;
+  for (const key of Object.keys(o)) if (!['id', 'name', 'world'].includes(key)) delete o[key]; // no stray knots/locks
+  Object.assign(o, JSON.parse(JSON.stringify(SHOWCASE)));
+  return true;
+}
+// Events that make UI raise a band callout. Record/og keep one caption on screen at a time (the take's own), so
+// these are logged (soundtrack) but not delivered to listeners. Chain pops (+1 / CHAIN xn!) still come from UI; spoolDone
+// is held back too, because its COMBO pop would replace the CHAIN x3 climax pop in the same frame.
+const MUTED = new Set(['basketWarn', 'full', 'doomed', 'hint', 'thaw', 'booster', 'boosterRefused', 'stuck', 'spoolDone']);
+
 // ================================================================== ?record=1  (GDD §12.1)
 const REC = { ready: false, t: 0, frames: 0, items: [], held: null, log: [], plan: null, hand: null, lastTapT: 0,
-  keyT: null, cap2On: null, cap2Off: null, pulls0: 0 };
+  keyT: null, cap2On: null, cap2Off: null, pulls0: 0, pop: null, chainMax: 0, miss: null, hover: null };
 
 function installRecord() {
   window.__rec = { step: recStep, frame: recFrame, audio: recAudio };
-  // Log every bus event against record time for the offline soundtrack.
+  // Log every bus event against record time for the offline soundtrack; the callout/pop events stop here.
   const emit0 = bus.emit;
   bus.emit = (t, d) => {
-    if (REC.ready) REC.log.push({ t: REC.t, ev: t, data: d == null ? d : { ...d } });
+    if (REC.ready) {
+      REC.log.push({ t: REC.t, ev: t, data: d == null ? d : { ...d } });
+      if (t === 'chain' && d) onChain(d);
+      if (MUTED.has(t)) return;
+    }
     return emit0.call(bus, t, d);
   };
   whenBooted(async () => {
     await fontsReady();
     prepShowcaseSave(LV);
+    REC.showcase = applyShowcase();
     A.resize(1080, 1920, 1);
     A.go('play', { kind: 'level', id: LV });
     const s = A.S.sess;
     const t0 = performance.now();
-    REC.plan = planShow(s, s.st, SEED, 2000);
+    REC.plan = planShow(s, s.st, SEED, 2500);
     REC.planMs = Math.round(performance.now() - t0);
     REC.items = scheduleShow(REC.plan);
-    REC.hand = { x: A.S.W * 0.82, y: A.S.H * 0.97, fx: A.S.W * 0.82, fy: A.S.H * 0.97, tx: A.S.W * 0.82, ty: A.S.H * 0.97, mt: 0 };
+    REC.hand = { x: A.S.W * 0.82, y: A.S.H * 0.97, fx: A.S.W * 0.82, fy: A.S.H * 0.97, tx: A.S.W * 0.82, ty: A.S.H * 0.97, mt: -1 };
     REC.lastTapT = REC.items.length ? REC.items[REC.items.length - 1].t : 0;
+    // Frame 0 already shows the hand resting on the first strand (the hook frame must read as "play this").
+    const f0 = REC.items[0], p0 = f0 && f0.id != null ? A.tapPointFor(f0.id) : null;
+    if (p0) { const h = REC.hand; h.fx = h.tx = p0.x + 40; h.fy = h.ty = p0.y + 60; }
     REC.ready = true;
+    A.step(0); // draw frame 0 (hook caption + board) before the first step
     window.__recPlan = { line: REC.plan.line, key: REC.plan.k, chain: REC.plan.chain, peak: REC.plan.peak, stars: REC.plan.stars,
-      ms: REC.planMs, score: Math.round(REC.plan.score), est: REC.plan.est };
+      ms: REC.planMs, score: Math.round(REC.plan.score), est: REC.plan.est, showcase: REC.showcase, n: s.puz.n };
     window.__recReady = true;
   });
+}
+// Contract 1: chain {n, combo} on every ball landing (n = balls absorbed by that spool so far); older play.js sends {m}.
+function onChain(d) {
+  const n = (d.n != null ? d.n : d.m) | 0;
+  if (n < 2) return;
+  REC.chainMax = Math.max(REC.chainMax, n);
+  REC.pop = { n, t: REC.t, slot: d.slot == null ? -1 : d.slot };
 }
 
 function recState() {
@@ -267,6 +306,19 @@ export function planShow(sess, st0, seed = 1, budgetMs = 2000) {
   const r = R.rng ? R.rng(seed * 7919 + 17) : Math.random;
   const t0 = performance.now();
   let best = null, tries = 0, wins = 0;
+  // The showcase board carries its picked line, so the take is identical on every machine (the search is time-boxed).
+  const fixed = sess.level && Array.isArray(sess.level.show) ? sess.level.show : null;
+  if (fixed && !Q.has('seed')) {
+    const st = R.cloneState(st0), info = [];
+    let ok = true;
+    for (const id of fixed) {
+      if (!canPullOk(puz, st, id)) { ok = false; break; }
+      const ev = [], b0 = st.bt;
+      R.pull(puz, st, id, ev);
+      info.push({ ...chainOf(ev), bt0: b0, bt: st.bt });
+    }
+    if (ok && R.isWon(puz, st)) return { line: fixed.slice(), info, ...scoreLine(fixed, info, puz, par, st0), tries: 0, wins: 1, fixed: true };
+  }
   const consider = (line, info) => {
     wins++;
     const sc = scoreLine(line, info, puz, par, st0);
@@ -329,64 +381,66 @@ export function planShow(sess, st0, seed = 1, budgetMs = 2000) {
   return best;
 }
 
+// Beat sheet targets (s). One action at least every ~1.1 s from 0.6 to the win: no dead air.
+const BEAT = { first: 0.6, a: 1.5, b: 8.0, cover: 8.8, late: [9.7, 10.5, 11.3], hover: 11.95, hoverDur: 1.1, key: 13.6,
+  after: 15.4, lastPull: 17.5, win: 19.8 };
+
 function scoreLine(line, info, puz, par, st0) {
   let k = 0;
   for (let i = 1; i < info.length; i++) if (info[i].chain > info[k].chain) k = i;
   const chain = info.length ? info[k].chain : 0;
   const cap = effCap(puz, st0);
   const peak = Math.max(0, ...info.map(x => x.bt));
+  const stars = R.starsFor ? R.starsFor(peak, par) : 0;
   let score = chain >= 3 ? 100 + 4 * Math.min(2, chain - 3) : chain * 20;
+  score += stars >= 3 ? 60 : -30 * (3 - stars); // the take ends on a clean 3-star card
   if (peak >= cap) score -= 40; // a full basket reads as panic, not planning
   if (info[k] && info[k].bt0 === cap - 1) score += 25; // "1 slot left" right before the key pull
   let run = 0;
   for (let j = k - 1; j >= 0 && j >= k - 3; j--) if (info[j].toBasket > 0 && !info[j].completes) run++; else break;
   score += run * 6; // three pulls into the basket right before the climax
-  // Beat sheet fit: simulate the tap schedule with spool hand-over waits and score where the beats land.
-  score -= k < 8 ? (8 - k) * 6 : 0; // too few pulls before the climax reads as luck, not planning
+  if (run === 3 && info[k - 3].bt0 === Math.max(0, cap - 4)) score += 10; // ...climbing from an empty basket
+  score -= k < 10 ? (10 - k) * 6 : 0; // too few pulls before the climax reads as luck (and leaves gaps)
+  // Simulate the tap schedule with the spool hand-over waits and score where the beats land.
   const tm = simSchedule(scheduleShow({ line, k, chain }), line, info);
-  score -= 12 * Math.max(0, Math.abs(tm.key - 15.1) - 0.4);
-  score -= 15 * Math.max(0, tm.end - 20.6); // win card (kitten freed + 1.6 s) should land by ~20.5 s
-  score -= 8 * Math.max(0, 19.9 - tm.end); // ...but not so early that the end is a single pull
-  score -= 3 * Math.max(0, k - 4 - 9); // the 3.5-9 s run reads best at ~6-9 pulls, not a blur
-  score -= 8 * Math.max(0, tm.cover - 10.4);
+  score -= 12 * Math.max(0, Math.abs(tm.key - BEAT.key) - 0.4);
+  score -= 15 * Math.max(0, tm.end - (BEAT.win + 0.2)); // win card (kitten freed + 1.6 s) by ~20 s: 3 stars land before 22.5
+  score -= 12 * Math.max(0, (BEAT.win - 0.4) - tm.end); // ...but not early: the end card would cut a long win card
+  score -= 8 * Math.max(0, tm.cover - 9.3);
+  score -= 10 * Math.max(0, tm.gap - 1.15); // dead air
   if (line.length - k - 1 < 2) score -= 8;
-  if (info.slice(1, Math.min(k, 8)).some(x => x.completes)) score += 8; // a spool rolls off in the 3.5-9 s run
-  const stars = R.starsFor ? R.starsFor(peak, par) : 0;
+  if (info.slice(1, Math.min(k, 8)).some(x => x.completes)) score += 8; // a spool rolls off early
   score += 4 * stars;
   return { score, k, chain, peak, stars, est: tm };
 }
 
 // Beat sheet (§12.1) -> tap times. Times are the earliest; a tap waits for spools to land (§3.4).
-// Spreads ids from a toward b at `step` (squeezed down to minStep); `fromStart` keeps a fixed and lets a long
-// run spill past b instead of starting early (used after the climax, which must not be hurried).
-function spread(ids, a, b, step, minStep, fromStart = false) {
+// Spreads ids evenly from a to b (step capped at maxStep, squeezed down to minStep; a long run spills past b).
+function spread(ids, a, b, maxStep, minStep) {
   const n = ids.length;
   if (!n) return [];
-  let st = n > 1 ? Math.min(step, (b - a) / (n - 1)) : 0;
-  if (n > 1 && st < minStep) {
-    st = minStep;
-    if (!fromStart) a = Math.max(1.4, b - st * (n - 1));
-  }
+  const st = n > 1 ? Math.max(minStep, Math.min(maxStep, (b - a) / (n - 1))) : 0;
   return ids.map((id, i) => ({ t: +(a + i * st).toFixed(3), id, hold: 0.14 }));
 }
 export function scheduleShow(plan) {
   const { line, k, chain } = plan;
   const items = [];
   if (!line.length) return items;
-  items.push({ t: 0.6, id: line[0], hold: 0.55, first: true });
+  items.push({ t: BEAT.first, id: line[0], hold: 0.5, first: true });
   if (chain >= 2 && k >= 2) {
     const pre = line.slice(1, k), nLate = Math.min(3, pre.length);
     const early = pre.slice(0, pre.length - nLate), late = pre.slice(pre.length - nLate);
-    items.push(...spread(early, 3.6, 8.6, 0.8, 0.36));
-    items.push({ t: 9.4, cover: true, hold: 0.16 });
-    [10.8, 12.0, 13.2].slice(3 - nLate).forEach((t, i) => items.push({ t, id: late[i], hold: 0.16 }));
-    items.push({ t: 15.0, id: line[k], hold: 0.22, key: true });
-    items.push(...spread(line.slice(k + 1), 17.2, 18.6, 0.4, 0.22, true));
+    items.push(...spread(early, BEAT.a, BEAT.b, 1.0, 0.4));
+    items.push({ t: BEAT.cover, cover: true, hold: 0.5 });
+    BEAT.late.slice(3 - nLate).forEach((t, i) => items.push({ t, id: late[i], hold: 0.16 }));
+    items.push({ t: BEAT.hover, hover: true, dur: BEAT.hoverDur, avoid: line[k] });
+    items.push({ t: BEAT.key, id: line[k], hold: 0.24, key: true });
+    items.push(...spread(line.slice(k + 1), BEAT.after, BEAT.lastPull, 0.9, 0.3)); // paced so the win card lands ~19.8 s
   } else {
     const rest = line.slice(1), half = Math.ceil(rest.length / 2);
-    items.push(...spread(rest.slice(0, half), 3.6, 8.8, 0.8, 0.3));
-    items.push({ t: 9.4, cover: true, hold: 0.16 });
-    items.push(...spread(rest.slice(half), 10.8, 19.2, 1.0, 0.3));
+    items.push(...spread(rest.slice(0, half), BEAT.a, BEAT.b, 1.0, 0.3));
+    items.push({ t: BEAT.cover, cover: true, hold: 0.5 });
+    items.push(...spread(rest.slice(half), 9.7, 17.6, 1.0, 0.3));
   }
   return items;
 }
@@ -394,16 +448,20 @@ export function scheduleShow(plan) {
 // Rough tap times for a schedule: a tap waits for the spool hand-over of the previous pull (§3.4).
 function simSchedule(items, line, info) {
   const busyOf = x => (x && x.completes ? DURS.leave + DURS.enter + (x.unb ? DURS.ubDelay + DURS.ubDur * x.unb : 0) : 0);
-  let free = 0, key = 0, last = 0, cover = 0;
+  let free = 0, key = 0, last = 0, cover = 0, gap = 0, prev = null;
   for (const it of items) {
+    if (it.hover) { prev = it.t + it.dur; continue; }
     const t = Math.max(it.t, free);
+    if (prev != null && !it.key && prev !== key) gap = Math.max(gap, t - prev); // the chain after the key is the show
+    prev = t;
     if (it.cover) { cover = t; free = t + it.hold + 0.05; continue; }
     const j = line.indexOf(it.id);
     if (it.key) key = t;
     last = t + it.hold;
     free = last + 0.05 + busyOf(info[j]);
   }
-  return { key, last, cover, end: free + (DUR.kittenFree ?? 1.6) };
+  return { key: +key.toFixed(2), last: +last.toFixed(2), cover: +cover.toFixed(2), gap: +gap.toFixed(2),
+    end: +(free + (DUR.kittenFree ?? 1.6)).toFixed(2) };
 }
 
 function pickCovered(sess) {
@@ -414,13 +472,34 @@ function pickCovered(sess) {
     const c = R.canPull ? R.canPull(puz, st, id) : null;
     if (!c || c.ok || c.why !== 'covered') continue;
     const nb = (c.blockers || []).length || 1;
-    const len = puz.strands[id].at ? puz.strands[id].at[puz.strands[id].at.length - 1] : 1;
-    const sc = -Math.abs(nb - 1) * 2 + len * 0.3;
+    const p = A.tapPointFor(id);
+    // one or two blockers reads best; prefer the middle of the board (the camera's eye line)
+    const mid = p ? -Math.abs(p.y - A.S.H * 0.48) / (A.S.H * 0.25) - Math.abs(p.x - A.S.W / 2) / A.S.W : -2;
+    const sc = -Math.abs(nb - 1.5) * 2 + mid;
+    if (sc > bs) { bs = sc; best = id; }
+  }
+  return best;
+}
+// Decoy for the "which one?" hover: a free strand that would land in the basket (filling it) and isn't the key.
+function pickDecoy(sess, avoid) {
+  const { puz, st } = sess;
+  const pt = A.tapPointFor(avoid);
+  let best = -1, bs = -Infinity;
+  for (const id of legal(puz, st)) {
+    if (id === avoid) continue;
+    const p = A.tapPointFor(id);
+    if (!p) continue;
+    const d = pt ? Math.hypot(p.x - pt.x, p.y - pt.y) : 300;
+    const sc = (goesToBasket(puz, st, id) ? 10 : 0) - Math.abs(d - 320) / 100; // a visible move between the two
     if (sc > bs) { bs = sc; best = id; }
   }
   return best;
 }
 
+function glideTo(x, y) {
+  const h = REC.hand, e = handPos();
+  h.fx = e.x; h.fy = e.y; h.tx = x; h.ty = y; h.mt = REC.t;
+}
 function runScript() {
   const S = A.S, s = S.sess;
   if (!s) return;
@@ -430,27 +509,41 @@ function runScript() {
   }
   const it = REC.items[0];
   if (!it) return;
+  if (it.hover) {
+    // Hesitate over a wrong strand while the "1 slot left" caption is up, then move on.
+    if (!it.pt && REC.t >= it.t) {
+      const id = pickDecoy(s, it.avoid);
+      const p = id >= 0 ? A.tapPointFor(id) : null;
+      if (!p) { REC.items.shift(); return; }
+      it.pt = { x: p.x, y: p.y };
+      it.end = REC.t + it.dur;
+      glideTo(p.x, p.y);
+      REC.hover = { t0: REC.t, t1: it.end };
+    }
+    if (it.end != null && REC.t >= it.end) { REC.items.shift(); REC.hover = null; }
+    return;
+  }
   // Glide the hand to the next target a moment before the press.
   if (!it.pt && REC.t >= it.t - 0.42 && S.screen === 'play') {
     if (it.cover) { it.id = pickCovered(s); if (it.id < 0) { REC.items.shift(); return; } }
     const p = A.tapPointFor(it.id);
     if (!p) { REC.items.shift(); return; }
     it.pt = { x: p.x, y: p.y };
-    const h = REC.hand, e = handPos();
-    h.fx = e.x; h.fy = e.y; h.tx = p.x; h.ty = p.y; h.mt = REC.t;
+    glideTo(p.x, p.y);
   }
   if (REC.t < it.t || !it.pt || S.screen !== 'play' || !sessFree(s)) return;
   if (!it.cover && !canPullOk(s.puz, s.st, it.id)) {
     // Rule state diverged from the plan (should not happen): re-plan from here, keep the timing.
-    const L = lineFrom(s, s.st).line, rest = REC.items.filter(x => !x.cover);
-    REC.items = REC.items.filter(x => x.cover);
+    const L = lineFrom(s, s.st).line, rest = REC.items.filter(x => !x.cover && !x.hover);
+    REC.items = REC.items.filter(x => x.cover || x.hover);
     let t = REC.t;
-    L.forEach((id, i) => { t = rest[i] ? Math.max(rest[i].t, t) : t + 0.4; REC.items.push({ t, id, hold: 0.14 }); });
+    L.forEach((id, i) => { t = rest[i] ? Math.max(rest[i].t, t) : t + 0.4; REC.items.push({ t, id, hold: 0.14, key: rest[i] && rest[i].key }); });
     REC.items.sort((a, b) => a.t - b.t);
     return;
   }
   REC.items.shift();
   if (it.key) REC.keyT = REC.t;
+  if (it.cover) REC.miss = { x: it.pt.x, y: it.pt.y, t: REC.t };
   A.pointer('down', it.pt.x, it.pt.y, 1);
   REC.held = { x: it.pt.x, y: it.pt.y, upAt: REC.t + it.hold };
   REC.lastTapT = Math.max(REC.lastTapT, REC.t + it.hold);
@@ -465,41 +558,105 @@ function handPos() {
 }
 function uOf(S) { return (S.L && S.L.u) || Math.min(S.W / 390, S.H / 700, 2.6); }
 
+const HOOK_END = 3.0;
 function drawRecOverlay(g, S) {
-  const t = REC.t, u = uOf(S);
+  const t = REC.t, u = uOf(S), k = S.W / 1080;
   const s = S.sess;
-  // Scripted hand (hidden once the level is over).
-  const handOn = t > 0.15 && t < REC.lastTapT + 0.6 && S.screen === 'play' && !(s && s.result);
+  if (t < ENDCARD_T) {
+    drawMiss(g, S, t, k);
+    drawChainPop(g, S, t, k);
+  }
+  // Scripted hand (hidden once the level is over). On from frame 0, resting by the first strand.
+  const handOn = t < REC.lastTapT + 0.6 && S.screen === 'play' && !(s && s.result) && t < ENDCARD_T;
   if (handOn) {
-    const p = handPos();
-    const fade = Math.min(1, (t - 0.15) / 0.25, (REC.lastTapT + 0.6 - t) / 0.3);
+    let p = handPos();
+    if (REC.hover && t >= REC.hover.t0 + 0.3) {
+      // hesitation: the finger circles the wrong strand ("this one?") without pressing
+      const w = t - REC.hover.t0 - 0.3;
+      p = { x: p.x + Math.sin(w * 7) * 14 * k, y: p.y - Math.abs(Math.sin(w * 3.5)) * 18 * k };
+    }
+    const fade = Math.min(1, (REC.lastTapT + 0.6 - t) / 0.3);
     g.save();
     g.globalAlpha *= Math.max(0, fade);
-    drawHand(g, p.x, p.y, u, !!REC.held);
+    drawHand(g, p.x, p.y, 150 * k, !!REC.held);
     g.restore();
   }
-  // Captions (one at a time; the HUD hides under the caption band).
-  if (t < 3.5 && HOOK) caption(g, S, HOOK, Math.min(1, t / 0.2, (3.5 - t) / 0.3));
-  else if (CAP2 && t < ENDCARD_T) {
+  // Captions: one at a time, hard cuts (no crossfade), opaque band over the HUD title while up.
+  if (t < HOOK_END && HOOK) caption(g, S, HOOK, 9);
+  else if (CAP2 && t < ENDCARD_T && !(s && s.result)) {
     const bt = s && s.st ? s.st.bt : 0, cap = s && s.puz ? effCap(s.puz, s.st) : 4;
-    if (REC.cap2On == null && t >= 10.5 && bt >= cap - 1) REC.cap2On = t;
-    if (REC.cap2On == null && t >= 14.6 && REC.keyT == null) REC.cap2On = t; // never hit cap-1: fall back to the slot
-    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT != null) REC.cap2Off = REC.keyT + 0.35;
-    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT == null && bt < cap - 1 && t > REC.cap2On + 0.5) REC.cap2Off = t; // HUD no longer says it
-    if (REC.cap2On != null && t >= REC.cap2On && (REC.cap2Off == null || t < REC.cap2Off + 0.3) && t < 16.5) {
-      const a = Math.min(1, (t - REC.cap2On) / 0.18, REC.cap2Off == null ? 1 : (REC.cap2Off + 0.3 - t) / 0.3);
-      caption(g, S, CAP2, a);
-    }
+    if (REC.cap2On == null && t >= 9.5 && bt >= cap - 1 && REC.keyT == null) REC.cap2On = t;
+    if (REC.cap2On == null && t >= BEAT.hover + 0.4 && REC.keyT == null) REC.cap2On = t; // never hit cap-1: show it before the key pull
+    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT != null) REC.cap2Off = REC.keyT + 0.3;
+    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT == null && bt < cap - 1 && t > REC.cap2On + 0.5 && t < BEAT.hover) REC.cap2Off = t; // HUD no longer says it
+    if (REC.cap2On != null && t >= REC.cap2On && (REC.cap2Off == null || t < REC.cap2Off) && t < 16.5) caption(g, S, CAP2, t - REC.cap2On);
   }
   if (t >= ENDCARD_T) endCard(g, S, t);
 }
 
-function drawHand(g, x, y, u, press) {
-  if (Rn.drawHand) {
-    try { Rn.drawHand(g, x, y, u * 1.25, press); return; } catch (e) { P.error(e); }
+// The covered tap: a bold red ring + cross on the spot, so "you can't pull that one yet" reads at phone size.
+function drawMiss(g, S, t, k) {
+  const m = REC.miss;
+  if (!m || t - m.t > 0.95) return;
+  const a = t - m.t, sc = a < 0.16 ? 0.6 + 0.6 * (a / 0.16) : 1.2 - 0.2 * Math.min(1, (a - 0.16) / 0.15);
+  const al = a > 0.7 ? Math.max(0, 1 - (a - 0.7) / 0.25) : 1, r = 62 * k * sc;
+  g.save();
+  g.globalAlpha *= al;
+  g.translate(m.x, m.y);
+  g.lineCap = 'round';
+  for (const [col, w] of [['#2B2440', 22 * k], ['#E8463A', 12 * k]]) {
+    g.strokeStyle = col; g.lineWidth = w;
+    g.beginPath(); g.arc(0, 0, r, 0, 7); g.stroke();
+    g.beginPath(); g.moveTo(-r * 0.5, -r * 0.5); g.lineTo(r * 0.5, r * 0.5); g.moveTo(r * 0.5, -r * 0.5); g.lineTo(-r * 0.5, r * 0.5); g.stroke();
+  }
+  g.restore();
+}
+
+// CHAIN xn! climax: a big burst above the spool rack, driven by the contract-1 chain event.
+function drawChainPop(g, S, t, k) {
+  const p = REC.pop;
+  if (!p) return;
+  const dur = p.n >= 3 ? 1.5 : 0.75, a = t - p.t;
+  if (a < 0 || a > dur) return;
+  if (p.ui == null) p.ui = /CHAIN\s*×\s*\d/.test(String((S.ui && S.ui.pop) || '')); // UI popped it: don't double up
+  if (p.ui) return;
+  const L = S.L || {}, rack = L.rack;
+  const big = p.n >= 3;
+  const x = S.W / 2, y = rack ? rack.y + rack.h + (big ? 190 : 120) * k : S.H * 0.3;
+  const sc = a < 0.18 ? 0.4 + 0.9 * (a / 0.18) : a < 0.3 ? 1.3 - 0.3 * ((a - 0.18) / 0.12) : 1;
+  const al = a > dur - 0.25 ? Math.max(0, (dur - a) / 0.25) : 1;
+  g.save();
+  g.globalAlpha *= al;
+  g.translate(x, y - Math.min(1, a / dur) * 30 * k);
+  if (big) {
+    // sunburst rays
+    g.save();
+    g.rotate(a * 0.8);
+    g.fillStyle = 'rgba(255,214,90,0.32)';
+    for (let i = 0; i < 12; i++) {
+      g.rotate(Math.PI / 6);
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(-40 * k * sc, -330 * k * sc); g.lineTo(40 * k * sc, -330 * k * sc); g.closePath(); g.fill();
+    }
+    g.restore();
+  }
+  g.scale(sc, sc);
+  g.rotate(-0.05);
+  const fs = (big ? 150 : 96) * k;
+  g.font = `${fs}px "Lilita One", "Nunito", sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  const txt = `CHAIN ×${p.n}!`;
+  g.lineWidth = fs * 0.26; g.strokeStyle = '#2B2440'; g.strokeText(txt, 0, 0);
+  g.fillStyle = big ? '#FFD65A' : '#FFF4E4'; g.fillText(txt, 0, 0);
+  g.restore();
+}
+
+// sz = hand height in px (render.drawHand's s).
+function drawHand(g, x, y, sz, press) {
+  if (typeof Rn.drawHand === 'function') {
+    try { Rn.drawHand(g, x, y, sz, press); return; } catch (e) { P.error(e); }
   }
   // Fallback hand: a cream fingertip with an ink outline and a press ring.
-  const s = u * 1.25;
+  const s = sz / 44;
   g.save();
   g.translate(x, y);
   if (press) { g.strokeStyle = 'rgba(255,244,228,.85)'; g.lineWidth = 3 * s; g.beginPath(); g.arc(0, 0, 16 * s, 0, 7); g.stroke(); }
@@ -516,36 +673,40 @@ function hudBottom(S) {
   const h = S.L && S.L.hud;
   return h ? h.y + h.h : 52 * uOf(S);
 }
-function caption(g, S, text, alpha) {
-  if (alpha <= 0) return;
+// age = seconds since this caption came up: it pops in with a little overshoot and is cut, never faded, so it can't
+// ghost over the HUD title. The band behind it is opaque down past the HUD, then fades into the scene.
+function caption(g, S, text, age) {
   const W = S.W, lines = String(text).split('|').slice(0, 3);
-  let fs = 78;
+  let fs = 82;
   g.save();
-  g.globalAlpha = Math.max(0, Math.min(1, alpha));
   const font = n => `${n}px "Lilita One", "Nunito", sans-serif`;
   g.font = font(fs);
   const widest = () => Math.max(...lines.map(l => g.measureText(l).width));
   while (fs > 40 && widest() > W - 96) { fs -= 2; g.font = font(fs); }
-  const lh = fs * 1.08, blockH = lines.length * lh;
+  const lh = fs * 1.1, blockH = lines.length * lh;
   const hb = hudBottom(S);
-  const top = Math.max(18, Math.min(0.22 * S.H - blockH - 10, hb / 2 - blockH / 2 + 14));
-  // Scrim hides the HUD band and keeps the caption readable over the scene.
-  const grd = g.createLinearGradient(0, 0, 0, top + blockH + 46);
-  grd.addColorStop(0, 'rgba(26,17,40,0.94)');
-  grd.addColorStop(Math.min(0.95, (hb + 4) / (top + blockH + 46)), 'rgba(26,17,40,0.90)');
-  grd.addColorStop(1, 'rgba(26,17,40,0)');
+  const top = Math.max(26, Math.min(0.2 * S.H - blockH - 10, hb / 2 - blockH / 2 + 20));
+  const solid = Math.max(hb + 10, top + blockH + 14), fadeH = 70;
+  g.fillStyle = '#21162F';
+  g.fillRect(0, 0, W, solid);
+  const grd = g.createLinearGradient(0, solid, 0, solid + fadeH);
+  grd.addColorStop(0, 'rgba(33,22,47,1)');
+  grd.addColorStop(1, 'rgba(33,22,47,0)');
   g.fillStyle = grd;
-  g.fillRect(0, 0, W, top + blockH + 46);
+  g.fillRect(0, solid, W, fadeH);
+  const sc = age >= 0.22 ? 1 : age < 0.14 ? 0.82 + 0.26 * (age / 0.14) : 1.08 - 0.08 * ((age - 0.14) / 0.08);
+  g.translate(W / 2, top + blockH / 2);
+  g.scale(sc, sc);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineJoin = 'round';
   g.lineWidth = 16; // 8 px stroke outside the glyph
   g.strokeStyle = '#2B2440';
-  g.fillStyle = '#FFF4E4';
   lines.forEach((l, i) => {
-    const y = top + lh * (i + 0.5);
-    g.strokeText(l, W / 2, y);
-    g.fillText(l, W / 2, y);
+    const y = lh * (i + 0.5) - blockH / 2;
+    g.strokeText(l, 0, y);
+    g.fillStyle = i === lines.length - 1 && lines.length > 1 ? '#FFD65A' : '#FFF4E4';
+    g.fillText(l, 0, y);
   });
   g.restore();
 }
@@ -579,7 +740,7 @@ function endCard(g, S, t) {
   yarn(); g.strokeStyle = '#E8463A'; g.lineWidth = 14 * k; yarn();
   // Heroes.
   const bob = Math.sin(t * 3) * 6 * k;
-  if (Rn.drawKitty) { try { Rn.drawKitty(g, W * 0.5, H * 0.56 + bob, 2.6 * k * 1.6, 'celebrate', t, 'pumpkin'); } catch (e) { P.error(e); } }
+  if (typeof Rn.drawKitty === 'function') { try { Rn.drawKitty(g, W * 0.5, H * 0.665 + bob, 520 * k, 'celebrate', t, 'pumpkin'); } catch (e) { P.error(e); } } // s = height in px, (x, y) = feet
   // Call to action.
   g.font = `800 ${54 * k}px Nunito, sans-serif`;
   g.lineWidth = 12 * k; g.strokeStyle = '#2B2440'; g.fillStyle = '#FFF4E4';
@@ -598,9 +759,13 @@ function endCard(g, S, t) {
 // ================================================================== ?og=1  (GDD §12.2)
 const OG = { ready: false };
 function installOG() {
+  // No callouts or pops on the still (one caption at a time; the OG card has its own text).
+  const emit0 = bus.emit;
+  bus.emit = (t, d) => (MUTED.has(t) ? undefined : emit0.call(bus, t, d));
   whenBooted(async () => {
     await fontsReady();
     prepShowcaseSave(LV);
+    OG.showcase = applyShowcase();
     try {
       A.resize(1200, 630, 1);
       A.go('play', { kind: 'level', id: LV });

@@ -10,9 +10,21 @@
 // DECISION: audio.init() runs on the first pointerdown/keydown; it is then suspended if !P.audioOn or P.paused, and
 //   gets the saved music/SFX volumes.
 // DECISION: the canvas follows the window (resize + ResizeObserver) except in record/og mode, where modes.js sizes it
-//   through api.resize. The backing store is also capped at ~16.7 M px so a 4K window stays cheap.
+//   through api.resize. The backing store is capped at MAX_PIXELS = 6.0 M px: in software-rendered Chromium (no GPU)
+//   a canvas over ~24 MiB (≈ 6.25 M px) used as a drawImage source (scene.js full-screen bake) is re-copied every
+//   frame (measured: draw 1 ms → 45–85 ms at 6.27 M px), so 2560×1440 runs at dpr 1.28 instead of 2. dpr is never
+//   pushed below 1 (crisp) unless the window itself is bigger than 4K (HARD_PIXELS).
 // DECISION: S.world: title = 2 (Pumpkin Night) until SEASON_END (IST), else 1; map = world of meta.cur();
 //   play = world of the level (daily/bonus: world of meta.cur()). audio.playWorld(0) on title/map, (world) in play.
+//   The daily screen keeps the world it was opened over (title → daily does not swap the background).
+// DECISION: host pause: game.js subscribes to ytgame.system.onPause/onResume itself at module load (before P.init
+//   awaits loadData, where platform.js wires its own), so a pause during load is not lost; hostPaused() = that flag
+//   || P.paused. While host-paused, pointer and key input are ignored and any gesture in progress is dropped.
+// DECISION: a win is never left unseen: pause / retry / leaving the session while play.winPending (strands landing +
+//   the 1.6 s kitten-free beat) finishes the win flow at once (play.finishWinNow → win card with stars and gifts).
+//   The player then leaves from the card. api.startLevel / go('play', {kind,id}) (bots, modes) are not redirected.
+// DECISION: api.canUseBooster(key) = play.canUseBooster; useBooster refuses (charges nothing) when it says no and
+//   emits 'boosterRefused' {kind, reason}; a refused Hint on a doomed board also emits hint {id:-1} (pulses Undo).
 // DECISION: go('play') with {kind, id} starts a level; without data it returns to the current session (to its win
 //   or lose card if the session is over or stuck). go('win'/'lose') also calls ui.showCard. Every transition emits
 //   'screen'. The session is dropped on title/map/daily/allbeaten; shop/kittens/settings keep it.
@@ -40,9 +52,14 @@ const cvs = document.getElementById('c');
 const g = cvs.getContext('2d');
 const SESSION_SCREENS = new Set(['play', 'pause', 'win', 'lose']);
 const KEEP_SESSION = new Set(['play', 'pause', 'win', 'lose', 'shop', 'kittens', 'settings']);
-const MAX_PIXELS = 4096 * 4096;
+const MAX_PIXELS = 6.0e6, HARD_PIXELS = 3840 * 2160;
 
-const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false };
+const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false, pending: new Set() };
+
+// host pause, wired at module load (before P.init awaits the save; see DECISION above)
+const YT = typeof ytgame !== 'undefined' && ytgame.IN_PLAYABLES_ENV ? ytgame : null; // eslint-disable-line no-undef
+let earlyPaused = false;
+const hostPaused = () => earlyPaused || P.paused;
 
 const istKey = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const seasonWorld = () => (istKey() < SEASON_END ? 2 : 1);
@@ -62,7 +79,9 @@ function report(e) {
 // ------------------------------------------------------------------ sizing
 function resize(W, H, dpr) {
   W = Math.max(1, Math.round(W)); H = Math.max(1, Math.round(H));
-  dpr = Math.max(0.5, Math.min(DPR_CAP, dpr || 1, Math.sqrt(MAX_PIXELS / (W * H))));
+  const want = Math.min(DPR_CAP, dpr || 1);
+  dpr = Math.max(Math.min(1, want), Math.min(want, Math.sqrt(MAX_PIXELS / (W * H)))); // budget, but not below 1
+  dpr = Math.max(0.5, Math.min(dpr, Math.sqrt(HARD_PIXELS / (W * H))));
   S.W = W; S.H = H; S.dpr = dpr;
   const bw = Math.round(W * dpr), bh = Math.round(H * dpr);
   if (cvs.width !== bw) cvs.width = bw;
@@ -72,7 +91,7 @@ function resize(W, H, dpr) {
   S.L = computeLayout(W, H);
   if (S.sess) play.onResize(S);
   safe(render.invalidate);
-  if (!running || P.paused) draw();
+  if (!running || hostPaused()) draw();
 }
 function fitWindow() {
   if (modeOn('record') || modeOn('og')) return;
@@ -86,7 +105,7 @@ function fitWindow() {
 // ------------------------------------------------------------------ loop
 let raf = 0, running = false, last = 0;
 function startLoop() {
-  if (running || P.paused) return;
+  if (running || hostPaused()) return;
   running = true;
   last = performance.now();
   raf = requestAnimationFrame(frame);
@@ -99,7 +118,7 @@ function stopLoop() {
 function frame(now) {
   raf = 0;
   if (!running) return;
-  if (P.paused) { running = false; return; }
+  if (hostPaused()) { running = false; return; }
   raf = requestAnimationFrame(frame);
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
@@ -115,7 +134,7 @@ function advance(dt) {
   S.TL += dt; // loop clock: runs whenever the rAF loop runs (also on the pause card); stops only on a host pause
   if (S.screen === 'loading') { S.T += dt; return; }
   S.outfit = (P.data && P.data.wear) || 'tabby'; // render reads the worn outfit from S
-  if (S.screen !== 'pause') {
+  if (S.screen !== 'pause' && !hitStopped(dt)) {
     S.T += dt;
     if (S.sess && (S.screen === 'play' || S.screen === 'win' || S.screen === 'lose')) {
       const r = play.update(dt, S);
@@ -124,6 +143,20 @@ function advance(dt) {
     }
   }
   ui.update(dt, S);
+}
+
+/** Hit-stop (combo juice): RENDER's hitStop(S, ms) stores it in S.fx; gameplay time holds still while it runs.
+ *  Accepts S.fx.stop (s left), S.fx.hitStop (ms left) or S.fx.stopUntil (on the S.TL loop clock). Capped at 0.2 s. */
+function hitStopped(dt) {
+  const fx = S.fx;
+  if (!fx || S.screen !== 'play') return false;
+  if (typeof fx.stopUntil === 'number' && fx.stopUntil > S.TL) {
+    if (fx.stopUntil - S.TL > 0.2) fx.stopUntil = S.TL + 0.2;
+    return true;
+  }
+  if (typeof fx.stop === 'number' && fx.stop > 0) { fx.stop = Math.min(0.2, fx.stop) - dt; return true; }
+  if (typeof fx.hitStop === 'number' && fx.hitStop > 0) { fx.hitStop = Math.min(200, fx.hitStop) - dt * 1000; return true; }
+  return false;
 }
 
 function draw() {
@@ -179,15 +212,27 @@ function go(screen, data) {
     emitScreen();
     return;
   }
-  if (!KEEP_SESSION.has(screen)) S.sess = null;
+  // leaving the session (or opening another screen over it) during the kitten-free beat: show the win card first
+  if (screen !== 'win' && screen !== 'play' && showPendingWin()) return;
+  if (!KEEP_SESSION.has(screen)) { S.sess = null; S.pending = new Set(); }
   if (S.sess && S.sess.press) S.sess.press = null;
+  const from = S.screen;
   S.screen = screen;
   if (screen === 'title') { S.world = seasonWorld(); safe(audio.playWorld, 0); }
+  else if (screen === 'daily' && from === 'title') safe(audio.playWorld, 0); // keep the title's world behind the daily card
   else if (screen === 'map' || screen === 'daily' || screen === 'allbeaten') { S.world = curWorld(); safe(audio.playWorld, 0); }
   if (screen === 'win' && S.sess) ui.showCard('win', S.sess.result);
   if (screen === 'lose' && S.sess) ui.showCard('lose', { stuck: true, kind: S.sess.kind, id: S.sess.id });
   safe(render.invalidate);
   emitScreen();
+}
+
+/** If a win is waiting for its card (strands landing / kitten-free beat), finish it now and show the card. */
+function showPendingWin() {
+  if (!play.winPending(S) || !SESSION_SCREENS.has(S.screen)) return false;
+  if (!play.finishWinNow(S)) return false;
+  go('win');
+  return true;
 }
 
 function startLevel(kind, id) {
@@ -205,6 +250,7 @@ function startLevel(kind, id) {
 function retry() {
   const s = S.sess;
   if (!s) return startLevel('level', meta.cur());
+  if (showPendingWin()) return; // R / Restart during the kitten-free beat: see the win card (Replay is on it)
   startLevel(s.kind, s.id);
 }
 
@@ -217,9 +263,21 @@ function next() {
   startLevel('level', s.id + 1);
 }
 
+function canUseBooster(kind) {
+  try { return play.canUseBooster(S, kind); } catch (e) { report(e); return { ok: false, reason: '' }; }
+}
 function useBooster(kind) {
   const s = S.sess;
   if (!s || s.result) return false;
+  const can = canUseBooster(kind);
+  if (!can.ok) {
+    bus.emit('boosterRefused', { kind, reason: can.reason });
+    if (kind === 'hint' && can.doomed) {
+      if (!s.doomed) { s.doomed = true; bus.emit('doomed', {}); }
+      bus.emit('hint', { id: -1 });
+    }
+    return false;
+  }
   const ok = play.applyBooster(kind, S);
   if (ok && S.screen === 'lose' && !s.stuck) { S.screen = 'play'; emitScreen(); }
   return ok;
@@ -227,6 +285,7 @@ function useBooster(kind) {
 
 function pause() {
   if (S.screen !== 'play') return;
+  if (showPendingWin()) return; // nothing to pause during the win beat: jump to the card
   if (S.sess) S.sess.press = null;
   S.screen = 'pause';
   emitScreen();
@@ -241,6 +300,7 @@ function resume() {
 let ptr = null; // { id, owner: 'ui' | 'core', t }
 function pointer(type, x, y, id = -1) {
   if (S.screen === 'loading') return;
+  if (hostPaused()) { dropGesture(); return; } // the host has paused us: no input until it resumes
   if (type === 'down') {
     if (ptr && ptr.id !== id && performance.now() - ptr.t < 8000) return; // second simultaneous pointer
     const owner = ui.pointer('down', x, y, S) ? 'ui' : 'core';
@@ -259,6 +319,10 @@ function pointer(type, x, y, id = -1) {
   else if (type === 'up') play.release(x, y, S);
   else S.sess.press = null;
 }
+function dropGesture() {
+  ptr = null;
+  if (S.sess) S.sess.press = null;
+}
 function tapAt(x, y) {
   pointer('down', x, y, 'tap');
   pointer('up', x, y, 'tap');
@@ -273,7 +337,7 @@ function audioInit() {
     const set = meta.settings();
     safe(audio.setMusic, set.music);
     safe(audio.setSfx, set.sfx);
-    if (!P.audioOn || P.paused) audio.suspend();
+    if (!P.audioOn || hostPaused()) audio.suspend();
     else safe(audio.playWorld, SESSION_SCREENS.has(S.screen) ? S.world : 0);
   } catch (e) { report(e); }
 }
@@ -285,7 +349,7 @@ function xy(e) {
 function onPointer(type) {
   return e => {
     if (type === 'down') {
-      if (!e.isPrimary) return;
+      if (!e.isPrimary || hostPaused()) return;
       audioInit();
       try { cvs.setPointerCapture(e.pointerId); } catch (x) {}
     }
@@ -310,6 +374,7 @@ const GAME_KEYS = new Set(['Space', 'Enter', 'NumpadEnter', 'Escape', 'KeyP', 'K
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 addEventListener('keydown', e => {
   if (!GAME_KEYS.has(e.code) || e.ctrlKey || e.metaKey || e.altKey || S.screen === 'loading') return;
+  if (hostPaused()) return;
   if (S.screen !== 'play' && scrollY > 40) return;
   if (e.code !== 'Escape') e.preventDefault();
   if (e.repeat) return;
@@ -333,6 +398,7 @@ const api = {
   go, startLevel, retry, next,
   undo: () => useBooster('undo'),
   useBooster,
+  canUseBooster,
   pause, resume,
   pointer, tapAt,
   tapPointFor: id => play.tapPointFor(id, S),
@@ -348,17 +414,25 @@ const api = {
 };
 
 // ------------------------------------------------------------------ platform hooks
-P.onPause(() => {
+function onHostPause() {
   stopLoop();
+  dropGesture();
   safe(audio.suspend);
-  if (P.env === 'web' && S.screen === 'play') pause();
-});
-P.onResume(() => {
+  if (P.env === 'web' && S.screen === 'play' && !play.winPending(S)) pause();
+}
+function onHostResume() {
+  if (hostPaused()) return; // the other source still says paused
   last = performance.now();
   startLoop();
   if (P.audioOn) safe(audio.resume);
-});
-P.onAudio(on => { if (on && !P.paused) safe(audio.resume); else safe(audio.suspend); });
+}
+if (YT) {
+  try { YT.system.onPause(() => { earlyPaused = true; onHostPause(); }); } catch (e) { report(e); }
+  try { YT.system.onResume(() => { earlyPaused = false; onHostResume(); }); } catch (e) { report(e); }
+}
+P.onPause(onHostPause);
+P.onResume(onHostResume);
+P.onAudio(on => { if (on && !hostPaused()) safe(audio.resume); else safe(audio.suspend); });
 
 // ------------------------------------------------------------------ boot (§11)
 async function boot() {

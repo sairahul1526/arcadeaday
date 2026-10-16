@@ -50,3 +50,9 @@ No BLOCKERs.
 - **Win card:** pause→Map during the kitten-free beat skips it.
 - **Lesser points:** the basket shows on L1; small board in landscape; booster fly-in passes over Undo.
 - **Checker:** also assert `__qa().T` in the checker (tools/playables-check.mjs) so a regression in in-game time is caught.
+
+## Fix round 1 status (2026-10-16 night): logs in studio/2026-10-16/fix1/
+- RENDER done: new glyphs, Z kink, bobbins, sad Kitty, pending pulse, shake/hitStop, OG redo. Left: L40 has 1/3 empty board (levels).
+- META/AUDIO done: daily/bonus exploits, kittenName(i), chain/combo ladder, spool thunk, star-synced bells, lose sting.
+- PLAY done: tap queue (0 lost in 6/6 bursts), chain/spoolDone events, canUseBooster, host-pause input, win beat, MAX_PIXELS 6.0M. Left: at 4K dpr1 (8.3M px) the scene.js bake gets re-copied each frame in software Chromium; tile or cap the bake.
+- UI done: nearest-centre booster hits (44–46 px phone), uncapped board (~66% safe height at 1440), hover + cursors, booster guard, tappable trophy, map strips, Esc→title, lose card docked + ✕, CHAIN/COMBO pops, kitten names, L1 no basket. Spools ~1.55× (not 2×) to keep the board size.

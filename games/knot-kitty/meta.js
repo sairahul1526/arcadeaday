@@ -21,14 +21,29 @@
 // DECISION: saved `best` is clamped to [0, MAX_SCORE]; a v0 (prototype) save's `best` is dropped (different metric) and
 //   rebuilt by P.best(score()) in initMeta.
 // Extras beyond §13.8 (read-only helpers for the map): totalStars(), nextGift(), chestClaimed(w), MAX_SCORE.
+// DECISION (fix1): daily.last is a monotonic high-water mark (max won key). A win with key ≤ last pays 0 and leaves
+//   the streak alone, so a clock set backwards can neither re-pay a daily (even one trimmed out of the 14-key `won`
+//   list) nor break or reset the streak. daily(key) with key ≤ last reads won = true (already claimed) and the current
+//   streak. Daily replays are allowed and pay 0 (GDD §3: "Replays allowed, reward once").
+// DECISION (fix1): a daily recorded while the daily is locked (cur ≤ 6, api only; the UI gates it) pays 0 and does
+//   not touch the streak. A paying daily or first bonus win also pays the chain/jumbo bonus like a level does.
+// DECISION (fix1): bonus tangles: only a win of index === d.bonus pays 10 + 5×stars (+chain/jumbo) and advances
+//   d.bonus; a replay of an earlier index pays 3 (as a level replay) and does not advance, so NEXT never skips one.
+//   The index comes from recordWin's `bonusId` (or recordBonusWin's 2nd arg), else the last recordAttempt('bonus', i),
+//   else d.bonus (legacy callers).
+// DECISION (fix1): sanitize derives cur from the stars (cur = highest beaten + 1); the chain bonus is capped per
+//   spool (m ≤ CHAIN_M) and per win (≤ MAX_STRANDS), since a level has at most MAX_STRANDS strands to basket.
+// DECISION (fix1): kittenName(i) (i = 0-based kitten index, the same as kittens()[i]; a recordWin kittenId is i + 1)
+//   gives each of the 60 kittens a fixed, unique name. Bosses (every 10th) get the grand names.
 
 import P from '../shared/platform.js';
-import { LEVELS, PER_WORLD, SAVE_V, BOOSTERS, OUTFITS, bus } from './consts.js';
+import { LEVELS, PER_WORLD, SAVE_V, BOOSTERS, OUTFITS, MAX_STRANDS, bus } from './consts.js';
 import { dailyIndex, istDateKey } from './levels.js';
 
 const BK = ['undo', 'hint', 'slot', 'snip'];
 const GIFT_EVERY = 15, GIFT_BALLS = 60, CHEST_BALLS = 150, START_BALLS = 50;
-const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14;
+const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14, REPLAY_BALLS = 3, CHAIN_M = 12;
+const CHAIN_MAX = MAX_STRANDS || 28;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS;
 const KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const OUTFIT_IDS = OUTFITS.map(o => o[0]);
@@ -80,7 +95,8 @@ function sanitize(src) {
   o.kittens = k.map((v, i) => (o.stars[i] > 0 ? Math.max(1, v === 2 && !isBoss(i + 1) ? 1 : v) : 0));
   let hi = 0;
   o.stars.forEach((v, i) => { if (v > 0) hi = i + 1; });
-  o.cur = Math.max(int(s.cur, 1, LEVELS + 1, 1), Math.min(LEVELS + 1, hi + 1));
+  // cur only ever moves to (highest beaten + 1), so derive it: a hand-edited cur 61 with 0 stars boots at L1.
+  o.cur = Math.min(LEVELS + 1, hi + 1);
   o.balls = int(s.balls, 0, MAX_BALLS, START_BALLS);
   if (isObj(s.boost)) for (const b of BK) o.boost[b] = int(s.boost[b], 0, MAX_BOOST, 0);
   if (isObj(s.gifted)) for (const b of BK) o.gifted[b] = s.gifted[b] === true;
@@ -198,9 +214,10 @@ const unlockedList = () => BK.filter(boosterUnlocked);
 
 // ---------- wins ----------
 function chainBonus(chain) {
-  if (Array.isArray(chain)) return chain.reduce((a, m) => a + Math.max(0, Math.floor(+m || 0) - 1), 0);
-  return int(chain, 0, 999, 0);
+  if (Array.isArray(chain)) return Math.min(CHAIN_MAX, chain.slice(0, 64).reduce((a, m) => a + int(m, 1, CHAIN_M, 1) - 1, 0));
+  return int(chain, 0, CHAIN_MAX, 0);
 }
+const extraBonus = (chain, jumbo) => chainBonus(chain) + 5 * int(jumbo, 0, 99, 0);
 
 function grantGifts(gifts) {
   const d = D();
@@ -219,14 +236,15 @@ function grantGifts(gifts) {
  * Records a won attempt. kind 'level' (id 1..60); 'daily'/'bonus' delegate to recordDailyWin/recordBonusWin.
  * Returns { balls, firstWin, newStars, kittenId, golden, gifts, newBest }. Calls P.best(score()).
  */
-export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, capped = false, chain = 0, jumbo = 0, dateKey } = {}) {
+export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, capped = false, chain = 0, jumbo = 0, dateKey, bonusId } = {}) {
   const res = { balls: 0, firstWin: false, newStars: 0, kittenId: 0, golden: false, gifts: [], newBest: false };
   const d = D();
   if (!d) return res;
   let s = int(st, 1, 3, 1);
   if (capped) s = Math.min(2, s);
   if (kind === 'daily' || kind === 'bonus') {
-    res.balls = kind === 'daily' ? recordDailyWin(s, dateKey) : recordBonusWin(s);
+    const extra = extraBonus(chain, jumbo);
+    res.balls = kind === 'daily' ? payDaily(s, dateKey, extra) : payBonus(s, bonusId, extra);
     res.newBest = P.best(score());
     return res;
   }
@@ -236,7 +254,7 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
   res.newStars = Math.max(0, s - prev);
   let b = res.firstWin ? 10 + 5 * s : res.newStars > 0 ? 5 * res.newStars : 3;
   if (res.firstWin && isBoss(id)) b *= 2;
-  b += chainBonus(chain) + 5 * int(jumbo, 0, 99, 0);
+  b += extraBonus(chain, jumbo);
   res.balls = b;
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   d.stars[i] = Math.max(prev, s);
@@ -268,7 +286,9 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
   return res;
 }
 
+let attempt = null; // { kind, id } of the last started attempt (module memory: tells a bonus replay from a new one)
 export function recordAttempt(kind, id) {
+  attempt = { kind, id };
   if (!D()) return;
   D().stats.plays++;
   save();
@@ -295,12 +315,30 @@ export function wear(id) {
 }
 export const kittens = () => (D() ? D().kittens.slice() : Array(LEVELS).fill(0));
 
+// 60 unique names; index i = kitten i (level i + 1). Every 10th is a boss kitten with a grand name.
+const KITTEN_NAMES = [
+  'Mochi', 'Biscuit', 'Pip', 'Noodle', 'Waffles', 'Bean', 'Toffee', 'Pickles', 'Button', 'Duchess Marmalade',
+  'Nutmeg', 'Pumpkin', 'Sprout', 'Hazel', 'Crumpet', 'Fig', 'Bramble', 'Clove', 'Squash', 'Count Whiskerton',
+  'Snowdrop', 'Pebble', 'Flurry', 'Cocoa', 'Mitten', 'Juniper', 'Frost', 'Tinsel', 'Dumpling', 'Lady Snowpaw',
+  'Latte', 'Sugar', 'Macaron', 'Truffle', 'Scone', 'Caramel', 'Bagel', 'Espresso', 'Brioche', 'Baron Von Purr',
+  'Dusty', 'Willow', 'Moth', 'Lantern', 'Pocket', 'Thimble', 'Shadow', 'Velvet', 'Acorn', 'Princess Moonbeam',
+  'Comet', 'Twinkle', 'Nova', 'Pixel', 'Orbit', 'Luna', 'Stardust', 'Cosmo', 'Sparkle', 'Queen Yarnabelle',
+];
+/** Deterministic cute name for kitten i (0-based, as kittens()[i]; level id = i + 1). */
+export function kittenName(i) {
+  i = Math.floor(+i);
+  if (!Number.isFinite(i)) return 'Kitten';
+  return KITTEN_NAMES[((i % LEVELS) + LEVELS) % LEVELS] || 'Kitten';
+}
+
 // ---------- daily knot ----------
-const streakOn = (d, key) => (d.daily.last === key || d.daily.last === addDays(key, -1) ? d.daily.streak : 0);
+// A key at or before the high-water `last` is a clock set backwards (or today): the streak stands.
+const streakOn = (d, key) => (d.daily.last && (key <= d.daily.last || d.daily.last === addDays(key, -1)) ? d.daily.streak : 0);
+const claimed = (d, key) => d.daily.won.includes(key) || (!!d.daily.last && key <= d.daily.last);
 
 export function daily(key = istDateKey()) {
   const d = D();
-  const won = !!d && d.daily.won.includes(key);
+  const won = !!d && claimed(d, key);
   return {
     key,
     i: dailyIndex(key).i,
@@ -311,29 +349,37 @@ export function daily(key = istDateKey()) {
   };
 }
 
-/** Rewards today's daily once: 40 + 10×stars + 10×min(streak, 7). Returns the balls granted (0 on a replay). */
-export function recordDailyWin(st, key = istDateKey()) {
+/**
+ * Rewards a daily once: 40 + 10×stars + 10×min(streak, 7). Returns the balls granted. Pays 0 on a replay, on any key
+ * at or before the high-water daily.last (clock set backwards), and while the daily is locked.
+ */
+export function recordDailyWin(st, key = istDateKey()) { return payDaily(st, key, 0); }
+function payDaily(st, key, extra) {
   const d = D();
-  if (!d || !KEY_RE.test(key)) return 0;
+  if (key === undefined || key === null) key = istDateKey();
+  if (!d || typeof key !== 'string' || !KEY_RE.test(key)) return 0;
   const s = int(st, 1, 3, 1);
   d.stats.wins++;
-  if (d.daily.won.includes(key) || d.daily.last === key) { save(); return 0; }
+  if (d.cur <= 6 || claimed(d, key)) { save(); return 0; }
   d.daily.streak = d.daily.last === addDays(key, -1) ? d.daily.streak + 1 : 1;
   d.daily.last = key;
   d.daily.won = [...new Set([...d.daily.won, key])].sort().slice(-DAILY_KEEP);
-  const b = 40 + 10 * s + 10 * Math.min(d.daily.streak, 7);
+  const b = 40 + 10 * s + 10 * Math.min(d.daily.streak, 7) + extra;
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   save();
   return b;
 }
 
 export const bonusNext = () => (D() ? D().bonus : 0);
-export function recordBonusWin(st) {
+/** Bonus tangle i won: 10 + 5×stars and d.bonus++ only when i is the next one (d.bonus); a replay pays 3. */
+export function recordBonusWin(st, i) { return payBonus(st, i, 0); }
+function payBonus(st, i, extra) {
   const d = D();
   if (!d) return 0;
-  const b = 10 + 5 * int(st, 1, 3, 1);
-  d.bonus++;
+  if (!Number.isInteger(i)) i = attempt && attempt.kind === 'bonus' && Number.isInteger(attempt.id) ? attempt.id : d.bonus;
   d.stats.wins++;
+  let b = REPLAY_BALLS;
+  if (i === d.bonus) { b = 10 + 5 * int(st, 1, 3, 1) + extra; d.bonus = Math.min(1e7, d.bonus + 1); }
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   save();
   return b;

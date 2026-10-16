@@ -14,10 +14,20 @@
 //   `kittenStage` plays a short "mew", `spoolEnter` a soft roll, `paw` with left>0 a soft pat,
 //   `booster` snip → snip, slot → unlock clack; undo/hint boosters use their own events.
 // DECISION: master = §8.3 DynamicsCompressor (−10 dB, 4:1) → soft-clip ceiling (WaveShaper: linear up to
-//   −4.4 dBFS, tanh knee, never above −0.5 dBFS) so nothing can clip. Firefox's DynamicsCompressor squashes
+//   −4.4 dBFS, tanh knee, never above −0.6 dBFS) so nothing can clip. Firefox's DynamicsCompressor squashes
 //   short blips by ~20 dB, so on Firefox a fixed +1.6 dB gain (≈ Chrome's makeup gain) replaces it.
 //   Gain staging puts the loudest stinger near −6 dBFS. One shared convolver reverb
 //   (post-fader sends from music and SFX) gives the cosy room.
+// DECISION (fix1): contract 1. `chain` {n, combo} plays on every chain arrival incl. n = 1 (a light pop; n ≥ 2 a
+//   rising chime, +2 st per extra ball up to +10), and `spoolDone` {i, combo} plays a wooden thunk + sparkle. Both
+//   ride the combo pitch ladder: +2 semitones per back-to-back spool (combo 2 → +2 … capped at +12). The old
+//   `chain` {m} shape still works (n = m).
+// DECISION (fix1): the win-card star bells follow the UI's bus 'star' {i} (one bell per event, each i once per win).
+//   If no 'star' arrives within 1.5 s of 'win' (card hidden, record without UI…), the bells fall back to timers.
+//   Offline renders look ahead instead: a 'win' with no 'star' event in the next 1.5 s gets the timed bells at
+//   0.6 + 0.25·i s as before. sfx('win', n) called directly still plays its own timed bells.
+// DECISION (fix1): `stuck` (Out of Room) is a soft sad sting: two gentle falling sighs (muted triangle, lowpassed)
+//   + the sad meow, with the music ducked. It sits ~6 dB under the win fanfare.
 // DECISION: renderOffline(timeline, durSec, world?) — the music world can come from the 3rd argument,
 //   `timeline.world`, a `{t, name:'music'|'playWorld', args:[w]}` entry, or `screen`/`levelStart` entries.
 //   Entries whose args is an array call sfx(name, ...args); object args are treated as bus event data.
@@ -27,15 +37,18 @@ import { bus, SEASON_END } from './consts.js';
 
 const LOOK = 0.1, TICK_MS = 25, MAX_VOICES = 24, MUSIC_K = 0.35, MASTER = 0.8;
 const FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
-const CLIP_CURVE = (() => { // y = x up to 0.6, then 0.6 + 0.35·tanh((x − 0.6)/0.35); input pre-scaled by 0.5
+const CLIP_CURVE = (() => { // y = x up to 0.6, then 0.6 + 0.33·tanh((x − 0.6)/0.33) (≤ −0.63 dBFS, room for 2× oversampling ringing); input pre-scaled by 0.5
   const n = 4096, c = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 4 - 2, a = Math.abs(x);
-    c[i] = Math.sign(x) * (a <= 0.6 ? a : 0.6 + 0.35 * Math.tanh((a - 0.6) / 0.35));
+    c[i] = Math.sign(x) * (a <= 0.6 ? a : 0.6 + 0.33 * Math.tanh((a - 0.6) / 0.33));
   }
   return c;
 })();
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const STAR_WAIT = 1.5; // s without a UI 'star' event before the win bells fall back to timers
+/** Combo pitch ladder (contract 1): +2 semitones per back-to-back spool, capped at +12. Returns a frequency ratio. */
+const ladder = combo => Math.pow(2, Math.min(12, 2 * Math.max(0, (combo | 0) - 1)) / 12);
 const cents = c => Math.pow(2, c / 1200);
 
 function rng(seed) { // proto logic.js rng (mulberry32)
@@ -250,24 +263,52 @@ function makeEngine(ctx) {
       const f = mtof(steps[Math.max(0, Math.min(steps.length - 1, (k | 0) - 1))]);
       tone('sine', f, f, 0.22, 0.25); tone('sine', f * 2.01, f * 2, 0.15, 0.08);
     },
-    spoolDone() { tone('sine', 180, 70, 0.22, 0.36); noise(0.12, 300, 120, 1, 0.25); bell(1046, 0.3, 0.12, 0.06); bell(1318, 0.3, 0.1, 0.12); },
-    chain(m = 1) { const f = 660 * Math.pow(2, (2 * Math.min(12, Math.max(0, m))) / 12); tone('triangle', f, f * 0.99, 0.16, 0.22, 0, { lp: 3000 }); tone('sine', f * 2, f * 2, 0.08, 0.06); bell(f * 2, 0.25, 0.05, 0.03); },
+    spoolDone(combo = 0) { // wooden bobbin thunk (body drop + knock) + a sparkle that climbs the combo ladder
+      const L = ladder(combo);
+      tone('sine', 150, 52, 0.2, 0.34, 0, { a: 0.003 });
+      tone('triangle', 240, 170, 0.07, 0.16, 0, { a: 0.002, lp: 900 });
+      noise(0.05, 520, 260, 2.5, 0.2, 0, 'bandpass', { a: 0.002 });
+      [1046, 1318, 1568, 2093].forEach((f, i) => bell(f * L, 0.32 + 0.06 * i, 0.075 - 0.008 * i, 0.07 + i * 0.045));
+      if ((combo | 0) >= 2) { bell(2637 * L, 0.5, 0.05, 0.27); noise(0.3, 6000, 9000, 1.2, 0.025, 0.22, 'highpass', { a: 0.02 }); }
+    },
+    chain(n = 1, combo = 0) {
+      const L = ladder(combo);
+      n = Math.max(1, n | 0);
+      if (n === 1) { // a light pop: the ball lands
+        const f = 880 * L;
+        tone('sine', f * 1.25, f, 0.07, 0.13, 0, { a: 0.002 }); tone('sine', f * 2, f * 2, 0.05, 0.035, 0.012);
+        return;
+      }
+      const f = 740 * L * Math.pow(2, (2 * Math.min(5, n - 2)) / 12);
+      tone('triangle', f, f * 0.99, 0.16, 0.2, 0, { lp: 3000 }); tone('sine', f * 2, f * 2, 0.08, 0.055); bell(f * 2, 0.25, 0.05, 0.03);
+      if (n >= 3) bell(f * 3, 0.3, 0.035, 0.07);
+    },
     basket() { tone('sine', 260, 180, 0.14, 0.3); noise(0.08, 900, 400, 1, 0.1); },
     blocked() { tone('square', 140, 110, 0.09, 0.08, 0, { lp: 700 }); noise(0.1, 500, 300, 2, 0.12); },
     full() { tone('triangle', 660, 660, 0.09, 0.15); tone('triangle', 660, 660, 0.09, 0.15, 0.14); },
     warn() { tone('triangle', 880, 880, 0.08, 0.14); },
     fail() { tone('triangle', 392, 196, 0.5, 0.25); tone('triangle', 311, 155, 0.6, 0.18, 0.12); },
-    stuck() { S.fail(); later(0.55, () => meow('sad')); duckMusic(1.8); },
+    sadSting() { // two soft falling sighs (G4→F#4, Eb4→D4), muted and slow-attack so it consoles rather than buzzes
+      tone('triangle', 392, 370, 0.42, 0.15, 0, { a: 0.03, lp: 1400 }); tone('sine', 196, 185, 0.42, 0.06, 0, { a: 0.03 });
+      tone('triangle', 311, 294, 0.6, 0.14, 0.36, { a: 0.03, lp: 1200 }); tone('sine', 155.6, 147, 0.6, 0.06, 0.36, { a: 0.03 });
+    },
+    stuck() { S.sadSting(); later(0.75, () => meow('sad')); duckMusic(2); },
     meow(kind = 'cat') { meow(kind); },
     mew() { meow('mew'); },
     purr(dur = 1.2) { purr(dur); },
-    win(stars = 3) {
+    winBody() { // fanfare + purr; the star bells come from the UI 'star' events (or the fallback timers)
       [523, 659, 784, 1046].forEach((f, i) => tone('sine', f, f, 0.35, 0.18, 0.1 + i * 0.09));
       purr(1.2, 0.42, 0.5);
-      for (let i = 0; i < Math.max(0, Math.min(3, stars | 0)); i++) later(0.6 + 0.25 * i, () => S.star(i));
       duckMusic(2.4);
     },
-    star(i = 0) { bell([784, 988, 1175][Math.max(0, Math.min(2, i | 0))], 0.9, 0.16); },
+    win(stars = 3) { S.winBody(); S.winStars(stars, 0.6); },
+    winStars(stars = 3, at = 0) { for (let i = 0; i < Math.max(0, Math.min(3, stars | 0)); i++) later(at + 0.25 * i, () => S.star(i)); },
+    star(i = 0) {
+      i = Math.max(0, Math.min(2, i | 0));
+      bell([784, 988, 1175][i], 0.9, 0.16);
+      bell([1568, 1976, 2349][i], 0.35, 0.03, 0.02);
+      if (i === 2) [2637, 3136, 3951].forEach((f, k) => bell(f, 0.3, 0.025, 0.08 + k * 0.04));
+    },
     coin() { tone('sine', 1318, 1318, 0.06, 0.12); tone('sine', 1760, 1760, 0.08, 0.12, 0.06); },
     unlock() { noise(0.02, 2000, 2000, 1.5, 0.3, 0, 'bandpass', { a: 0.002 }); bell(1046, 0.6, 0.14, 0.03); },
     reveal() { for (let i = 0; i < 4; i++) bell(1500 + r() * 1500, 0.35, 0.07, i * 0.04); },
@@ -450,14 +491,22 @@ function makeEngine(ctx) {
 
 // ------------------------------------------------------------------ bus → sound
 const SCREEN_TITLE_VARIANT = ['map', 'shop', 'kittens', 'settings', 'daily', 'allbeaten'];
-function busHandlers(E, music) {
+// opts.defer(sec, fn): live only, runs fn later (fn re-checks state); offline renders pass `timed` to win instead.
+function busHandlers(E, music, opts = {}) {
+  let W = null, lastStar = -1e9; // W = { n, at, played: Set } for the current win's star bells
+  const winStars = (n, timed) => {
+    const w = (W = { n, at: E.base, played: new Set() });
+    if (timed) { E.play('winStars', n, 0.6); for (let i = 0; i < n; i++) w.played.add(i); return; }
+    if (lastStar >= E.base - 2) return; // the card's stars already started (card before the bus 'win')
+    if (opts.defer) opts.defer(STAR_WAIT, () => { if (W === w && !w.played.size) { for (let i = 0; i < n; i++) w.played.add(i); E.play('winStars', n, 0); } });
+  };
   return {
     pluck: d => E.play('pluck', (d && d.i) | 0),
     pull: d => E.play('zip', (d && d.dur) || 0.45),
     wind: d => E.play('wind', d.k, d.n),
-    spoolDone: () => E.play('spoolDone'),
+    spoolDone: d => E.play('spoolDone', (d && d.combo) | 0),
     spoolEnter: () => E.play('roll'),
-    chain: d => E.play('chain', (d && d.m) | 0),
+    chain: d => E.play('chain', d && d.n != null ? d.n | 0 : d && d.m != null ? d.m | 0 : 1, (d && d.combo) | 0),
     basket: () => E.play('basket'),
     blocked: () => E.play('blocked'),
     full: () => E.play('full'),
@@ -468,7 +517,18 @@ function busHandlers(E, music) {
     thaw: d => E.play(d && d.left === 0 ? 'thaw' : 'iceCrack'),
     kittenStage: () => E.play('mew'),
     kittenFree: () => E.play('meow', 'kitten'),
-    win: d => E.play('win', d && d.result && d.result.stars != null ? d.result.stars : 3),
+    win: (d, timed) => {
+      const n = Math.max(0, Math.min(3, d && d.result && d.result.stars != null ? d.result.stars | 0 : 3));
+      E.play('winBody');
+      winStars(n, timed);
+    },
+    star: d => {
+      const i = Math.max(0, Math.min(2, (d && d.i) | 0));
+      lastStar = E.base;
+      if (W && W.played.has(i) && E.base - W.at < 6) return; // each bell once per win
+      if (W) W.played.add(i);
+      E.play('star', i);
+    },
     stuck: () => E.play('stuck'),
     undo: () => E.play('undo'),
     booster: d => { if (d && d.kind === 'snip') E.play('snip'); else if (d && d.kind === 'slot') E.play('unlock'); },
@@ -488,7 +548,7 @@ function busHandlers(E, music) {
     },
   };
 }
-export const BUS_EVENTS = Object.keys(busHandlers({ play() {} }, () => {}));
+export const BUS_EVENTS = Object.keys(busHandlers({ play() {}, base: 0 }, () => {}));
 
 // ------------------------------------------------------------------ live module state
 let ctx = null, E = null, H = null, held = false, timer = 0, hooked = false;
@@ -539,7 +599,7 @@ export function init() {
     try { // iOS unlock: a silent one-sample buffer inside the gesture
       const b = ctx.createBufferSource(); b.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); b.connect(ctx.destination); b.start(0);
     } catch {}
-    H = busHandlers(E, liveMusic);
+    H = busHandlers(E, liveMusic, { defer: (sec, fn) => setTimeout(() => { if (E && allowed()) { E.base = ctx.currentTime; try { fn(); } catch (e) { console.warn(e); } } }, sec * 1000) });
     if (!hooked) {
       hooked = true;
       for (const k of Object.keys(H)) bus.on(k, d => { if (k === 'screen' || k === 'levelStart') H[k](d); else if (allowed()) { E.base = ctx.currentTime; H[k](d || {}); } });
@@ -576,6 +636,7 @@ export async function renderBuffer(timeline = [], durSec = 25, world = null, sr 
   const evs = (Array.isArray(timeline) ? timeline : []).filter(e => e && isFinite(e.t)).slice().sort((a, b) => a.t - b.t);
   const w0 = world != null ? world : timeline && timeline.world != null ? timeline.world : null;
   if (w0 != null && !evs.some(e => e.t <= 0.001 && (MUSIC_NAMES.includes(e.name) || e.name === 'levelStart'))) { X.base = 0; X.playWorld(w0 | 0, 0); }
+  const starSoon = t => evs.some(x => x.name === 'star' && x.t >= t - 0.001 && x.t <= t + STAR_WAIT);
   for (const e of evs) {
     const t = Math.max(0, Math.min(dur, e.t));
     X.pump(t);
@@ -583,6 +644,7 @@ export async function renderBuffer(timeline = [], durSec = 25, world = null, sr 
     try {
       if (MUSIC_NAMES.includes(e.name)) { const a = Array.isArray(e.args) ? e.args : [e.args]; X.playWorld(a[0] | 0, t, a[1]); }
       else if (Array.isArray(e.args)) X.play(e.name, ...e.args);
+      else if (e.name === 'win') h.win(e.args || {}, !starSoon(e.t));
       else if (h[e.name]) h[e.name](e.args || {});
       else X.play(e.name, e.args);
     } catch (err) { console.warn(err); }

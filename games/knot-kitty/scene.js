@@ -19,7 +19,7 @@
 import {
   INK, CREAM, WALNUT, WALNUT_L, WALNUT_D, TOMATO, TOMATO_D, GOLD, GOLD_D, FONT_T, FONT_B, YARN,
   mix, rr, mkCanvas, hash, text, coatOf, drawCat, drawSleepCat, drawKitty, drawSpool, drawHeart,
-  drawMiniBoard, drawYarnRun,
+  drawMiniBoard, drawYarnRun, drawKitten,
 } from './render.js';
 import { getLevel } from './levels.js';
 
@@ -1584,6 +1584,7 @@ export function drawRoomVignette(g, rect, world, t) {
 }
 
 // ------------------------------------------------------------------ OG (§12.2), 1200×630 design space
+const OG_MEM = {};
 export function drawOG(g, S) {
   const W = S.W, H = S.H, t = S.T || 0;
   drawWorld(g, W, H, 2, t, 'og');
@@ -1593,50 +1594,51 @@ export function drawOG(g, S) {
   g.fillStyle = lin(g, 0, 0, 640, 0, [[0, 'rgba(22,14,36,0.62)'], [0.75, 'rgba(22,14,36,0.3)'], [1, 'rgba(22,14,36,0)']]);
   g.fillRect(-ox / sc - 2, -oy / sc - 2, 640 + ox / sc + 2, 630 + 2 * oy / sc + 4);
 
-  // ---- right: the L20 board tilted −4°, ~40 % cleared
+  // ---- right: a dense showcase board (only ~10 % cleared) tilted −5°, big enough to read at 300 px wide
+  // DECISION (fix1): the OG ignores the session's ~40 % cleared state; a nearly full tangle reads as "puzzle" in a
+  // feed thumbnail, and the tangled kitten sits front and centre over the board's lower edge as the hook.
   const sess = S.sess;
   let level = sess && sess.level && sess.level.strands ? sess.level : null;
-  let removed = null;
-  if (level && sess.st && sess.st.removed != null) { removed = []; for (let i = 0; i < level.strands.length; i++) if ((sess.st.removed >>> i) & 1) removed.push(i); }
   if (!level) { try { level = getLevel(20); } catch (e) { level = null; } }
   let mb = null;
-  const bc = { x: 905, y: 392 };
+  const bc = { x: 850, y: 322 };
   g.save();
-  g.translate(bc.x, bc.y); g.rotate(-4 * Math.PI / 180);
-  if (level) mb = drawMiniBoard(g, { x: -255, y: -200, w: 510, h: 430 }, level, t, removed && removed.length ? { removed, kitten: false } : { cleared: 0.4, kitten: false });
-  // the kitten mid-leap with 3 hearts
-  if (mb) {
-    const kit = mb.box.kit, s = kit.s * 1.45;
-    const coat = coatOf(1, 3);
-    drawCat(g, kit.x, kit.y - s * 0.42, s, { ...coat, ears: 'up', eyes: 'happy', mouth: 'open', arms: 'up', tail: 0.9, rot: -0.12, sx: 0.94, sy: 1.08, blush: true, t });
-    g.fillStyle = 'rgba(255,244,228,0.7)';
-    for (const [dx, dy, r] of [[-0.55, -0.15, 0.05], [0.6, -0.05, 0.04], [-0.42, 0.05, 0.03]]) { circ(g, kit.x + dx * s, kit.y + dy * s, r * s); g.fill(); }
-    drawHeart(g, kit.x - s * 0.62, kit.y - s * 1.28, s * 0.15, 1);
-    drawHeart(g, kit.x + s * 0.6, kit.y - s * 1.42, s * 0.18, 1);
-    drawHeart(g, kit.x + s * 0.05, kit.y - s * 1.78, s * 0.13, 1);
-  }
+  g.translate(bc.x, bc.y); g.rotate(-5 * Math.PI / 180);
+  if (level) mb = drawMiniBoard(g, { x: -290, y: -300, w: 580, h: 540 }, level, t, { cleared: 0.1, kitten: false });
   g.restore();
 
-  // ---- rack above the board: shelf, tomato spool (winding), teal spool, Kitty mid-swat
-  const shelfY = 168, sx0 = 640, sx1 = 1150;
+  // ---- spools on a short shelf, top right, overlapping the board corner
+  const shelfY = 214, sx0 = 1010, sx1 = 1196;
   g.fillStyle = 'rgba(20,10,20,0.35)'; rr(g, sx0 + 5, shelfY + 6, sx1 - sx0, 16, 7); g.fill();
   g.fillStyle = lin(g, 0, shelfY, 0, shelfY + 16, [WALNUT_L, WALNUT_D]); rr(g, sx0, shelfY, sx1 - sx0, 16, 7); g.fill();
   g.strokeStyle = INK; g.lineWidth = 3; g.stroke();
-  const sp = [{ x: 860, c: 0, shown: 2, h: 112 }, { x: 990, c: 1, shown: 1, h: 112 }, { x: 1100, c: 2, shown: 0, h: 78 }];
-  for (const p of sp) drawSpool(g, p.x, shelfY - p.h / 2 - 2, p.h, p.c, p.shown, 3, { pips: p.h > 100, spin: t * 4, want: p.c === 0 ? 0.8 : 0 });
-  drawKitty(g, 704, shelfY, 146, 'swat', 0.125, 'pumpkin');
+  drawSpool(g, 1104, shelfY - 84, 164, 0, 2, 3, { w: 132, fill: 2, spin: t * 4, pips: true, glint: 0.4 });
   // ---- a tomato strand mid-flight from the board up to the tomato spool
-  const sw = mb ? Math.max(9, mb.B.sw) : 12, u = mb ? mb.B.unit : 44;
-  const fx0 = 800, fy0 = 300, fx1 = 858, fy1 = shelfY - 70;
+  const sw = mb ? Math.max(12, mb.B.sw) : 14, u = mb ? mb.B.unit : 44;
+  const fx0 = 930, fy0 = 230, fx1 = 1078, fy1 = 84;
   const pts = [];
   for (let i = 0; i <= 24; i++) {
     const p = i / 24;
-    const x = fx0 + (fx1 - fx0) * p + Math.sin(p * Math.PI) * -46, y = fy0 + (fy1 - fy0) * p - Math.sin(p * Math.PI) * 30;
+    const x = fx0 + (fx1 - fx0) * p - Math.sin(p * Math.PI) * 40, y = fy0 + (fy1 - fy0) * p - Math.sin(p * Math.PI) * 26;
     pts.push([x, y]);
   }
   drawYarnRun(g, pts, 0, sw, u, { glow: 1 });
-  g.fillStyle = 'rgba(255,244,228,0.85)';
-  for (let i = 0; i < 5; i++) { const a = i * 1.3; circ(g, fx1 + Math.cos(a) * 26, fy1 + 6 + Math.sin(a) * 18, 3.5 - i * 0.4); g.fill(); }
+  g.fillStyle = 'rgba(255,244,228,0.9)';
+  for (let i = 0; i < 5; i++) { const a = i * 1.3; circ(g, fx1 + 8 + Math.cos(a) * 30, fy1 + 4 + Math.sin(a) * 20, 4 - i * 0.5); g.fill(); }
+
+  // ---- the tangled kitten, front and centre, over the board's lower edge
+  const kx = 836, ky = 622, ks = 236;
+  g.fillStyle = 'rgba(20,10,24,0.35)'; g.beginPath(); g.ellipse(kx + 6, ky - 6, ks * 0.4, ks * 0.07, 0, 0, Math.PI * 2); g.fill();
+  drawKitten(g, kx, ky, ks, { stage: 1, loops: 4, freeT: -1, t: 0.4, breed: 2, coat: 0, loopColors: [4, 1, 3, 0], memKey: OG_MEM });
+  // "Help!" bubble
+  const hx = kx + 168, hy = ky - 214;
+  g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 5;
+  rr(g, hx - 74, hy - 36, 148, 72, 36); g.fill();
+  g.beginPath(); g.moveTo(hx - 52, hy + 22); g.lineTo(hx - 92, hy + 58); g.lineTo(hx - 24, hy + 30); g.closePath(); g.fill();
+  rr(g, hx - 74, hy - 36, 148, 72, 36); g.stroke();
+  g.beginPath(); g.moveTo(hx - 50, hy + 34); g.lineTo(hx - 92, hy + 58); g.lineTo(hx - 26, hy + 35); g.stroke();
+  g.fillStyle = CREAM; g.fillRect(hx - 54, hy + 26, 32, 8);
+  text(g, 'Help!', hx, hy + 3, 44, { color: TOMATO, stroke: INK, strokeW: 4 });
 
   // ---- left: logo, tagline, PLAY FREE pill
   const lx = 276;
@@ -1660,8 +1662,8 @@ export function drawOG(g, S) {
   g.strokeStyle = TOMATO; g.lineWidth = 10; g.stroke();
   g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 3; g.setLineDash([8, 10]); g.stroke(); g.setLineDash([]);
   yarnBall(g, 442, 326, 20, TOMATO);
-  text(g, 'Pull the yarn.', lx, 392, 36, { font: FONT_B, weight: 800, color: CREAM, stroke: INK, strokeW: 9 });
-  text(g, 'Free the kitten.', lx, 438, 36, { font: FONT_B, weight: 800, color: CREAM, stroke: INK, strokeW: 9 });
+  text(g, 'Pull the yarn.', lx, 394, 42, { font: FONT_B, weight: 800, color: CREAM, stroke: INK, strokeW: 9 });
+  text(g, 'Free the kitten.', lx, 444, 42, { font: FONT_B, weight: 800, color: CREAM, stroke: INK, strokeW: 9 });
   // pill
   const pw = 250, ph = 70, px = lx - pw / 2, py = 486;
   g.fillStyle = TOMATO_D; rr(g, px, py + 7, pw, ph, ph / 2); g.fill();
