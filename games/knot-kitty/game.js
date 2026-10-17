@@ -14,6 +14,14 @@
 //   a canvas over ~24 MiB (≈ 6.25 M px) used as a drawImage source (scene.js full-screen bake) is re-copied every
 //   frame (measured: draw 1 ms → 45–85 ms at 6.27 M px), so 2560×1440 runs at dpr 1.28 instead of 2. dpr is never
 //   pushed below 1 (crisp) unless the window itself is bigger than 4K (HARD_PIXELS).
+//   fix2: scene.js now tiles its bake (≤ 2048² per source) and blits it 1:1, so the cliff no longer applies to the
+//   backdrop; MAX_PIXELS stays as the fill-cost budget for the board/UI, which draw straight to this canvas.
+// DECISION (fix2): frame governor. Fill cost scales with backing pixels, and a slow device (or a 4× CPU-throttled
+//   phone profile) can't fill 975×2110 @ dpr 2.5 at 60 fps. If, over a window of GOV_N frames, the median rAF
+//   interval is > 22 ms AND the median in-callback work is > GOV_WORK ms (so a 30 Hz display / iOS Low Power Mode,
+//   where frames are slow but work is tiny, never triggers it), the dpr cap steps down (×0.5–0.85, by how slow)
+//   and the canvas is re-sized. Floor GOV_FLOOR (still ≥ 1 CSS px per device px band; text stays sharp at 1.25+).
+//   It only ever steps down within a page load (no oscillation); S.gov exposes {cap, med, work, steps} for QA.
 // DECISION: S.world: title = 2 (Pumpkin Night) until SEASON_END (IST), else 1; map = world of meta.cur();
 //   play = world of the level (daily/bonus: world of meta.cur()). audio.playWorld(0) on title/map, (world) in play.
 //   The daily screen keeps the world it was opened over (title → daily does not swap the background).
@@ -53,8 +61,11 @@ const g = cvs.getContext('2d');
 const SESSION_SCREENS = new Set(['play', 'pause', 'win', 'lose']);
 const KEEP_SESSION = new Set(['play', 'pause', 'win', 'lose', 'shop', 'kittens', 'settings']);
 const MAX_PIXELS = 6.0e6, HARD_PIXELS = 3840 * 2160;
+const GOV_N = 16, GOV_SLOW = 22, GOV_WORK = 3, GOV_FLOOR = 1;
 
 const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false, pending: new Set() };
+const GOV = { cap: Infinity, iv: [], wk: [], skip: 30, steps: 0, med: 0, work: 0 };
+S.gov = GOV;
 
 // host pause, wired at module load (before P.init awaits the save; see DECISION above)
 const YT = typeof ytgame !== 'undefined' && ytgame.IN_PLAYABLES_ENV ? ytgame : null; // eslint-disable-line no-undef
@@ -79,7 +90,7 @@ function report(e) {
 // ------------------------------------------------------------------ sizing
 function resize(W, H, dpr) {
   W = Math.max(1, Math.round(W)); H = Math.max(1, Math.round(H));
-  const want = Math.min(DPR_CAP, dpr || 1);
+  const want = Math.min(DPR_CAP, dpr || 1, GOV.cap);
   dpr = Math.max(Math.min(1, want), Math.min(want, Math.sqrt(MAX_PIXELS / (W * H)))); // budget, but not below 1
   dpr = Math.max(0.5, Math.min(dpr, Math.sqrt(HARD_PIXELS / (W * H))));
   S.W = W; S.H = H; S.dpr = dpr;
@@ -102,6 +113,25 @@ function fitWindow() {
   resize(W, H, dpr);
 }
 
+// frame governor (see DECISION above)
+function govern(iv, work) {
+  if (GOV.skip > 0) { GOV.skip--; return; }
+  if (S.screen === 'loading' || modeOn('record') || modeOn('og') || (typeof document !== 'undefined' && document.hidden)) return;
+  GOV.iv.push(iv); GOV.wk.push(work);
+  if (GOV.iv.length < GOV_N) return;
+  const med = a => a.sort((x, y) => x - y)[a.length >> 1];
+  GOV.med = med(GOV.iv); GOV.work = med(GOV.wk);
+  GOV.iv = []; GOV.wk = [];
+  const floor = Math.min(GOV_FLOOR, S.dpr);
+  if (GOV.med > GOV_SLOW && GOV.work > GOV_WORK && S.dpr > floor + 0.01) {
+    const f = Math.max(0.5, Math.min(0.85, Math.sqrt(14 / GOV.med)));
+    GOV.cap = Math.max(floor, S.dpr * f);
+    GOV.steps++;
+    GOV.skip = 8; // let the re-bakes settle before judging again
+    resize(S.W, S.H, Math.min(DPR_CAP, window.devicePixelRatio || 1));
+  }
+}
+
 // ------------------------------------------------------------------ loop
 let raf = 0, running = false, last = 0;
 function startLoop() {
@@ -120,14 +150,17 @@ function frame(now) {
   if (!running) return;
   if (hostPaused()) { running = false; return; }
   raf = requestAnimationFrame(frame);
-  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  const iv = now - last;
+  const dt = Math.min(0.05, Math.max(0, iv / 1000));
   last = now;
   if (modeOn('record')) return; // record mode drives api.step(1/60) itself
+  const w0 = performance.now();
   try {
     advance(dt);
     draw();
     modes.afterFrame(S);
   } catch (e) { report(e); }
+  try { govern(iv, performance.now() - w0); } catch (e) { report(e); }
 }
 
 function advance(dt) {

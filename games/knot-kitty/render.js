@@ -487,6 +487,14 @@ function drawStrandPegs(g, gi, c, sw, r, dim, dx = 0, dy = 0, myst = false) {
   }
 }
 
+// Moon crescent in a unit frame: outer unit circle, bite circle centre (bx, by) radius q; o0/o1 and b0/b1 are the
+// parametric angles where they meet (both ellipses are the unit circles stretched by rx, ry, so angles carry over).
+const MOON_BOSS = (() => {
+  const bx = 1.0, by = -0.25, q = 0.78, d = Math.hypot(bx, by), phi = Math.atan2(by, bx), al = Math.acos((1 + d * d - q * q) / (2 * d));
+  const P1 = [Math.cos(phi + al), Math.sin(phi + al)], P2 = [Math.cos(phi - al), Math.sin(phi - al)];
+  return { bx, by, q, o0: phi + al, o1: phi - al, b0: Math.atan2(P2[1] - by, P2[0] - bx), b1: Math.atan2(P1[1] - by, P1[0] - bx) };
+})();
+
 /** Shape templates for boss boards in peg space (§4.4): returns a Path2D in screen px. */
 function shapePath(shape, B, cols, rows) {
   const u = B.unit, cx = B.ox + (cols - 1) * u / 2, cy = B.oy + (rows - 1) * u / 2;
@@ -507,33 +515,35 @@ function shapePath(shape, B, cols, rows) {
       break;
     }
     case 'heart': {
-      const s = Math.min(rx, ry);
+      // fix2: taller lobes (~62 % of the board, was ~49 %); gen.mjs silhouette() mirrors this exactly
       p.moveTo(cx, cy + ry);
-      p.bezierCurveTo(cx - rx * 1.25, cy + ry * 0.1, cx - rx * 1.05, cy - ry * 1.15, cx, cy - ry * 0.45);
-      p.bezierCurveTo(cx + rx * 1.05, cy - ry * 1.15, cx + rx * 1.25, cy + ry * 0.1, cx, cy + ry);
+      p.bezierCurveTo(cx - rx * 1.38, cy, cx - rx * 1.16, cy - ry * 1.5, cx, cy - ry * 0.62);
+      p.bezierCurveTo(cx + rx * 1.16, cy - ry * 1.5, cx + rx * 1.38, cy, cx, cy + ry);
       p.closePath();
-      void s;
       break;
     }
     case 'moon': {
-      const r = Math.min(rx, ry);
-      p.arc(cx, cy, r, Math.PI * 0.32, Math.PI * 1.68);
-      p.arc(cx + r * 0.55, cy - r * 0.05, r * 0.72, Math.PI * 1.5, Math.PI * 0.5, true);
+      // fix2: crescent stretched to the board ellipse with a shallower bite (~60 % of the board, was ~36 %)
+      const m = MOON_BOSS;
+      p.ellipse(cx, cy, rx, ry, 0, m.o0, m.o1);
+      p.ellipse(cx + m.bx * rx, cy + m.by * ry, m.q * rx, m.q * ry, 0, m.b0, m.b1, true);
       p.closePath();
       break;
     }
     case 'star': {
-      const r = Math.min(rx, ry) * 1.05;
-      for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.5 : r; p[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * q, cy + 0.08 * r + Math.sin(a) * q); }
+      // fix2: star stretched to touch the board box on all sides, inner radius 0.65 (~56 % of the board, was ~32 %)
+      const Rx = rx / Math.cos(Math.PI / 10), Ry = 2 * ry / (1 + Math.cos(Math.PI / 5)), oy = cy - ry + Ry;
+      for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? 0.65 : 1; p[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * q * Rx, oy + Math.sin(a) * q * Ry); }
       p.closePath();
       break;
     }
     case 'kitten': {
-      const hr = Math.min(rx * 0.7, ry * 0.42), hy = cy - ry + hr * 1.35;
+      // fix2: bigger head and body (~65 % of the board, was ~60 %)
+      const hr = Math.min(rx * 0.74, ry * 0.44), hy = cy - ry + hr * 1.35;
       p.arc(cx, hy, hr, 0, TAU);
       p.moveTo(cx - hr * 0.95, hy - hr * 0.2); p.lineTo(cx - hr * 0.8, hy - hr * 1.3); p.lineTo(cx - hr * 0.2, hy - hr * 0.92); p.closePath();
       p.moveTo(cx + hr * 0.95, hy - hr * 0.2); p.lineTo(cx + hr * 0.8, hy - hr * 1.3); p.lineTo(cx + hr * 0.2, hy - hr * 0.92); p.closePath();
-      p.ellipse(cx, cy + ry * 0.35, rx * 0.9, ry * 0.62, 0, 0, TAU);
+      p.ellipse(cx, cy + ry * 0.34, rx * 0.98, ry * 0.64, 0, 0, TAU);
       break;
     }
     default: return null;

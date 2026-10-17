@@ -56,15 +56,20 @@ const NAMES = [null,
 // DECISION (v2): boss masks (even widened by one grid step) hold 18 strands at most under §3.1, so bosses get 18
 //   and are made peaks by the dressing (tighter basket, deeper stacks, harder queues), not by size. 8×10 levels
 //   cap at 21: 24 packs on ~60 % of seeds but then fails the crossings / free-at-start gates almost always.
-const STRANDS = [0, 3, 6, 9, 12, 12, 15, 15, 12, 15, 15,
+// DECISION (fix2): with the enlarged moon / star / heart / kitten silhouettes every boss holds 18 strands (L40 / L50
+//   were 15, L10 15). 21 was tried: it packs on the silhouettes only with a 1.0 halo on ~1 seed in 4, mostly with
+//   10–11 crossings (under minX 13), and the few valid 21-strand bosses played off-curve (L30: expert 77 %; L60:
+//   casual 34 %, above L59), so bosses are made peaks by dressing, not size.
+const STRANDS = [0, 3, 6, 9, 12, 12, 15, 15, 12, 15, 18,
   15, 15, 15, 12, 15, 18, 18, 18, 18, 18,
   15, 18, 18, 18, 18, 18, 21, 18, 21, 18,
-  18, 21, 21, 21, 18, 21, 21, 21, 21, 15,
-  21, 18, 21, 21, 21, 21, 21, 21, 21, 15,
+  18, 21, 21, 21, 18, 21, 21, 21, 21, 18,
+  21, 18, 21, 21, 21, 21, 21, 21, 21, 18,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 18];
 // DECISION (v2): per-level casual first-try win-rate aim: a smooth ramp inside each GDD band, teach levels and
 //   post-boss breathers above the band middle, every boss below both neighbours, L60 the lowest.
-const AIM = [0, 1, 1, 0.92, 0.86, 0.80, 0.76, 0.72, 0.80, 0.68, 0.60,
+// DECISION (fix2): band B pulled toward 60–70 % (L4 0.86→0.76, L5 0.80→0.71, L8 0.80→0.68), still a smooth ramp; L10 boss 0.55.
+const AIM = [0, 1, 1, 0.92, 0.76, 0.71, 0.70, 0.66, 0.68, 0.63, 0.55,
   0.74, 0.68, 0.64, 0.72, 0.60, 0.62, 0.58, 0.56, 0.53, 0.47,
   0.64, 0.56, 0.53, 0.50, 0.47, 0.52, 0.48, 0.55, 0.45, 0.39,
   0.52, 0.47, 0.44, 0.42, 0.50, 0.44, 0.42, 0.40, 0.38, 0.33,
@@ -95,10 +100,10 @@ function specFor(id) {
   if (id === 1) row(4, 4, 1, 3, 0, [1, 0, 0], [1, 1], [0, 0], [1, 1], 1, 1);
   else if (id === 2) row(5, 5, 2, 3, 0, [0.5, 0.5, 0], [1, 1], [0, 0], [1, 1], 1, 1);
   else if (id === 3) row(6, 6, 3, 3, 9, [0.5, 0.5, 0], [2, 2], [1, 1], [0.85, 1], 0.95, 1);
-  else if (id <= 5) row(6, 7, 4, 4, 9, [0.5, 0.4, 0.1], [2, 3], [1, 1], [0.75, 0.9], 0.9, 1);
+  else if (id <= 5) row(6, 7, 4, 4, 9, [0.5, 0.4, 0.1], [2, 3], [1, 1], [0.68, 0.82], 0.9, 1);
   else if (id === 30) { row(8, 10, 4, 5, 12, [0.3, 0.5, 0.2], [3, 4], [2, 3], [0.35, 0.55], 0.65, 0.88); s.shape = 'heart'; }
-  else if (id <= 9) row(7, 8, 4, 4, 9, [0.45, 0.4, 0.15], [2, 3], [1, 1], [0.65, 0.8], 0.85, 0.95);
-  else if (id === 10) { row(7, 9, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.55, 0.7], 0.8, 0.95); s.shape = 'cathead'; }
+  else if (id <= 9) row(7, 8, 4, 4, 9, [0.45, 0.4, 0.15], [2, 3], [1, 1], [0.6, 0.72], 0.85, 0.95);
+  else if (id === 10) { row(7, 9, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.5, 0.62], 0.8, 0.95); s.shape = 'cathead'; }
   else if (id <= 15) row(7, 8, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.55, 0.75], 0.8, 0.92);
   else if (id <= 19) row(7, 9, 4, 4, 10, [0.4, 0.4, 0.2], [2, 3], [1, 2], [0.5, 0.7], 0.75, 0.9);
   else if (id === 20) { row(8, 9, 4, 4, 11, [0.35, 0.45, 0.2], [2, 3], [2, 2], [0.45, 0.6], 0.7, 0.9); s.shape = 'pumpkin'; }
@@ -181,6 +186,13 @@ function arcPts(cx, cy, r, a0, a1, ccw = false, k = 48, ry = r) {
 function bez(p0, p1, p2, p3, k = 24) {
   return Array.from({ length: k + 1 }, (_, i) => { const t = i / k, u = 1 - t; return [0, 1].map(j => u * u * u * p0[j] + 3 * u * u * t * p1[j] + 3 * u * t * t * p2[j] + t * t * t * p3[j]); });
 }
+// DECISION (fix2): moon / star / heart / kitten silhouettes enlarged in render.js (moon ~60 %, star ~56 %, heart ~62 %,
+//   kitten ~65 % of the board, were 36 / 32 / 49 / 60 %) so bosses hold 18–21 strands; MOON matches render.js.
+const MOON = (() => {
+  const bx = 1.0, by = -0.25, q = 0.78, d = Math.hypot(bx, by), phi = Math.atan2(by, bx), al = Math.acos((1 + d * d - q * q) / (2 * d));
+  const P1 = [Math.cos(phi + al), Math.sin(phi + al)], P2 = [Math.cos(phi - al), Math.sin(phi - al)];
+  return { bx, by, q, o0: phi + al, o1: phi - al, b0: Math.atan2(P2[1] - by, P2[0] - bx), b1: Math.atan2(P1[1] - by, P1[0] - bx) };
+})();
 export function silhouette(shape, cols, rows) {
   const cx = (cols - 1) / 2, cy = (rows - 1) / 2, rx = (cols - 1 + 0.7) / 2, ry = (rows - 1 + 0.7) / 2;
   const P = [];
@@ -194,20 +206,20 @@ export function silhouette(shape, cols, rows) {
     P.push([[cx - r * 0.95, oy - r * 0.2], [cx - r * 0.8, cy - ry], [cx - r * 0.2, oy - r * 0.92]]);
     P.push([[cx + r * 0.95, oy - r * 0.2], [cx + r * 0.8, cy - ry], [cx + r * 0.2, oy - r * 0.92]]);
   } else if (shape === 'heart') {
-    P.push([...bez([cx, cy + ry], [cx - rx * 1.25, cy + ry * 0.1], [cx - rx * 1.05, cy - ry * 1.15], [cx, cy - ry * 0.45]),
-      ...bez([cx, cy - ry * 0.45], [cx + rx * 1.05, cy - ry * 1.15], [cx + rx * 1.25, cy + ry * 0.1], [cx, cy + ry])]);
+    P.push([...bez([cx, cy + ry], [cx - rx * 1.38, cy], [cx - rx * 1.16, cy - ry * 1.5], [cx, cy - ry * 0.62]),
+      ...bez([cx, cy - ry * 0.62], [cx + rx * 1.16, cy - ry * 1.5], [cx + rx * 1.38, cy], [cx, cy + ry])]);
   } else if (shape === 'moon') {
-    const r = Math.min(rx, ry);
-    P.push([...arcPts(cx, cy, r, Math.PI * 0.32, Math.PI * 1.68), ...arcPts(cx + r * 0.55, cy - r * 0.05, r * 0.72, Math.PI * 1.5, Math.PI * 0.5, true)]);
+    const m = MOON;
+    P.push([...arcPts(cx, cy, rx, m.o0, m.o1, false, 64, ry), ...arcPts(cx + m.bx * rx, cy + m.by * ry, m.q * rx, m.b0, m.b1, true, 48, m.q * ry)]);
   } else if (shape === 'star') {
-    const r = Math.min(rx, ry) * 1.05;
-    P.push(Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? r * 0.5 : r; return [cx + Math.cos(a) * q, cy + 0.08 * r + Math.sin(a) * q]; }));
+    const Rx = rx / Math.cos(Math.PI / 10), Ry = (2 * ry) / (1 + Math.cos(Math.PI / 5)), oy = cy - ry + Ry;
+    P.push(Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? 0.65 : 1; return [cx + Math.cos(a) * q * Rx, oy + Math.sin(a) * q * Ry]; }));
   } else if (shape === 'kitten') {
-    const hr = Math.min(rx * 0.7, ry * 0.42), hy = cy - ry + hr * 1.35;
+    const hr = Math.min(rx * 0.74, ry * 0.44), hy = cy - ry + hr * 1.35;
     P.push(arcPts(cx, hy, hr, 0, TAU, false, 64));
     P.push([[cx - hr * 0.95, hy - hr * 0.2], [cx - hr * 0.8, hy - hr * 1.3], [cx - hr * 0.2, hy - hr * 0.92]]);
     P.push([[cx + hr * 0.95, hy - hr * 0.2], [cx + hr * 0.8, hy - hr * 1.3], [cx + hr * 0.2, hy - hr * 0.92]]);
-    P.push(arcPts(cx, cy + ry * 0.35, rx * 0.9, 0, TAU, false, 64, ry * 0.62));
+    P.push(arcPts(cx, cy + ry * 0.34, rx * 0.98, 0, TAU, false, 64, ry * 0.64));
   } else return null;
   return P;
 }
@@ -679,7 +691,8 @@ const DRESS = 48, JIT = [1, 0.5, 1.5, 2, 0.75, 1.25], JIT_HARD = [1, 1.5, 2, 2.5
 // DECISION (v2, render review): pegs may sit up to this far outside the painted boss silhouette (a thin halo), the
 //   least that packs the boss's strand count: pumpkin / kitten / cathead 0.5, heart / moon / star 1.0 (moon and
 //   star patches are small: render.js draws them inside min(rx, ry) circles, ~35 % of the board).
-const BOSS_DIL = { cathead: 0.5, pumpkin: 0.5, heart: 1, moon: 1, star: 1, kitten: 0.5 };
+// DECISION (fix2): enlarged heart / moon / star start at a 0.5 halo like the others (genOne widens to 1.0 if needed).
+const BOSS_DIL = { cathead: 0.5, pumpkin: 0.5, heart: 0.5, moon: 0.5, star: 0.5, kitten: 0.5 };
 const GEO_FAILS = new Set(['minX', 'pieces']);
 function genOne(spec, secs) {
   const t0 = Date.now();

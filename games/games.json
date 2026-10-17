@@ -1088,5 +1088,129 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "knot-kitty",
+    "title": "Knot Kitty",
+    "tagline": "Pull the yarn in the right order and free the kitten. Only the strand on top can move and only two spools take yarn, so plan your basket.",
+    "date": "2026-10-16",
+    "accent": "#E8463A",
+    "icon": "🧶",
+    "store": "kk_",
+    "shop": {
+      "name": "Shop",
+      "item": "Outfit",
+      "items": [
+        [
+          "Plain Tabby",
+          0
+        ],
+        [
+          "Cosy Scarf",
+          120
+        ],
+        [
+          "Pumpkin Sweater",
+          200
+        ],
+        [
+          "Witch Hat",
+          300
+        ],
+        [
+          "Snowflake Jumper",
+          400
+        ],
+        [
+          "Café Bow Tie",
+          500
+        ],
+        [
+          "Yarn Crown",
+          750
+        ],
+        [
+          "Star Helmet",
+          1000
+        ]
+      ],
+      "currency": [
+        "yarn balls",
+        "🧶"
+      ]
+    },
+    "share": {
+      "title": "Knot Kitty: untangle the yarn, free the kitten",
+      "description": "Tap the yarn on top to wind it onto its spool. Plan your basket, chain the spools and pull the last strand to set the kitten free."
+    },
+    "seo": {
+      "keyword": "yarn untangle game",
+      "title": "Knot Kitty: Yarn Untangle Game · Play Free Online",
+      "description": "Play Knot Kitty, a free yarn untangle game. Pull the top strand onto its spool, plan your basket and free the kitten in 60 cosy levels. No download.",
+      "h1": "Knot Kitty: the yarn untangle game where you set a kitten free",
+      "imageAlt": "Knot Kitty: a dense, tilted pegboard of colourful yarn strands with a tangled calico kitten below it calling out \"Help!\"",
+      "genre": [
+        "Puzzle",
+        "Casual",
+        "Untangle",
+        "Sorting"
+      ],
+      "intro": [
+        "Knot Kitty is a free yarn untangle game you play with one finger. A kitten is tied up in a tangle of yarn on a cosy pegboard. Tap a strand that's on top and it slithers off its pegs, peg by peg, and winds onto the spool of its colour. Pull the last strand and the kitten pops free, shakes off the yarn and joins your Kitten Corner. It runs right here in your browser on a phone or a computer.",
+        "The order matters twice. Only a strand with nothing crossing over it can move, and only the two active spools take yarn. Anything that doesn't fit waits in a small basket, and when the next spool rolls in it grabs matching yarn straight out of the basket in a chain. Fill the basket with nothing that fits and you're out of room. There are 60 levels across six worlds (Autumn Den, Pumpkin Night, Snowy Cabin, Cat Café, Moonlit Attic and Starry Rooftop), each with a shaped boss board, and new twists keep arriving: knots, locks and keys, mystery yarn, sleepy paws, rainbow yarn, big spools and a frozen basket slot."
+      ],
+      "howTo": [
+        "Tap a strand that's on top. Free strands look bright and bob gently. The strand slides off its pegs and winds onto the spool of its colour; a normal spool holds 3 strands.",
+        "A covered strand won't move. It wiggles and red rings show which strands are lying over it. Press and hold a covered strand to see its blockers without pulling anything. Blocked taps cost nothing.",
+        "Watch the rack: only 2 spools are active, and the NEXT spools wait on the shelf beside them. A strand with no active spool of its colour drops into the basket, which has 3 to 5 slots.",
+        "When a spool is full it rolls away and the next one rolls in, grabbing every matching ball from the basket. That's a CHAIN, and each ball after the first in one chain pays +1 yarn ball.",
+        "If the basket is full and no free strand fits a spool, you're out of room. Undo a pull, add a +1 Slot, or retry the same board instantly.",
+        "Pull every strand to free the kitten. Stars come from your basket peak: at or under the level's par (the dashed gold line on the basket) is 3★, one over is 2★, more is 1★. A first win pays 10 + 5 per star yarn balls (15, 20 or 25), doubled on boss levels."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Tap a strand to pull it. Press and hold a covered strand to see what is on top of it. Slide your finger away before letting go to cancel a pull."
+        ],
+        [
+          "Computer",
+          "Click a strand to pull it, or click and hold to see its blockers. U = Undo, H = Hint, R = Retry, P or Esc = Pause, Enter or Space = the main button on each screen"
+        ],
+        [
+          "Boosters",
+          "Tap a booster button under the board. Snip then needs one more tap on the strand you want to cut free"
+        ]
+      ],
+      "tips": [
+        "Before you send a strand to the basket, look at the NEXT spool. Basket yarn of that colour first, so the next spool chains it straight back out.",
+        "Boosters cost yarn balls: Undo 30, Hint 40, +1 Slot 60 and Snip 80. They unlock at levels 4, 6, 9 and 16 with free ones as a gift. +1 Slot and Snip cap that level at 2★, and Undo never lowers your basket peak.",
+        "If the Undo button starts pulsing, the board can no longer be won from where you are. Undo a pull or two and try a different order.",
+        "Each twist arrives on its own level: knots tie two strands together so they go as one (level 8), a key strand opens its padlock (14), grey mystery yarn shows its colour once it's on top (21), a sleepy paw waits until you pull a set number of other strands (28), rainbow yarn fits any spool (35), a big spool holds 6 strands (42) and an ice slot thaws after spools are filled (49).",
+        "Every 15 stars opens a gift box with 60 yarn balls and a booster, and finishing a world opens a chest with 150 yarn balls and one of each unlocked booster.",
+        "Beat level 6 to unlock the Daily Knot: one new board a day that pays 40 + 10 per star, plus 10 per day of your streak (up to 7). Spend yarn balls on Kitty Outfits, from the Cosy Scarf (120) to the Star Helmet (1000)."
+      ],
+      "faq": [
+        [
+          "Is Knot Kitty free?",
+          "Yes. It is free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play this yarn untangle game on my phone?",
+          "Yes. It was made for phones and one finger, and it works on a computer with a mouse too, with keyboard shortcuts for Undo, Hint, Retry and Pause."
+        ],
+        [
+          "Why won't a strand move?",
+          "Only a strand with nothing crossing over it can be pulled; tap it and red rings show what's on top. From later levels a strand can also be locked (pull its key strand first) or held by a sleepy paw (pull the number of other strands shown on the bubble). If the basket is full, only a strand that fits an active spool can go."
+        ],
+        [
+          "How do I get 3 stars?",
+          "Keep the basket as empty as you can. If your highest basket count stays at or under the level's par, marked by the dashed gold line, you get 3★. Basket yarn that matches the NEXT spool so it chains straight out."
+        ],
+        [
+          "How many levels are there?",
+          "60 levels in six worlds of 10, and every 10th level is a boss board shaped like a cat head, a pumpkin, a heart, the moon, a star and a kitten. There's also a Daily Knot every day, and Bonus Tangles once all 60 kittens are rescued. Your stars, yarn balls, boosters, outfits and kittens are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]

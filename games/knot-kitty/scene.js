@@ -50,9 +50,6 @@ function P(g, x, y, s, fn) {
 const fs = (g, fill) => { g.fillStyle = fill; g.fill(); g.stroke(); };
 function ell(g, x, y, rx, ry, rot = 0) { g.beginPath(); g.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), rot, 0, TAU); }
 function circ(g, x, y, r) { g.beginPath(); g.arc(x, y, Math.max(0.01, r), 0, TAU); }
-function dprOf(g) {
-  try { const m = g.getTransform(); return clamp(Math.hypot(m.a, m.b) || 1, 1, 2.5); } catch (e) { return 1; }
-}
 /** Tile pattern drawn at device resolution; fn(cg, w, h) draws one tile in CSS px. */
 function tile(g, w, h, dpr, fn) {
   const tw = Math.max(2, Math.round(w * dpr)), th = Math.max(2, Math.round(h * dpr));
@@ -1530,21 +1527,65 @@ function titleExtras(g, G, world) {
 }
 
 // ------------------------------------------------------------------ bake cache + public API
-const cache = new Map(); // key → { cv, A, G }
+// DECISION (fix2): the static backdrop bake is cut into tiles of at most BAKE_TILE × BAKE_TILE device px
+//   (2048² = 16 MiB, under the ~24 MiB / 6.25 M px drawImage-source cliff of software-rendered Chromium, where a big
+//   source canvas is re-copied every frame: draw 1 ms → 40–85 ms). The bake is drawn whole into a temporary canvas
+//   once, sliced, and the big canvas dropped, so a 4K window costs 4 small blits, not one cliff-sized copy.
+// DECISION (fix2): whenever the context transform is a plain scale (+ translate) the tiles are blitted 1:1 in device
+//   space at integer offsets (setTransform(1,0,0,1,…)). A fractional dpr (e.g. 1.28) otherwise turns the copy into a
+//   resampled scale of ~0.99999, measured 12.9 ms vs 2.9 ms per frame at 2560×1440 — and blurs the backdrop a hair.
+//   The bake is made at the context's real device scale (not clamped to ≥ 1), capped at BAKE_MAX px (soft backdrop:
+//   past that it is baked smaller and drawn scaled; never hit at ≤ 4K since game.js caps the backing store).
+const BAKE_TILE = 2048, BAKE_MAX = 9e6;
+const cache = new Map(); // key → { tiles:[{cv,x,y}], bw, bh, s, A, G, Wd }
+function devScale(g) {
+  try {
+    const m = g.getTransform();
+    const s = Math.hypot(m.a, m.b) || 1;
+    return { s: clamp(s, 0.25, 2.5), m, axis: Math.abs(m.b) < 1e-9 && Math.abs(m.c) < 1e-9 && Math.abs(m.a - m.d) < 1e-9 && m.a > 0 };
+  } catch (e) { return { s: 1, m: null, axis: false }; }
+}
 function getBake(W, H, world, dpr, variant) {
-  const key = [world, Math.round(W), Math.round(H), dpr.toFixed(2), variant || ''].join('|');
+  const s = Math.min(dpr, Math.sqrt(BAKE_MAX / Math.max(1, W * H)));
+  const key = [world, Math.round(W), Math.round(H), s.toFixed(4), variant || ''].join('|');
   let e = cache.get(key);
   if (e) { cache.delete(key); cache.set(key, e); return e; } // LRU touch
   const G = geom(W, H);
-  const cv = mkCanvas(Math.ceil(W * dpr), Math.ceil(H * dpr)), cg = cv.getContext('2d');
-  cg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const bw = Math.max(1, Math.ceil(W * s - 1e-6)), bh = Math.max(1, Math.ceil(H * s - 1e-6));
+  const cv = mkCanvas(bw, bh), cg = cv.getContext('2d');
+  cg.setTransform(s, 0, 0, s, 0, 0);
   const Wd = WORLDS[world] || WORLDS[1];
-  const A = Wd.bake(cg, G, dpr, variant);
+  const A = Wd.bake(cg, G, s, variant);
   if (variant === 'title') titleExtras(cg, G, world);
-  e = { cv, A, G, Wd };
+  let tiles;
+  if (bw <= BAKE_TILE && bh <= BAKE_TILE) tiles = [{ cv, x: 0, y: 0, w: bw, h: bh }];
+  else {
+    tiles = [];
+    for (let y = 0; y < bh; y += BAKE_TILE) for (let x = 0; x < bw; x += BAKE_TILE) {
+      const w = Math.min(BAKE_TILE, bw - x), h = Math.min(BAKE_TILE, bh - y);
+      const t = mkCanvas(w, h), tg = t.getContext('2d');
+      tg.drawImage(cv, x, y, w, h, 0, 0, w, h);
+      tiles.push({ cv: t, x, y, w, h });
+    }
+    cv.width = cv.height = 1; // free the big canvas now
+  }
+  e = { tiles, bw, bh, s, A, G, Wd };
   cache.set(key, e);
   while (cache.size > 12) cache.delete(cache.keys().next().value);
   return e;
+}
+function blitBake(g, e, W, H) {
+  const d = devScale(g), m = d.m;
+  if (m && d.axis && Math.abs(m.a - e.s) < 1e-6) {
+    // 1:1 device-space blit at an integer offset: no resampling, no seams between tiles
+    g.save();
+    g.setTransform(1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+    for (const t of e.tiles) g.drawImage(t.cv, t.x, t.y);
+    g.restore();
+    return;
+  }
+  const kx = W / (e.bw / e.s), ky = H / (e.bh / e.s); // bake covers ceil'd px: map bake px → CSS px exactly
+  for (const t of e.tiles) g.drawImage(t.cv, (t.x / e.s) * kx, (t.y / e.s) * ky, (t.w / e.s) * kx, (t.h / e.s) * ky);
 }
 function clipPanes(g, panes) {
   g.beginPath();
@@ -1553,9 +1594,8 @@ function clipPanes(g, panes) {
 }
 function drawWorld(g, W, H, world, t, variant) {
   if (!(W > 0 && H > 0)) return null;
-  const dpr = dprOf(g);
-  const e = getBake(W, H, world, dpr, variant);
-  g.drawImage(e.cv, 0, 0, W, H);
+  const e = getBake(W, H, world, devScale(g).s, variant);
+  blitBake(g, e, W, H);
   g.save(); clipPanes(g, e.A.panes); e.Wd.winLive(g, e.G, e.A, t); g.restore();
   g.save(); e.Wd.live(g, e.G, e.A, t); g.restore();
   return e;

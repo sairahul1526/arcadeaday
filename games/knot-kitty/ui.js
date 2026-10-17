@@ -305,7 +305,7 @@ let api = null;
 const U = {
   t: 0, du: 1, scr: '', ret: 'title', S: null, L: null, Lkey: '',
   btns: [], sliders: [], reg: true, press: null, drag: null,
-  callout: null, queue: [], pop: null,
+  callout: null, queue: [], pop: null, popQ: [],
   card: null, cards: [], extra: [], after: null, giftKeys: new Set(), winDone: false, loseDone: false, winAt: 0, loseAt: 0,
   sessRef: null, tut: null, tutOn: false, idle: 0, hand: null, ghost: null, attn: [], fly: [], intro: null,
   rate: {}, undoPulse: 0, shakes: {},
@@ -455,12 +455,25 @@ function clearSay(text) {
   if (c && (!text || c.text === text)) c.dur = Math.min(c.dur, c.t + 0.2);
   U.queue = U.queue.filter(q => text && q.text !== text);
 }
-function clearCallouts() { U.callout = null; U.queue = []; U.pop = null; }
+function clearCallouts() { U.callout = null; U.queue = []; U.pop = null; U.popQ = []; }
 /** Celebratory pop at a spool. o: { col, size (u px), big (beats a "+1"), ball (yarn-ball icon) }. */
+// DECISION (fix 2): pops QUEUE instead of overwriting (CHAIN ×3 then COMBO ×2 used to land in one frame and the
+//   second erased the first). A big pop arriving while another big one shows waits; the showing one is cut to a
+//   0.1 s fade once it has had POP_GAP − 0.1 s, so queued pops start ≈ 0.45 s apart and only one is ever on screen.
+//   Small pops (+1, coins) never queue: they show only when nothing big is up or waiting. Queue holds ≤ 2.
+const POP_GAP = 0.45;
 function popAt(text, slot, o = {}) {
-  U.pop = { text, slot: slot == null ? -1 : slot, t: 0, dur: o.big ? 1.05 : 0.8, col: o.col || GOLD, size: o.size || 26, big: !!o.big,
-    ball: !!o.ball, sub: 0, burst: !!o.burst };
+  const dur = o.big ? 1.05 : 0.8;
+  const p = { text, slot: slot == null ? -1 : slot, t: 0, dur, d0: dur, fade: dur * 0.25, col: o.col || GOLD, size: o.size || 26,
+    big: !!o.big, ball: !!o.ball, sub: 0, burst: !!o.burst };
+  const cur = U.pop;
+  if (!cur || (!cur.big && !U.popQ.length)) { U.pop = p; return; }
+  if (!p.big) return;
+  U.popQ.push(p);
+  if (U.popQ.length > 2) U.popQ.shift();
 }
+/** The pop a coin sub-line should ride on: the newest queued pop, else the showing one while it is fresh. */
+function popForSub() { return U.popQ.length ? U.popQ[U.popQ.length - 1] : U.pop && U.pop.t < 0.6 ? U.pop : null; }
 const chainN = d => (d ? (d.n != null ? d.n : d.m) | 0 : 0);
 // DECISION (fix 1): pops escalate: +1 cream 22u → CHAIN ×2 gold 28u → ×3 amber 32u → ×4+ tomato 36u with a burst;
 //   COMBO is teal-on-gold, 32u + 3u per step (max 44u). All scale in with a 1.35× overshoot.
@@ -646,12 +659,12 @@ function onBus(type, d) {
     case 'chain': { // contract 1: {n, combo} (old shape {m}); "+1" for one ball, "CHAIN ×n!" from two
       const n = chainN(d);
       if (n >= 2) popAt(`CHAIN ×${n}!`, d.slot, chainStyle(n));
-      else if (n === 1 && !(U.pop && U.pop.big && U.pop.t < 0.5)) popAt('+1', d.slot, { col: CREAM, size: 26 });
+      else if (n === 1) popAt('+1', d.slot, { col: CREAM, size: 26 }); // dropped by popAt while a big pop is up
       break;
     }
     case 'spoolDone': { const c = d ? d.combo | 0 : 0; if (c >= 2) popAt(`COMBO ×${c}!`, d.slot != null ? d.slot : -1, comboStyle(c)); break; }
     case 'coins': // yarn-ball reward rides under the current pop as a sub-line; alone only when nothing is popping
-      if (d && d.n > 0) { if (U.pop && U.pop.t < 0.6) U.pop.sub = d.n; else popAt(`+${d.n}`, -1, { col: GOLD, size: 24, ball: true }); }
+      if (d && d.n > 0) { const p = popForSub(); if (p) p.sub = d.n; else popAt(`+${d.n}`, -1, { col: GOLD, size: 24, ball: true }); }
       break;
     case 'boosterRefused': if (d && d.reason) refuse(d.kind, d.reason); break;
     case 'full': if (rateOk('full', 3)) say('Basket full: pick yarn that fits a spool', { pri: 1, dur: 2 }); break;
@@ -730,7 +743,13 @@ export function update(dt, S) {
     if (U.intro && U.t >= U.intro.at) runIntro(S);
   }
   // callouts
-  if (U.pop) { U.pop.t += dt; if (U.pop.t >= U.pop.dur) U.pop = null; }
+  if (U.pop) {
+    const p = U.pop;
+    p.t += dt;
+    if (U.popQ.length && p.dur > p.t + 0.1 && p.t >= POP_GAP - 0.1) { p.dur = p.t + 0.1; p.fade = 0.1; }
+    if (p.t >= p.dur) U.pop = null;
+  }
+  if (!U.pop && U.popQ.length) U.pop = U.popQ.shift();
   if (U.callout && !U.pop) { U.callout.t += dt; if (U.callout.t >= U.callout.dur) U.callout = null; }
   for (const q of U.queue) q.wait += dt;
   U.queue = U.queue.filter(q => q.wait < 2.5 || q.pri >= 3);
@@ -1189,7 +1208,9 @@ function drawMap(g, S) {
     const cx = w < 6 ? lerp(nX(mm, 10 * w), nX(mm, 10 * w + 1), 0.42) : mm.cx + mm.amp * 0.65;
     if (cy > -40 * d && cy < H + 40 * d) chestIcon(g, cx, cy, 34 * d, safe(() => M.chestClaimed(w), false));
     const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * d) : nY(mm, mm.yc(10 * (w - 1)) + 0.64 * span);
-    if (ly > -30 * d && ly < H + 30 * d) {
+    // fix 2: under a modal (settings / shop / kittens / daily over the map) the labels are hidden: at 1440×900 the
+    //   settings card's bottom edge cut the "World 1" strip in half.
+    if (S.screen === 'map' && ly > -30 * d && ly < H + 30 * d) {
       const locked = cur < (w - 1) * PER_WORLD + 1;
       const label = `World ${w} · ${WORLDS[w].name}`;
       const s = fitSize(g, label, Math.min(W - 40 * d, 300 * d), 15 * d, FT, '', 0.25);
@@ -1342,35 +1363,59 @@ function drawCallout(g, S, L) {
   lines(g, wf, cx, cy + wf.size * 0.04);
   g.restore();
 }
+// DECISION (fix 2): pops live in the CALLOUT BAND (the strip between the spool rack and the board; in landscape the
+//   band in the right column), never at the spool: the old spool anchor pushed big pops up over the HUD subtitle.
+//   The band is free while a pop shows (pops hide the callout). Text is sized to the band, the overshoot is capped so
+//   the scaled text stays inside it, and everything (burst included) is clipped to the band ± half a margin, so a
+//   pop can never touch the HUD text or the board. The coin sub-line rides to the RIGHT of the text, not below it.
+function popBand(L) {
+  const c = L.callout, m = L.m;
+  const top = Math.max(L.rack.y + L.rack.h * 0.55, c.y - m * 0.5);
+  const bot = Math.min(L.board && L.orient !== 'landscape' ? L.board.y : c.y + c.h + m * 0.5, c.y + c.h + m * 0.5);
+  return { x: c.x, y: top, w: c.w, h: Math.max(8, bot - top), cx: c.x + c.w / 2, cy: c.y + c.h / 2 };
+}
 function drawPop(g, S, L) {
   const p = U.pop;
-  if (!p || U.card) return;
-  const rs = safe(() => rackSlots(L), null);
-  if (!rs) return;
-  const sl = p.slot >= 0 && rs.active[p.slot] ? rs.active[p.slot] : rs.active[0];
-  const u = L.u, k = p.t / p.dur, size = (p.size || 26) * u;
-  const x = clamp(sl.x, L.rack.x + 70 * u, L.rack.x + L.rack.w - 70 * u);
-  const y = Math.max(L.rack.y + size * 0.6, sl.y - sl.h * 0.5 - size * 0.2) - 16 * u * e3(k);
-  // punchy scale-in: 0.3 → 1.35 in 0.1 s, settle to 1 by 0.28 s (overshoot), then drift up and fade
-  const t = p.t, sc = t < 0.1 ? lerp(0.3, 1.35, t / 0.1) : t < 0.28 ? lerp(1.35, 1, e3((t - 0.1) / 0.18)) : 1;
+  if (!p || U.card || !L.callout) return;
+  const u = L.u, band = popBand(L);
+  const k = Math.min(1, p.t / (p.d0 || p.dur));
+  const hasSub = !!p.sub, ss0 = hasSub ? 0.62 : 0;
+  // text box: height ≤ band (minus a hair for the stroke), width ≤ 92 % of the band less the sub-line
+  let size = Math.min((p.size || 26) * u, L.callout.h * 1.02, 46 * u);
+  setFont(g, size, FT);
+  const subW = hasSub ? tw(g, '+' + p.sub, size * ss0, FT) + size * ss0 * 1.1 + 6 * u : 0;
+  const maxW = band.w * 0.92 - subW;
+  size = fitSize(g, p.text, maxW, size, FT, '', 0.26);
+  const textW = tw(g, p.text, size, FT) + (p.ball ? size * 1.1 : 0);
+  const totW = textW + subW;
+  const x = band.cx, y = band.cy - 3 * u * e3(k);
+  // punchy scale-in 0.3 → 1.35 in 0.1 s, settle to 1 by 0.28 s; the peak is capped so the box stays in the band
+  const t = p.t;
+  let sc = t < 0.1 ? lerp(0.3, 1.35, t / 0.1) : t < 0.28 ? lerp(1.35, 1, e3((t - 0.1) / 0.18)) : 1;
+  const capH = Math.min(band.cy - band.y, band.y + band.h - band.cy) / (size * 0.56);
+  const capW = (band.w * 0.98) / Math.max(1, totW);
+  sc = Math.min(sc, Math.max(1, Math.min(capH, capW)));
   g.save();
-  g.globalAlpha = Math.min(1, (1 - k) / 0.25);
-  g.translate(x, y); g.rotate(p.big ? -0.06 : 0); g.scale(sc, sc);
-  if (p.burst) { // sunburst behind the big ones
-    const r = size * 1.25, n = 10;
-    g.save(); g.rotate(U.t * 1.5); g.globalAlpha *= 0.55 * (1 - k);
+  rr(g, band.x, band.y, band.w, band.h, 0); g.clip();
+  g.globalAlpha = Math.min(1, Math.max(0, (p.dur - p.t) / Math.max(0.05, p.fade || 0.25)));
+  g.translate(x, y); g.rotate(p.big ? -0.035 : 0); g.scale(sc, sc);
+  if (p.burst) { // sunburst behind the big ones, flattened to the band
+    const rx = Math.min(totW * 0.75, band.w * 0.5), ry = band.h * 0.6, n = 10;
+    g.save(); g.globalAlpha *= 0.5 * (1 - k);
     g.fillStyle = p.col === TEAL ? GOLD : CREAM;
     g.beginPath();
-    for (let i = 0; i < n * 2; i++) { const a = i * Math.PI / n, q = i % 2 ? r * 0.45 : r; g.lineTo(Math.cos(a) * q * 1.6, Math.sin(a) * q * 0.8); }
+    const rot = U.t * 1.5;
+    for (let i = 0; i < n * 2; i++) { const a = rot + i * Math.PI / n, q = i % 2 ? 0.45 : 1; g.lineTo(Math.cos(a) * q * rx, Math.sin(a) * q * ry); }
     g.closePath(); g.fill(); g.restore();
   }
-  const maxW = Math.min(L.rack.w * 0.8, 260 * u);
-  const sz = txt(g, p.text, 0, 0, size, { col: p.col || GOLD, stroke: INK, sk: 0.26, maxW });
-  if (p.ball) aIcon(g, 'ball', -tw(g, p.text, sz, FT) / 2 - sz * 0.55, 0, sz * 0.8);
-  if (p.sub) {
-    const ss = sz * 0.55, label = '+' + p.sub, w = tw(g, label, ss, FT);
-    aIcon(g, 'ball', -w / 2 - ss * 0.15, sz * 0.78, ss * 0.95);
-    txt(g, label, ss * 0.45, sz * 0.8, ss, { col: GOLD, stroke: INK, sk: 0.26 });
+  const tx = -subW / 2 + (p.ball ? size * 0.55 : 0);
+  const sz = txt(g, p.text, tx, 0, size, { col: p.col || GOLD, stroke: INK, sk: 0.26 });
+  if (p.ball) aIcon(g, 'ball', tx - tw(g, p.text, sz, FT) / 2 - sz * 0.55, 0, sz * 0.8);
+  if (hasSub) {
+    const ss = sz * ss0, label = '+' + p.sub, lw = tw(g, label, ss, FT);
+    const x0 = tx + tw(g, p.text, sz, FT) / 2 + 6 * u;
+    aIcon(g, 'ball', x0 + ss * 0.5, sz * 0.06, ss * 0.95);
+    txt(g, label, x0 + ss * 1.1 + lw / 2, sz * 0.06, ss, { col: GOLD, stroke: INK, sk: 0.26 });
   }
   g.restore();
 }
@@ -1831,7 +1876,18 @@ function drawWinCard(g, S, c) {
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
   const list = [
-    { h: 44, fn: (y, hh, e) => txt(g, title, area.x + area.w / 2, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw0 - (res.newBest ? 40 * e : 0) }) },
+    { h: 44, fn: (y, hh, e) => {
+      // fix 2: with the NEW BEST ribbon the title clears the ribbon's left edge (it used to touch the "!" at 390 px):
+      //   it keeps its size where it can and slides left; it shrinks only when the space left of the ribbon is short.
+      let cx = area.x + area.w / 2, maxW = iw0;
+      if (res.newBest) {
+        const lim = area.x + area.w - 84 * e, lft = area.x + pad;
+        maxW = Math.min(iw0, lim - lft);
+        const w = tw(g, title, fitSize(g, title, maxW, 34 * e, FT, '', 0.2), FT);
+        cx = Math.min(cx, lim - w / 2);
+      }
+      txt(g, title, cx, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW });
+    } },
     { h: 70, fn: (y, hh, e) => {
       const sr = Math.min(26 * e, iw0 / 8);
       for (let i = 0; i < 3; i++) {

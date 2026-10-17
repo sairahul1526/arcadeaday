@@ -17,6 +17,8 @@ function checkLevel(L, where, { daily = false } = {}) {
   const n = L.strands.length;
   const boss = L.id % 10 === 0 || daily;
   if (n > 28 || n > (boss ? 26 : 24)) fail(where, `strand budget ${n}`);
+  // fix2: campaign bosses (enlarged silhouettes) must hold at least 18 strands
+  if (!daily && L.id % 10 === 0 && n < 18) fail(where, `boss holds only ${n} strands (< 18)`);
   if (L.cols < 4 || L.cols > 8 || L.rows < 4 || L.rows > 10) fail(where, `board ${L.cols}x${L.rows}`);
   if (L.cap < 3 || L.cap > 5) fail(where, 'cap ' + L.cap);
   // pegs
