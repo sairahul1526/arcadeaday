@@ -14,7 +14,7 @@
 //   number, so a reload never re-rolls it. If none is unlocked yet the gift is balls only.
 // DECISION: golden kitten = boss level won with 3★ (also upgrades on a later 3★ replay). kittenId = id when the kitten is
 //   newly rescued or newly golden, else 0.
-// DECISION: daily unlocked = L6 beaten (cur ≥ 7). stamps = the 7 IST days ending today (index 6 = today).
+// DECISION: daily unlocked = L13 beaten (cur ≥ 14; fix3, critic r2: every Daily board has key/lock pairs, taught at L14). stamps = the 7 IST days ending today (index 6 = today).
 //   A streak shown/continued only if the last daily win was today or yesterday; otherwise it reads 0.
 //   recordDailyWin/daily take an optional dateKey (defaults to istDateKey()) so Core can pass the session's date.
 // DECISION: buyOutfit also wears it. resetAll keeps settings and `best` (the score only rises; yt already has it).
@@ -58,7 +58,7 @@ const BK = ['undo', 'hint', 'slot', 'snip'];
 // Economy v2 (polish): see the DECISION above. First win WIN_A + WIN_B×stars (boss ×2), a star-improving replay
 // WIN_B per new star, a plain replay REPLAY_BALLS (+ at most 1 chain/jumbo extra, + at most COMBO_REPLAY combo).
 const GIFT_EVERY = 15, GIFT_BALLS = 15, CHEST_BALLS = 25, START_BALLS = 50, WIN_A = 2, WIN_B = 4, REPLAY_EXTRA = 1;
-const DAILY_A = 15, DAILY_B = 4, DAILY_STREAK = 4;
+const DAILY_A = 15, DAILY_B = 4, DAILY_STREAK = 4, DAILY_AFTER = 13;
 const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14, REPLAY_BALLS = 1, CHAIN_M = 12;
 export const COMBO_CAP = 8, COMBO_REPLAY = 1;
 const CHAIN_MAX = MAX_STRANDS || 28;
@@ -403,7 +403,7 @@ export function comboCap(kind = 'level', id = 0) {
   if (!d) return 0;
   if (kind === 'daily') {
     const key = typeof id === 'string' && KEY_RE.test(id) ? id : istDateKey();
-    return d.cur > 6 && !claimed(d, key) ? COMBO_CAP : 0;
+    return d.cur > DAILY_AFTER && !claimed(d, key) ? COMBO_CAP : 0;
   }
   if (kind === 'bonus') return (Number.isInteger(id) ? id : d.bonus) === d.bonus ? COMBO_CAP : 0;
   return validId(id) && d.stars[id - 1] >= 3 ? COMBO_REPLAY : COMBO_CAP;
@@ -467,7 +467,7 @@ export function daily(key = istDateKey()) {
     i: dailyIndex(key).i,
     won,
     streak: d ? streakOn(d, key) : 0,
-    unlocked: !!d && d.cur > 6,
+    unlocked: !!d && d.cur > DAILY_AFTER,
     stamps: Array.from({ length: 7 }, (_, j) => !!d && d.daily.won.includes(addDays(key, j - 6))),
   };
 }

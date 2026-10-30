@@ -30,7 +30,7 @@
 //   calls preventDefault) only while the map can still scroll that way. Locked nodes say "Beat level N first".
 // DECISION: settings sliders/toggle emit bus 'settings' {k, v} (meta.setSetting has no event) so Audio can apply them
 //   live; win-card stars emit bus 'star' {i} as each one pops.
-// DECISION: the locked Daily dialog shows "Beat level 6 to unlock" with an OK primary. Reset progress = two taps within 3 s.
+// DECISION: the locked Daily dialog shows "Beat level 13 to unlock" with an OK primary. Reset progress = two taps within 3 s.
 // DECISION: Esc in play opens pause; Esc on win/lose (and their gift cards) does nothing; Enter/Space press the screen's
 //   primary button. ui.key never calls preventDefault.
 // DECISION: art helpers are called through guarded wrappers; a missing or throwing export falls back to a simple local
@@ -66,7 +66,7 @@ const MECH_LINE = { knot: 'Tied strands go together as one pull', lock: 'A padlo
   mystery: 'Grey yarn shows its colour once nothing is on top', paw: 'A sleepy paw waits until you pull the number on its bubble',
   rainbow: 'Rainbow yarn fits any spool', jumbo: 'The big spool takes 6 strands', ice: 'The ice slot thaws after spools fill' };
 const BTEACH = { undo: 'Undo takes back a pull', hint: 'Hint shows a good move', slot: '+1 Slot adds a basket space',
-  snip: 'Snip pulls any strand' };
+  snip: 'Snip cuts any one strand free' };
 const TEACH_LINE = { knot: 'Tied together: they go as one', lock: 'Pull the key strand to unlock',
   mystery: 'Grey yarn shows its colour on top', paw: 'Wait for the paw: pull N others first', rainbow: 'Rainbow fits any spool',
   jumbo: 'Big spool: 6 strands', ice: 'Ice slot thaws after 2 spools' };
@@ -724,7 +724,7 @@ function dirMechanics(s) {
 const TEACH_PLAN = {
   3: { key: 'teach3', rings: ['basket', 'next'], arrow: true, label: { text: 'Spare yarn waits here', at: 'basket' }, marks: ['f_basket', 'f_next'] },
   // fix 2 (critics r1): plain words, and L4 teaches the plan (watch NEXT, keep the basket empty), ≥ 16 px
-  4: { key: 'teach4', rings: ['par', 'next'], label: { text: 'Look at NEXT: pull the colour that\'s coming, keep the basket empty', at: 'next' }, marks: ['x_par'] },
+  4: { key: 'teach4', rings: ['par', 'next'], label: { text: 'Watch NEXT and keep the basket nearly empty for 3 stars', at: 'next' }, marks: ['x_par'] },
 };
 function teachFor(s) {
   if (!s || s.kind !== 'level' || SHOWREEL) return null;
@@ -1607,7 +1607,7 @@ function drawHUD(g, S, live) {
   }
   const lv = sess.level || {};
   const title = sess.kind === 'level' ? `Level ${sess.id}` : lv.name || (sess.kind === 'daily' ? 'Daily Knot' : 'Bonus Tangle');
-  const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day' : 'Endless tangles';
+  const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day' : `Bonus tangle ${(sess.id | 0) + 1}`;
   const maxW = h.w - 2 * (L.m + dd + 8);
   const ts = Math.min(22 * u, h.h * 0.44);
   if (plaque) {
@@ -1621,7 +1621,8 @@ function drawHUD(g, S, live) {
   //   re-shows it in plain words, one mechanic per tap
   const mechs = showBtns ? Object.keys(MECH).filter(k => MECH_LINE[k] && safe(() => MECH[k](sess.puz || {}), false)) : [];
   if (mechs.length) {
-    const tW = Math.min(tw(g, title, ts), maxW), rq = Math.max(10, ts * 0.48);
+    // fix3 (critic r2, grandparent 2): the "?" read as ~20 px; now ~28 px across (the tap area was already the whole title)
+    const tW = Math.min(tw(g, title, ts), maxW), rq = Math.max(13, ts * 0.62);
     const qx = h.x + h.w / 2 + tW / 2 + rq + 5, qy = h.y + h.h * (plaque ? 0.4 : 0.38);
     const room = qx + rq <= h.x + h.w - (L.m + dd + 4);
     if (room) {
@@ -1794,6 +1795,8 @@ function drawAttn(g) {
 //   flag on the basket). Each is a small tag with a pointer; it never shows over a card, a pop or a tutorial hand.
 function firstDone(key) { safe(() => M.markTut(key)); if (U.first && U.first.key === key) U.first = null; }
 function colourCount(s) { const set = new Set(); for (const q of (s.puz && s.puz.strands) || []) if (q && q.c >= 0 && q.c < 6 && !q.m) set.add(q.c); return set.size; }
+/** The "+N more" pill box, as render.js draws it. */
+function moreBox(S, L, rs) { const s = S.sess; return safe(() => R.moreChip(null, rs, (s.nextQ || [])[1], moreOf(s), L.u, L.W || S.W), null); }
 function moreOf(s) {
   const total = s.puz && s.puz.spools ? s.puz.spools.length : (s.level && s.level.queue ? s.level.queue.length : 0);
   return s.moreN != null ? s.moreN : total - ((s.st && s.st.next) || 0) - Math.min(2, (s.nextQ || []).length);
@@ -1828,14 +1831,16 @@ function firstAnchor(S, L, at) {
   if (!rs) return null;
   const box = p => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 });
   if (at === 'next' && rs.next[0]) return { pref: 'below', t: box(rs.next[0]) };
-  if (at === 'more' && rs.more) { const r = Math.max(10, 12 * L.u); return { pref: 'below', t: { x0: rs.more.x - r * 1.1, y0: rs.more.y - r * 0.75, x1: rs.more.x + r * 1.1, y1: rs.more.y + r * 0.75 } }; }
+  if (at === 'more') { const mc = moreBox(S, L, rs); return mc ? { pref: 'below', t: mc } : null; }
   if (at === 'rack') { const a = box(rs.active[0]), b = box(rs.active[1]); return { pref: 'below', t: { x0: a.x0, y0: a.y0, x1: b.x1, y1: a.y1 } }; }
   return null;
 }
 /** Boxes a tag should not cover, with weights (kitten worst). The tag's own target is left out. */
 function tagObstacles(S, L, at) {
   const s = S.sess, o = [], add = (x0, y0, x1, y1, wt) => o.push({ x0, y0, x1, y1, wt });
-  if (L.hud) add(L.hud.x, L.hud.y, L.hud.x + L.hud.w, L.hud.y + L.hud.h, 2);
+  // fix3 (critic r2: the L7 "+1" tag half-covered the world name): the HUD's level/world text weighs more than the
+  //   board top, so a tag drops onto the board edge instead
+  if (L.hud) add(L.hud.x, L.hud.y, L.hud.x + L.hud.w, L.hud.y + L.hud.h, 5);
   const B = s && s.B;
   if (B) {
     add(B.x, B.y, B.x + B.w, B.y + B.h, 1.2);
@@ -1849,7 +1854,8 @@ function tagObstacles(S, L, at) {
     //   a heavy obstacle, so a tag never sits on what the player must look at next
     rs.next.forEach((p, i) => add(p.x - p.w / 2 - 4, p.y - p.h * (i ? 0.9 : 1.3), p.x + p.w / 2 + 4, p.y + p.h / 2, i ? 2.5 : 7));
     if (rs.kitty) add(rs.kitty.x - rs.kitty.s * 0.45, rs.kitty.y - rs.kitty.s, rs.kitty.x + rs.kitty.s * 0.45, rs.kitty.y, 1.5);
-    if (rs.more && at !== 'more' && moreOf(s) > 0) { const r = Math.max(10, 12 * L.u); add(rs.more.x - r * 1.1, rs.more.y - r * 0.75, rs.more.x + r * 1.1, rs.more.y + r * 0.75, 2.5); }
+    const mc = at !== 'more' ? moreBox(S, L, rs) : null;
+    if (mc) add(mc.x0, mc.y0, mc.x1, mc.y1, 2.5);
   }
   if (L.basket && !L.hideBasket && at !== 'basket' && at !== 'par') add(L.basket.x, L.basket.y, L.basket.x + L.basket.w, L.basket.y + L.basket.h, 1.5);
   const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
@@ -1968,19 +1974,25 @@ function drawBanner(g, S, L) {
   if (t < 0) return;
   // fix 11: 1.6 s in all (pop 0.28 s, hold, 0.35 s fade that ends at exactly 0 and then the banner is dropped, so no
   //   faint ghost lingers), and it sits over the HUD header / top margin instead of the top third of the board
-  const DUR_B = 1.6, FADE = 0.35;
+  // fix3 (critic r2, kid 1 / grandparent): it sat on the HUD, so "Level N" and the world name showed through it and
+  //   the portrait covered Pause. It now fills the spool rack under the HUD (no text or buttons there but NEXT), and
+  //   it leaves by shrinking at full opacity instead of fading, so no text ever shows through it.
+  const DUR_B = 1.6, FADE = 0.3;
   if (t >= DUR_B) { U.banner = null; return; }
   const sess = S.sess, u = L.u, bd = sess && sess.B ? sess.B : L.board, hb = L.hud && L.hud.w > 0 ? L.hud : null;
+  const rk = L.rack && L.rack.w > 0 && L.rack.h > 0 ? L.rack : null;
   const boss = b.kind === 'boss' && sess && sess.kind === 'level';
-  const h = Math.max(54, Math.min((boss ? 88 : 76) * u, hb ? Math.max(54, hb.h * 1.5) : bd.h * 0.26)), n0 = h * 0.32 + 8;
-  const ref = hb || bd;
-  // the ribbon may run past a narrow header's sides (never off screen) so its text stays ≥ 12 px
-  const w = Math.min(S.W - 2 * n0, Math.max(ref.w * 0.96, Math.min(S.W - 2 * n0, boss ? 330 : 280)), (boss ? 440 : 380) * Math.max(u, 0.8));
+  const h0 = Math.max(54, Math.min((boss ? 88 : 76) * u, hb ? Math.max(54, hb.h * 1.5) : bd.h * 0.26));
+  // the boss portrait (radius 0.66 h) stays inside the rack
+  const h = rk ? Math.max(54, Math.min(h0, rk.h / (boss ? 1.4 : 1.1))) : h0, n0 = h * 0.32 + 8;
+  const ref = rk || hb || bd;
+  // the ribbon may run past a narrow rack's sides (never off screen) so its text stays ≥ 12 px
+  const w = Math.min(S.W - 2 * n0, Math.max(ref.w * 0.96 - 2 * n0, Math.min(S.W - 2 * n0, boss ? 330 : 280)), (boss ? 440 : 380) * Math.max(u, 0.8));
   const cx = clamp(ref.x + ref.w / 2, w / 2 + n0, S.W - w / 2 - n0);
-  const cy = hb ? Math.max(hb.y + hb.h / 2, h * (boss ? 0.72 : 0.56) + 4) : Math.max(bd.y + h * 0.62, h * (boss ? 0.72 : 0.56) + 4);
-  const sc = t < 0.28 ? eBack(t / 0.28) : 1, fo = clamp((t - (DUR_B - FADE)) / FADE, 0, 1), a = 1 - fo * fo * (3 - 2 * fo);
-  if (a <= 0.01) return;
-  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.03); g.scale(sc * (1 - 0.06 * fo), sc * (1 - 0.06 * fo));
+  const cy = rk ? rk.y + rk.h / 2 : hb ? Math.max(hb.y + hb.h / 2, h * (boss ? 0.72 : 0.56) + 4) : Math.max(bd.y + h * 0.62, h * (boss ? 0.72 : 0.56) + 4);
+  const fo = clamp((t - (DUR_B - FADE)) / FADE, 0, 1), sc = (t < 0.28 ? eBack(t / 0.28) : 1) * (1 - fo * fo);
+  if (sc <= 0.02) return;
+  g.save(); g.translate(cx, cy); g.rotate(-0.03); g.scale(sc, sc);
   const n = h * 0.32;
   g.beginPath(); g.moveTo(-w / 2 - n, -h * 0.3); g.lineTo(-w / 2, -h * 0.3); g.lineTo(-w / 2, h * 0.42); g.lineTo(-w / 2 - n, h * 0.42); g.lineTo(-w / 2 - n * 0.5, h * 0.06); g.closePath();
   g.moveTo(w / 2 + n, -h * 0.3); g.lineTo(w / 2, -h * 0.3); g.lineTo(w / 2, h * 0.42); g.lineTo(w / 2 + n, h * 0.42); g.lineTo(w / 2 + n * 0.5, h * 0.06); g.closePath();
@@ -2571,7 +2583,8 @@ function drawKittens(g, S) {
   if (!U.kPage || U.t - (U.kSeen || -9) > 0.6) U.kPage = kitPageOf(ks);
   U.kSeen = U.t;
   const wd = U.kPage, base = (wd - 1) * PER_WORLD;
-  const pw = Math.min(W - 16 * d, land ? 900 * d : 520 * d), ph = H - 16 * d, px = (W - pw) / 2, py = 8 * d;
+  // fix3 (critic r2, art 4): capped like the shop on desktop (was 900 du ≈ the full 1440 width, title and X ~1300 px apart)
+  const pw = Math.min(W - 16 * d, land ? Math.min(900 * d, Math.max(1000, 640 * d)) : 520 * d), ph = H - 16 * d, px = (W - pw) / 2, py = 8 * d;
   panel(g, px, py, pw, ph, d);
   const pad = 16 * d, ix = px + pad, iw = pw - 2 * pad;
   const hy = py + pad + 20 * d;
@@ -2673,7 +2686,7 @@ function drawDaily(g, S) {
     const fr = dialogFrame(g, S, 360, (iw) => [
       { h: 44, fn: (y, hh, e) => txt(g, 'Daily Knot', W / 2, y + hh / 2, 28 * e, { maxW: iw }) },
       { h: 70, fn: (y, hh, e) => aIcon(g, 'lock', W / 2, y + hh / 2, 50 * e, INK) },
-      { h: 52, fn: (y, hh, e) => lines(g, wrapFit(g, 'Beat level 6 to unlock', iw, hh, 18 * e, 13 * e), W / 2, y + hh / 2) },
+      { h: 52, fn: (y, hh, e) => lines(g, wrapFit(g, 'Beat level 13 to unlock', iw, hh, 18 * e, 13 * e), W / 2, y + hh / 2) },
       { h: 8 },
       { h: 56, fn: (y, hh, e) => { const bw = Math.min(iw, 200 * e); pill(g, { id: 'd-ok', label: 'OK', kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 52 * e, act: close, d: e }); } },
     ]);
@@ -2685,7 +2698,7 @@ function drawDaily(g, S) {
   const streak = info.streak || 0;
   const istNow = Date.now() + 5.5 * 3600e3, left = 86400000 - (istNow % 86400000);
   const hh2 = Math.floor(left / 3600e3), mm2 = Math.floor((left % 3600e3) / 60e3);
-  const reward = 70 + 10 * Math.min(streak + 1, 7);
+  const reward = 15 + 4 * 3 + 4 * Math.min(streak + 1, 7); // meta economy v2: DAILY_A + DAILY_B × 3★ + DAILY_STREAK × streak
   const fr = dialogFrame(g, S, 400, (iw, x0) => [
     { h: 44, fn: (y, hh, e) => txt(g, 'Daily Knot', W / 2, y + hh / 2, 28 * e, { maxW: iw - 80 * e }) },
     { h: 58, fn: (y, hh, e) => {
@@ -2747,7 +2760,7 @@ function drawAllBeaten(g, S) {
   let y = Math.max(8 * e, (H - fixed * e) / 2) + 16 * e;
   txt(g, 'All 60 kittens rescued!', W / 2, y + 25 * e, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: W - 32 * e });
   y += 50 * e;
-  txt(g, 'New tangles soon', W / 2, y + 15 * e, 18 * e, { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW: W - 32 * e });
+  txt(g, 'Play on: Bonus Tangles + the Daily Knot', W / 2, y + 15 * e, 18 * e, { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW: W - 32 * e });
   y += 40 * e;
   // parade
   const ks = safe(() => M.kittens(), Array(LEVELS).fill(1));
@@ -2857,7 +2870,7 @@ function drawWinCard(g, S, c) {
   const peak = res.peak ?? 0, par = res.par ?? 0;
   // fix 2: the coaching line is plain words (no ★ shorthand) and reads at ≥ 16 css px, wrapping to 2 lines
   const statLine = sess.capped && st < 3 ? 'You used Snip or +1 Slot, so 2 stars is the most'
-    : st >= 3 ? (peak ? `Tidy! The basket held only ${peak}` : 'Spotless! The basket stayed empty')
+    : st >= 3 ? (peak ? `Tidy! Never more than ${peak} in the basket` : 'Spotless! The basket stayed empty')
       : par > 0 ? `The basket held ${peak}. Hold ${par} or fewer to earn 3 stars` : `The basket held ${peak}. Keep it empty to earn 3 stars`;
   const kid = res.kittenId || 0;
   const pad = 14 * d, iw0 = area.w - 2 * pad;
@@ -3024,9 +3037,17 @@ function drawMarks(g, S, pts) {
 //   toBlob). Order: share({files,text,url}) when canShare({files}); else share({text,url}); else copy + "Copied!".
 // The page's own address (arcadeaday.com/knot-kitty/ on the web); share is off on yt and portals (P.canShare).
 const SHARE_URL = typeof location !== 'undefined' ? location.origin + location.pathname : '';
+// fix3 (critic r2, viral 2): the share carries a stat and a dare (basket peak, best chain), the numbers the video's
+//   pinned comment asks people to post
+function shareStats(sess, res) {
+  const cap = (sess.basket || []).length || 0, chain = Math.max(0, ...((sess.chainLog || []).map(x => x.m | 0)));
+  return { peak: res.peak | 0, cap, chain };
+}
 function shareText(sess, res) {
-  const st = '★'.repeat(clamp(res.stars || 1, 1, 3));
-  return sess.kind === 'daily' ? `I untangled today's Daily Knot in Knot Kitty ${st}` : sess.kind === 'level' ? `I rescued the kitten on level ${sess.id} of Knot Kitty ${st}` : `I cleared a bonus tangle in Knot Kitty ${st}`;
+  const st = '★'.repeat(clamp(res.stars || 1, 1, 3)), k = shareStats(sess, res);
+  const nm = sess.kind === 'level' && res.kittenId ? kName(res.kittenId - 1) : '';
+  const what = sess.kind === 'daily' ? `I untangled today's Daily Knot in Knot Kitty ${st}` : sess.kind === 'level' ? `I rescued ${nm || 'the kitten'} on level ${sess.id} of Knot Kitty ${st}` : `I cleared a bonus tangle in Knot Kitty ${st}`;
+  return `${what} with a basket peak of ${k.peak}${k.chain > 1 ? ` and a CHAIN x${k.chain}` : ''}. Can you beat it?`;
 }
 function shareImage(sess, res) {
   const Wc = 1080, Hc = 1350, cv = document.createElement('canvas');
@@ -3040,19 +3061,25 @@ function shareImage(sess, res) {
   const vg = g.createLinearGradient(0, 0, 0, Hc);
   vg.addColorStop(0, 'rgba(43,30,40,0.42)'); vg.addColorStop(0.3, 'rgba(43,30,40,0.05)'); vg.addColorStop(0.7, 'rgba(43,30,40,0.05)'); vg.addColorStop(1, 'rgba(43,30,40,0.5)');
   g.fillStyle = vg; g.fillRect(0, 0, Wc, Hc);
-  txt(g, 'Knot Kitty', Wc / 2, 150, 124, { col: '#fff', stroke: INK, sk: 0.16, maxW: Wc - 120 });
-  const sub = sess.kind === 'level' ? `Level ${sess.id}` : sess.kind === 'daily' ? 'Daily Knot' : 'Bonus tangle';
-  txt(g, sub, Wc / 2, 268, 78, { col: GOLD, stroke: INK, sk: 0.18, maxW: Wc - 160 });
-  // the rescued kitten (painted sprite), else the hero kitty cheering
-  const kid = res.kittenId || 0, feet = 930, s = 520;
+  // fix3 (critic r2, viral 1): the kitten is drawn first and capped (no boss 1.4x) so its top stays under "Level N",
+  //   and every line of text is drawn over it
+  const kid = res.kittenId || 0, feet = 890, s = 480;
   const glow = g.createRadialGradient(Wc / 2, feet - s * 0.45, 0, Wc / 2, feet - s * 0.45, s * 0.75);
   glow.addColorStop(0, 'rgba(255,236,170,0.85)'); glow.addColorStop(1, 'rgba(255,236,170,0)');
   g.fillStyle = glow; g.beginPath(); g.arc(Wc / 2, feet - s * 0.45, s * 0.75, 0, TAU2); g.fill();
   const okKid = kid && R.kittenSprite && safe(() => R.kittenSprite(kid, true), null);
-  if (okKid) safe(() => R.drawKitten(g, Wc / 2, feet, s, { id: kid, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(kid), coat: coatOf(kid), golden: !!res.golden, t: 0, loopColors: [], memKey: cv }));
+  if (okKid) safe(() => R.drawKitten(g, Wc / 2, feet, s, { id: kid, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(kid), coat: coatOf(kid), golden: !!res.golden, t: 0, loopColors: [], memKey: cv, bossScale: false, maxH: 520 }));
   else aKitty(g, Wc / 2, feet, s * 0.8, 'idle', 0, safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby'));
+  txt(g, 'Knot Kitty', Wc / 2, 150, 124, { col: '#fff', stroke: INK, sk: 0.16, maxW: Wc - 120 });
+  const sub = sess.kind === 'level' ? `Level ${sess.id}` : sess.kind === 'daily' ? 'Daily Knot' : 'Bonus tangle';
+  txt(g, sub, Wc / 2, 268, 78, { col: GOLD, stroke: INK, sk: 0.18, maxW: Wc - 160 });
+  const nm = okKid ? kName(kid - 1) : '';
+  if (nm) txt(g, `${nm} is free!`, Wc / 2, 940, 56, { col: '#fff', stroke: INK, sk: 0.18, maxW: Wc - 140 });
   const st = clamp(res.stars || 0, 0, 3);
-  for (let i = 0; i < 3; i++) aStar(g, Wc / 2 + (i - 1) * 190, 1060 + (i === 1 ? -18 : 0), i === 1 ? 82 : 70, i < st, (i - 1) * 0.2);
+  for (let i = 0; i < 3; i++) aStar(g, Wc / 2 + (i - 1) * 170, 1062 + (i === 1 ? -14 : 0), i === 1 ? 74 : 64, i < st, (i - 1) * 0.2);
+  const k = shareStats(sess, res);
+  const line = `Basket peak ${k.peak}${k.cap ? '/' + k.cap : ''}${k.chain > 1 ? ` · CHAIN x${k.chain}` : ''} · Beat me!`;
+  txt(g, line, Wc / 2, 1180, 44, { f: FB, w: '900', col: CREAM, stroke: INK, sk: 0.16, maxW: Wc - 120 });
   const u = 'arcadeaday.com/knot-kitty', us = 46, uw = tw(g, u, us, FB, '900') + 70;
   rr(g, Wc / 2 - uw / 2, 1230, uw, 76, 38); g.fillStyle = CREAM; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
   txt(g, u, Wc / 2, 1269, us, { f: FB, w: '900', col: INK });

@@ -468,6 +468,13 @@ The user does every account, upload, submission and email. Runs prepare everythi
 - **Every lose card offers a way forward:** Undo, Hint and +1 Slot with counts (buy-and-use at 0), plus a free Hint after 2 losses on the same level. Every new mechanic gets a "?" next to the level title that shows its coach lines again.
 - **Content after the campaign:** generated bonus boards with their own ramp (bonus-data.js, 60 boards, about 98 KB) answer "what do I play after L60?" cheaply. Re-dressed remixes of campaign boards don't.
 
+## Lessons: critic panel r2 → fix round 3 (2026-10-30)
+- **r2 moved the mean only 7.75 → 7.92, and new blockers came from the fixes themselves.** The new "+N more" pill covered the badge on tablet, the boss banner sat on the HUD, and the share card hid "Level N" behind the kitten. Screenshot every fix at 390x844, 360x640, 820x1180 and 1440x900 before the next panel, and give each overlay one owner function that returns its box, so collision code (tags, coach marks) and drawing can never disagree (`R.moreChip`).
+- **Banners and overlays must never fade over text.** Put a banner in empty space (the spool rack), keep it fully opaque, and leave by scaling out. A fade lets the HUD read through it, and critics call that an overlap.
+- **Mid-game 3★ should be reachable but rare.** After the retune the average bot 3-starred 0–7% of L21–L60, and par was never explained. Raise par above the solver's optimum when needed (`stats.opt` keeps the optimum, and `check.mjs` enforces `opt <= par < cap`), add a breather level every ~5, and teach the 3★ rule in words at its intro ("keep the basket nearly empty for 3 stars"). Target: average-bot win ≥ 0.65 and 3★ 15–40% per band.
+- **Unlock a mode at the level that teaches its pieces.** The Daily used key/lock pairs from day one but unlocked at L7, before keys are taught (L14). It now unlocks after L13. Labels must say what is actually there ("Bonus tangle 3", "Play on: Bonus Tangles + the Daily Knot"), never "Endless" or "soon".
+- **After a level pass, run `tune4.mjs merge` last.** The older `tune3.mjs merge` and `gen.mjs --merge` rebuild levels-data.js from older parts and silently revert the newer pass.
+
 ## Lessons: QA and tuning (Days 1–9)
 These still apply in v2. Give the relevant ones to every QA, bot and video agent.
 

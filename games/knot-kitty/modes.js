@@ -6,7 +6,7 @@
 // DECISION: ?record=1 and ?og=1 never write the player's save: P.save / P.flush become no-ops in those
 //   modes, and the showcase save tweaks (L1-19 at 3 stars, Pumpkin Sweater worn, gifts/chests/tutorials
 //   marked done so no popup interrupts the take) live only in memory.
-// DECISION: ?record=1 / ?og=1 (default level only) swap L20's board in memory for SHOWCASE below: an 18-strand
+// DECISION: ?record=1 / ?og=1 (default level only) swap L20's board in memory for SHOWCASE below: a 20-strand
 //   pumpkin with par 3, so the CHAIN x3 climax (three balls waiting in a cap-4 basket) is also a clean 3-star win.
 //   It is patched onto the levels-data.js object before the session is built; normal play never sees it.
 // DECISION: record/og swallow the events that raise UI band callouts (basketWarn, full, doomed, hint...) before they
@@ -159,7 +159,7 @@ function prepShowcaseSave(lv) {
 }
 
 // ================================================================== showcase board (record / og)
-// 18 strands on a 9x10 pumpkin, cap 4, par 3, 6 colours, no knots (tools/knot-kitty generator, picked by planShow:
+// 20 strands on a 9x10 pumpkin, cap 4, par 3, 6 colours, no knots (tools/knot-kitty generator, picked by planShow:
 // CHAIN x3 at peak 3 = 3 stars). Applied only when no ?lv= is given.
 export const SHOWCASE = {"cols":9,"rows":10,"cap":4,"shape":"pumpkin","strands":[{"pegs":[[8,5],[6,6]],"bow":-0.072,"c":1,"d":3},{"pegs":[[5,8],[4,6]],"bow":0.06,"c":2,"d":18},{"pegs":[[6.5,7],[4,8]],"bow":0.117,"c":2,"d":19},{"pegs":[[4,7],[5,5]],"bow":0.107,"c":0,"d":4},{"pegs":[[5.5,3],[7.5,6.5]],"bow":-0.105,"c":3,"d":14},{"pegs":[[7.5,4],[4.5,4]],"bow":-0.054,"c":1,"d":2},{"pegs":[[4,5],[6,8.5]],"bow":-0.056,"c":3,"d":5},{"pegs":[[4,0],[3.5,2.5]],"bow":0.109,"c":1,"d":17},{"pegs":[[2,3],[4.5,1]],"bow":-0.051,"c":2,"d":8},{"pegs":[[1.5,2],[3.5,3.5]],"bow":-0.119,"c":2,"d":0},{"pegs":[[1.5,5.5],[0.5,4]],"bow":0.058,"c":2,"d":1},{"pegs":[[2.5,4],[0.5,5.5]],"bow":0.057,"c":0,"d":7},{"pegs":[[1.5,4],[3,6.5]],"bow":-0.105,"c":0,"d":10},{"pegs":[[2,8.5],[3,5]],"bow":-0.116,"c":2,"d":11},{"pegs":[[1.5,7],[3,9]],"bow":-0.081,"c":3,"d":15},{"pegs":[[4.5,3],[6,5]],"bow":-0.07,"c":0,"d":12},{"pegs":[[6.5,3],[5.5,1.5]],"bow":-0.112,"c":3,"d":13},{"pegs":[[6.5,2],[4.5,2]],"bow":-0.084,"c":3,"d":9},{"pegs":[[3,8],[4.5,9]],"bow":0.114,"c":0,"d":16},{"pegs":[[5,0],[2.5,1.5]],"bow":-0.062,"c":0,"d":6}],"queue":[3,2,3,1,2,0,0],"par":3,"sol":[2,1,4,6,14,13,0,7,16,17,8,9,15,5,12,11,10,3,18,19],"show":[16,14,2,13,1,17,7,6,15,4,5,0,8,9,12,11,10,3,18,19]};
 const SHOW_ON = (REC_ON || on('og')) && !LV_PARAM && !on('real');

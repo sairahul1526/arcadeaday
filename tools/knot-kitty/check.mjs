@@ -4,6 +4,8 @@
 // fix2: also verifies bonus-data.js (Bonus Tangles): same gates as a daily board, exact solve, par/sol replay, geometry
 //   distinct from every campaign level, daily board and other bonus board (any mirror), >= 30 boards, and getBonus()
 //   serving board i for i < count and the daily remix after it.
+// fix3: par may be raised above the solver optimum (tune4.mjs 'par'); then stats.opt holds the optimum, the solver and the
+//   sol line must hit stats.opt exactly, and opt <= par < cap.
 import LEVELS from '../../games/knot-kitty/levels-data.js';
 import DAILIES from '../../games/knot-kitty/dailies-data.js';
 import BONUS from '../../games/knot-kitty/bonus-data.js';
@@ -77,7 +79,10 @@ function checkLevel(L, where, { daily = false } = {}) {
   // solve
   const r = solve(puz, null, 600000);
   if (!r.exact) fail(where, 'solver aborted');
-  if (r.peak !== L.par) fail(where, `par ${L.par} but solver says ${r.peak}`);
+  // fix3: par is the 3-star line; it may sit above the solver optimum (stats.opt, tune4 'par') but stays below cap
+  const opt = L.stats && L.stats.opt != null ? L.stats.opt : L.par;
+  if (r.peak !== opt) fail(where, `${opt === L.par ? 'par' : 'stats.opt'} ${opt} but solver says ${r.peak}`);
+  if (L.par < opt || (L.par !== opt && L.par >= L.cap)) fail(where, `par ${L.par} outside [opt ${opt}, cap ${L.cap})`);
   // sol replay
   const st = initState(puz);
   for (const id of L.sol) {
@@ -86,7 +91,7 @@ function checkLevel(L, where, { daily = false } = {}) {
     pull(puz, st, id);
   }
   if (!isWon(puz, st)) fail(where, 'sol does not win');
-  else if (st.peak !== L.par) fail(where, `sol peak ${st.peak} != par ${L.par}`);
+  else if (st.peak !== opt) fail(where, `sol peak ${st.peak} != optimum ${opt}`);
   // bots
   puz.par = L.par;
   const bots = {};

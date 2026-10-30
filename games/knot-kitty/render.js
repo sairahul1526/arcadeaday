@@ -1066,6 +1066,24 @@ function spoolBox(x, y, h, n, w) {
   const hx = Math.max(W * 0.62, lr * 1.25) + 4;
   return [x - hx, yc - H / 2 + ry * 0.6 - lr * 1.55 - 4, x + hx, Math.max(yc + H / 2 + ry, y + H / 2 + pr * 3.2) + 4];
 }
+// fix3 (critic r2, art 1: on tablets "more" ran into the 4th spool's colour badge): "+N more" is now one pill that sits
+//   right of the last NEXT spool's badge when it fits on screen, else just above the badge; never on it.
+//   ui.js uses the same box for the "+1 = …" tag. Returns { x0, y0, x1, y1, fs, label } or null.
+let measureG = null;
+export function moreChip(g, rs, q1, more, ui, W) {
+  if (!(more > 0) || !rs || !rs.more) return null;
+  const fs = Math.max(12, 12.5 * ui), label = `+${more} more`;
+  if (!g) g = measureG || (measureG = document.createElement('canvas').getContext('2d'));
+  g.font = `900 ${fs}px ${FONT_B}`;
+  const pw = g.measureText(label).width + fs * 1.3, ph = fs * 1.6, pad = 4;
+  const p = rs.next[1];
+  if (!p || !q1) return { x0: rs.more.x - pw / 2, y0: rs.more.y - ph / 2, x1: rs.more.x + pw / 2, y1: rs.more.y + ph / 2, fs, label };
+  const n = q1.n || 3, H = n > 3 ? p.h * 1.4 : p.h, Wd = Math.min(p.w || p.h * 0.8, H * 1.05) * (n > 3 ? 1.1 : 1);
+  const lr = Math.max(7, Wd * 0.2), top = spoolBox(p.x, p.y, p.h, n, p.w)[1], bcy = top + 4 + lr;
+  let x0 = p.x + lr + 5, y0 = bcy - lr - ph * 0.15;
+  if (x0 + pw > W - pad) { x0 = Math.max(pad, Math.min(p.x - pw / 2, W - pad - pw)); y0 = top - 2 - ph; }
+  return { x0, y0, x1: x0 + pw, y1: y0 + ph, fs, label };
+}
 /** Yarn ball with wrap lines + glyph. opt { bounce, alpha, dim, glyph (default true) }. */
 export function drawBall(g, x, y, r, c, opt = {}) {
   const rainbow = c === RAINBOW;
@@ -2894,16 +2912,11 @@ function drawRack(g, S, sess, rs, ui, T) {
     });
     const total = puz.spools ? puz.spools.length : (sess.level && sess.level.queue ? sess.level.queue.length : 0);
     const more = sess.moreN != null ? sess.moreN : total - (st.next || 0) - Math.min(2, sess.nextQ.length);
-    if (more > 0 && rs.more) {
-      const r = Math.max(11.5, 12 * ui); // the chip text (r * 1.05) stays at 12 px or more (ui2)
+    const mc = moreChip(g, rs, sess.nextQ[1], more, ui, S.L && S.L.W ? S.L.W : S.W || 1e4);
+    if (mc) {
       g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 2;
-      rr(g, rs.more.x - r * 1.1, rs.more.y - r * 0.75, r * 2.2, r * 1.5, r * 0.75); g.fill(); g.stroke();
-      text(g, '+' + more, rs.more.x, rs.more.y + 1, r * 1.05, { color: INK });
-      // "more" under the chip so it reads "+2 more" (critic r1: a bare "+2" read as a score). ≥ 12 px, NEXT style,
-      // nudged left if it would leave the screen
-      const ms = Math.max(12, 11 * ui), lw = ms * 1.9;
-      const mx = Math.min(rs.more.x, (S.L && S.L.W ? S.L.W : Infinity) - lw / 2 - 3);
-      text(g, 'more', mx, rs.more.y + r * 0.75 + ms * 0.62 + 1, ms, { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
+      rr(g, mc.x0, mc.y0, mc.x1 - mc.x0, mc.y1 - mc.y0, (mc.y1 - mc.y0) / 2); g.fill(); g.stroke();
+      text(g, mc.label, (mc.x0 + mc.x1) / 2, (mc.y0 + mc.y1) / 2 + 1, mc.fs, { font: FONT_B, weight: 900, color: INK });
     }
   }
   // active slots: leaving spool rolls off right; current rolls in from the NEXT shelf

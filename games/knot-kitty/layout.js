@@ -38,6 +38,25 @@ function webBottomInset(H) {
   } catch (e) { return 0; }
 }
 
+// fix3 (critic r2, art 2): notch and home-indicator insets (index.html sets viewport-fit=cover). A hidden probe reads
+//   env(safe-area-inset-*) once per screen size; it is 0 inside iframes (Playables, portals) and on desktop.
+let siKey = '', siVal = { t: 0, r: 0, b: 0, l: 0 };
+function safeInsets(W, H) {
+  const k = W + 'x' + H;
+  if (k === siKey || typeof document === 'undefined' || !document.body) return siVal;
+  siKey = k;
+  try {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+      'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+    document.body.appendChild(d);
+    const cs = getComputedStyle(d), px = v => clamp(parseFloat(v) || 0, 0, 0.2 * Math.min(W, H));
+    siVal = { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
+    d.remove();
+  } catch (e) { siVal = { t: 0, r: 0, b: 0, l: 0 }; }
+  return siVal;
+}
+
 // Fix 1 (UI): reference board for sizing decisions = the biggest shipped board, 8×10 (frame 9.2 × 10.2 units,
 //   plus 1.4 units for the kitten ledge → 11.6). GATE = §7.6 floor for its unit at 320×480.
 const REF_W = 9.2, REF_H = 11.6, GATE = 24.4;
@@ -68,11 +87,12 @@ export function computeLayout(W, H) {
   //   play safe rect no longer gives that strip away.
   const inset = webBottomInset(H);
 
-  // safe rect
+  // safe rect, inside the device's safe-area insets
+  const si = safeInsets(W, H), AW = Math.max(1, W - si.l - si.r), AH = Math.max(1, H - si.t - si.b);
   let sw, sh;
-  if (orient === 'landscape') { sw = Math.min(W, 2.1 * H, 1100 * u); sh = Math.min(H, 700 * u); }
-  else { sw = Math.min(W, 520 * u); sh = Math.min(H, 2.3 * W); }
-  const safe = R(Math.round((W - sw) / 2), Math.round((H - sh) / 2), sw, sh);
+  if (orient === 'landscape') { sw = Math.min(AW, 2.1 * AH, 1100 * u); sh = Math.min(AH, 700 * u); }
+  else { sw = Math.min(AW, 520 * u); sh = Math.min(AH, 2.3 * AW); }
+  const safe = R(Math.round(si.l + (AW - sw) / 2), Math.round(si.t + (AH - sh) / 2), sw, sh);
   const sx = safe.x, sy = safe.y, sr = safe.x + safe.w, sb = safe.y + safe.h;
 
   const L = { W, H, u, orient, shape, m, safe, inset, boostDir: 'tray' };
@@ -89,7 +109,9 @@ export function computeLayout(W, H) {
     //   'row'  — fallback: tray with a one-row booster strip forced to ≥ 40 px cells.
     //   Leftover height (board width-limited) grows the rack (bigger spools), then the tray.
     const callH = Math.max(34 * u, Math.min(28, 40 * u + 6));
-    const bw = safe.w - 2 * m, bottom = sb - m * 0.5;
+    // fix3 (critic r2, art 2): the booster row kept 4 px from the screen edge; keep ≥ 10u clear (less when the
+    //   home-indicator inset already moved sb up)
+    const bw = safe.w - 2 * m, bottom = sb - Math.max(m * 0.5, 10 * u - si.b);
     const rack0 = 108 * u, rackMax = 140 * u, rackMin = 92 * u;
     const btnCap = Math.max(44, 60 * u);
     const boardH = (rackH, trayH) => bottom - trayH - m * 0.25 - (sy + hudH + rackH + callH + m * 0.5);
@@ -134,9 +156,10 @@ export function computeLayout(W, H) {
     {
       const rowH = Math.max(48, Math.min(60 * u, btnCap + 4, 48 + 14 * u));
       const bkH = Math.max(46, Math.min(66 * u, 50 + 16 * u));
-      const trayH = bkH + gap + rowH;
+      // fix3 (critic r2, art 2): a real gap between the basket and the booster row (was 4u, read as touching)
+      const bgap = Math.max(8, 10 * u), trayH = bkH + bgap + rowH;
       const unit = unitOf(bw, boardH(rack0, trayH)), unitMin = unitOf(bw, boardH(rackMin, trayH));
-      if (!tab && unitMin >= GATE && unit >= 0.85 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, unit };
+      if (!tab && unitMin >= GATE && unit >= 0.85 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, bgap, unit };
     }
     let rackH = rack0, trayH = C.trayH;
     // leftover height → rack (spools), clamp so 8×10 never drops under the §7.6 gate
@@ -156,7 +179,7 @@ export function computeLayout(W, H) {
     if (C.mode === 'band') {
       L.boostDir = 'row';
       L.basket = R(sx + m, L.tray.y, bw, C.bkH);
-      L.boosters = R(sx + m, L.tray.y + C.bkH + gap, bw, C.rowH);
+      L.boosters = R(sx + m, L.tray.y + C.bkH + C.bgap, bw, C.rowH);
       L.board = R(sx + m, top, bw, bh);
       // the kitten band reserves up to 0.6 unit more (bigger kitten) while the reference board stays ≥ the gate
       // polish round 3 (RENDER ask): the phone kitten may grow to 128u (was 100u) in the spare band height
