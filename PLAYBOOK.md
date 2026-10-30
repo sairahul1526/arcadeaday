@@ -168,7 +168,7 @@ default-src 'none'; script-src 'report-sample' 'self' 'unsafe-eval' 'unsafe-inli
 ```
 
 ### Official test suite
-The official test suite is at https://developers.google.com/youtube/gaming/playables/test_suite. After deploy, drive it with Playwright: enter `https://arcadeaday.com/yt/<slug>/` as the Game URL and read the MUST/SHOULD results. If it insists on an invite code we don't have, note that in the report and rely on `playables-check.mjs`.
+The official test suite is at https://developers.google.com/youtube/gaming/playables/test_suite. After deploy, open it in the built-in browser pane (in headless Playwright the tool's panel renders empty, as of 2026-10-30). Set the viewport to about 1000x1400 so the whole game frame shows, type `https://arcadeaday.com/yt/<slug>/` into the Game URL field, press the reload button, then play level 1 in the frame so "sendScore called with an integer" turns green. Read the MUST/SHOULD results, and reset the viewport afterwards. If it insists on an invite code we don't have, note that in the report and rely on `playables-check.mjs`.
 
 ### `tools/art/kie.mjs`: AI art (kie.ai, added 2026-10-30)
 Every game from Day 10 on uses real illustrated art: characters, bosses, backgrounds, win art, the portal cover and the icon. Code-drawn shapes are no longer the default. The key is `KIE_API_KEY` in `~/.config/arcadeaday.env`; never print, log or commit it.
