@@ -8,10 +8,14 @@
 //   kittenArt(id, happy)      // sprite id for kitten of level id (1..60); bosses on every 10th level
 //   bgArt(world)              // backdrop id for world 1..6
 //   WINS                      // celebration illustration ids
+//   want(id)                  // img(id), and starts a lazy load if it was never requested (wide backdrops)
+//   bgWideArt(world)          // 16:9 backdrop id for world 1..6 (desktop only, lazy: never in ALL)
 
 export const KITTENS = ['tabby', 'tuxedo', 'calico', 'siamese', 'black', 'grey', 'persian', 'browntabby',
   'cream', 'bengal', 'tortie', 'ginger-white'];
 export const BOSSES = { 10: 'b10', 20: 'b20', 30: 'b30', 40: 'b40', 50: 'b50', 60: 'b60' };
+import { SEASON_END } from './consts.js';
+
 export const BGS = [null, 'den', 'pumpkin', 'cabin', 'cafe', 'attic', 'roof'];
 export const WINS = ['win-yarnhug', 'win-pile', 'win-nap', 'win-ribbon'];
 
@@ -20,8 +24,13 @@ export const ALL = [
   ...Object.values(BOSSES).flatMap(b => [`boss-${b}-sad`, `boss-${b}-happy`]),
   ...BGS.filter(Boolean).map(b => `bg-${b}`),
   ...WINS,
+  'kit-hero-idle',
 ];
-export const FIRST = ['kit-tabby-sad', 'kit-tabby-happy', 'bg-den'];
+// DECISION: the title shows world 2 (Pumpkin Night) until SEASON_END (same IST-date rule as game.js seasonWorld),
+// so FIRST must hold the backdrop the title actually paints, plus the painted Kitty it sits in front of. Otherwise
+// the code-drawn room shows first and the painting pops in about a second later on 4G.
+const TITLE_BG = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10) < SEASON_END ? 'bg-pumpkin' : 'bg-den';
+export const FIRST = ['kit-hero-idle', 'kit-tabby-sad', 'kit-tabby-happy', TITLE_BG];
 
 const cache = new Map(); // id -> { im, ok, p }
 
@@ -35,7 +44,7 @@ function one(id) {
       const done = () => { e.ok = true; res(true); };
       im.decode ? im.decode().then(done, done) : done();
     };
-    im.onerror = () => res(false);
+    im.onerror = () => { e.bad = true; res(false); };
   });
   im.src = `art/${id}.webp`;
   cache.set(id, e);
@@ -57,3 +66,10 @@ export function kittenArt(id, happy = false) {
 }
 
 export const bgArt = world => `bg-${BGS[Math.min(6, Math.max(1, world | 0))]}`;
+export const bgWideArt = world => `bgw-${BGS[Math.min(6, Math.max(1, world | 0))]}`;
+
+/** img(id), and if id was never requested, start loading it now (null until decoded). For lazy, optional art. */
+export function want(id) { if (!cache.has(id)) one(id); return img(id); }
+
+/** Has id finished (loaded or failed)? Lets callers stop waiting on a missing file. */
+export function settled(id) { const e = cache.get(id); return !!e && (e.ok || e.bad); }

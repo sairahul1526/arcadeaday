@@ -1328,23 +1328,26 @@ function spriteOf(im) {
   let e = sprMem.get(im);
   if (e) return e;
   const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
-  e = { bb: { x: 0, y: 0, w, h }, gold: null };
+  e = { bb: { x: 0, y: 0, w, h }, gold: null, lum: 0.5 };
   try {
     const c = mkCanvas(w, h), cg = c.getContext('2d', { willReadFrequently: true });
     cg.drawImage(im, 0, 0);
     const d = cg.getImageData(0, 0, w, h).data;
-    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1, L = 0, n = 0;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (d[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      const i = (y * w + x) * 4;
+      if (d[i + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (d[i + 3] > 200) { L += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
     }
     if (x1 > x0 && y1 > y0) e.bb = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    if (n) e.lum = L / n / 255; // render2 R4: mean luminance of the opaque body (black kitten ≈ 0.27, tabby ≈ 0.66)
   } catch (err) { /* tainted or no 2D context: draw the full image */ }
   sprMem.set(im, e);
   return e;
 }
 function goldOf(im, e) {
   if (e.gold) return e.gold;
-  const { x, y, w, h } = e.bb;
+  const { x, y, w, h } = e.bb || { x: 0, y: 0, w: im.width, h: im.height };
   const c = mkCanvas(w, h), cg = c.getContext('2d');
   cg.drawImage(im, x, y, w, h, 0, 0, w, h);
   cg.globalCompositeOperation = 'color';
@@ -1367,6 +1370,164 @@ const LOOP_SPR = [
   { cx: 14, cy: -42, rx: 17, ry: 15, rot: 0.6 },
   { cx: -2, cy: -72, rx: 40, ry: 12, rot: -0.42 },
 ];
+// ---- render2 R3/R4: a unique, stable look per kitten id, built once per (sprite, id) into an offscreen canvas.
+// DECISION: the 12 breed paintings repeat every 12 levels, so ids 13..60 get variant k = ⌊(id−1)/12⌋ (1..4) of their
+//   breed: k odd → mirrored; a gentle natural tone per k (warm-light / rich / soft-pastel / honey; only warm tints and
+//   partial desaturation, so never a green or blue cat); and a small accessory per k (bell collar / bandana / bow tie
+//   / heart-tag collar) in a colour hashed from the id. Ids 1..12 keep the painting as is. The same id gives the same
+//   look in play (sad sprite), on the win card and in Kitten Corner (happy sprite). Bosses keep their own art.
+// DECISION: accessories are drawn 'source-atop' (they can never overhang the silhouette), then the sprite is
+//   redrawn through the head ellipse (and the clasped paws on sad poses) so the chin and paws sit over the collar.
+//   Anchors are in the sprite's 100-unit frame (x from the bbox centre, y up from the feet) and were measured on
+//   grid contact sheets: every sad painting except tabby shares one template pose.
+// DECISION (R4): sprites whose opaque body is dark (mean luminance < 0.32: the black kitten, boss b20) get a light
+//   cream rim baked behind the silhouette, and drawKittenArt lays a cached cream glow under them, so the face and
+//   outline read on the dark café / attic / rooftop floors. Per frame it is still one drawImage (+ one for the glow).
+const SAD_T = { x: 1, y: -52, hw: 24, head: [1, -75, 32, 22], paws: [-1, -45, 14, 11] };
+const NECK = {
+  'tabby-sad': { x: 0, y: -53, hw: 25, head: [-3, -75, 32, 22], paws: [-1, -46, 14, 11] },
+  'tabby-happy': { x: 2, y: -55, hw: 20 }, 'tuxedo-happy': { x: 7, y: -57, hw: 16 }, 'calico-happy': { x: -3, y: -56, hw: 18 },
+  'siamese-happy': { x: -8, y: -57, hw: 17 }, 'black-happy': { x: -9, y: -58, hw: 17 }, 'grey-happy': { x: -5, y: -63, hw: 16 },
+  'persian-happy': { x: 8, y: -60, hw: 17 }, 'browntabby-happy': { x: 3, y: -55, hw: 17 }, 'cream-happy': { x: 1, y: -61, hw: 16 },
+  'bengal-happy': { x: -4, y: -55, hw: 15 }, 'tortie-happy': { x: -5, y: -57, hw: 15 }, 'ginger-white-happy': { x: 6, y: -54, hw: 16 },
+};
+const TONES = [null,
+  [['screen', '#FFD9A8', 0.22]],
+  [['multiply', '#E6BC90', 0.4]],
+  [['saturation', '#808080', 0.38], ['screen', '#FFF0E0', 0.14]],
+  [['soft-light', '#FF9E3D', 0.5]],
+];
+const ACC = ['', 'bell', 'bandana', 'bowtie', 'tag'];
+const ACC_COL = ['#E8463A', '#1FB0A0', '#F5B82E', '#8E5BC2', '#F2627E', '#3D86EE', '#FF8A3D', '#5BBF4A'];
+const SPR_LINE = '#45263A'; // the paintings' plum outline
+const lookMem = new WeakMap(); // image → Map(id → look)
+const lookLRU = new Map();     // `${n}` → [im, id], oldest first (cap below)
+let lookN = 0;
+function neckOf(im) {
+  const m = /kit-([a-z-]+)-(sad|happy)\.webp/.exec(im.src || '');
+  if (!m) return null;
+  return NECK[m[1] + '-' + m[2]] || (m[2] === 'sad' ? SAD_T : null);
+}
+/** The look canvas for kitten id drawn from sprite im, or null to draw im as is. */
+function kitLook(id, im) {
+  const e = spriteOf(im);
+  const k = isBossKit(id) ? 0 : clamp(Math.floor((id - 1) / 12), 0, 4);
+  const dark = e.lum < 0.32;
+  if (!k && !dark) return null;
+  let m = lookMem.get(im);
+  if (!m) { m = new Map(); lookMem.set(im, m); }
+  let L = m.get(id);
+  if (L) return L;
+  try { L = buildLook(im, e, id, k, dark); } catch (err) { L = null; }
+  if (!L) return null;
+  m.set(id, L);
+  lookLRU.set(++lookN, [im, id]);
+  while (lookLRU.size > 80) { const [kk, v] = lookLRU.entries().next().value; lookLRU.delete(kk); const mm = lookMem.get(v[0]); if (mm) mm.delete(v[1]); }
+  return L;
+}
+function buildLook(im, e, id, k, dark) {
+  const bb = e.bb, U = bb.h / 100, pad = Math.ceil(Math.max(3, bb.h * 0.02));
+  const cw = bb.w + pad * 2, ch = bb.h + pad * 2, flip = k % 2 === 1;
+  // 1) toned sprite
+  const T = mkCanvas(cw, ch), tg = T.getContext('2d');
+  const put = (g2) => {
+    g2.save();
+    if (flip) { g2.translate(cw, 0); g2.scale(-1, 1); }
+    g2.drawImage(im, bb.x, bb.y, bb.w, bb.h, pad, pad, bb.w, bb.h);
+    g2.restore();
+  };
+  put(tg);
+  if (TONES[k]) {
+    for (const [op, col, a] of TONES[k]) { tg.globalCompositeOperation = op; tg.globalAlpha = a; tg.fillStyle = col; tg.fillRect(0, 0, cw, ch); }
+    tg.globalAlpha = 1; tg.globalCompositeOperation = 'destination-in'; put(tg); tg.globalCompositeOperation = 'source-over';
+  }
+  const V = mkCanvas(cw, ch), vg = V.getContext('2d');
+  vg.drawImage(T, 0, 0);
+  // 2) accessory, in frame units: px = pad + bb.w/2 + x·U, py = pad + bb.h + y·U
+  const n = neckOf(im), acc = ACC[k];
+  if (n && acc) {
+    const nx = flip ? -n.x : n.x;
+    vg.save();
+    vg.translate(pad + bb.w / 2, pad + bb.h); vg.scale(U, U);
+    vg.globalCompositeOperation = 'source-atop';
+    drawAccessory(vg, acc, nx, n.y, n.hw, ACC_COL[Math.floor(hash(id, 31) * ACC_COL.length)]);
+    vg.restore();
+    // chin (and clasped paws) back over the collar
+    const hd = n.head || [n.x, n.y - 19, Math.max(26, n.hw * 1.7), 20];
+    vg.save();
+    vg.translate(pad + bb.w / 2, pad + bb.h); vg.scale(U, U);
+    vg.beginPath();
+    vg.ellipse(flip ? -hd[0] : hd[0], hd[1], hd[2], hd[3], 0, 0, TAU);
+    if (n.paws) { const q = n.paws; vg.moveTo((flip ? -q[0] : q[0]) + q[2], q[1]); vg.ellipse(flip ? -q[0] : q[0], q[1], q[2], q[3], 0, 0, TAU); }
+    vg.clip();
+    vg.setTransform(1, 0, 0, 1, 0, 0);
+    vg.drawImage(T, 0, 0);
+    vg.restore();
+  }
+  // 3) light rim behind a dark sprite: the silhouette dilated by r px, filled cream, laid under everything
+  if (dark) {
+    const R = mkCanvas(cw, ch), rg = R.getContext('2d'), r = Math.max(1.5, bb.h * 0.013);
+    for (let i = 0; i < 12; i++) { const a = i * TAU / 12; rg.drawImage(T, Math.cos(a) * r, Math.sin(a) * r); }
+    rg.globalCompositeOperation = 'source-in'; rg.fillStyle = 'rgba(255,238,206,0.92)'; rg.fillRect(0, 0, cw, ch);
+    vg.globalCompositeOperation = 'destination-over'; vg.drawImage(R, 0, 0); vg.globalCompositeOperation = 'source-over';
+    R.width = R.height = 1;
+  }
+  T.width = T.height = 1;
+  return { cv: V, pad, bw: bb.w, bh: bb.h, gold: null, dark };
+}
+function drawAccessory(g, acc, x, y, hw, col) {
+  const dk = mix(col, INK, 0.35), lt = mix(col, '#FFFFFF', 0.45);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const band = (w) => {
+    g.beginPath(); g.moveTo(x - hw - 2, y + 0.5); g.quadraticCurveTo(x, y + 5.5, x + hw + 2, y + 0.5);
+    g.strokeStyle = SPR_LINE; g.lineWidth = w + 2; g.stroke();
+    g.strokeStyle = col; g.lineWidth = w; g.stroke();
+    g.beginPath(); g.moveTo(x - hw, y - 0.3); g.quadraticCurveTo(x, y + 4.4, x + hw, y - 0.3);
+    g.strokeStyle = lt; g.lineWidth = 0.8; g.stroke();
+  };
+  if (acc === 'bell' || acc === 'tag') {
+    band(3.2);
+    const by = y + 6.6;
+    if (acc === 'bell') {
+      g.fillStyle = '#F5C542'; g.strokeStyle = SPR_LINE; g.lineWidth = 1;
+      g.beginPath(); g.arc(x, by, 3.1, 0, TAU); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(x - 2.6, by - 0.4); g.lineTo(x + 2.6, by - 0.4); g.stroke();
+      g.fillStyle = SPR_LINE; g.beginPath(); g.arc(x, by + 1.2, 0.8, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.arc(x - 1.1, by - 1.5, 0.8, 0, TAU); g.fill();
+    } else {
+      const r = 3;
+      g.fillStyle = '#F7D16A'; g.strokeStyle = SPR_LINE; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x, by + r * 0.9);
+      g.bezierCurveTo(x - r * 1.5, by - r * 0.1, x - r * 0.7, by - r * 1.25, x, by - r * 0.45);
+      g.bezierCurveTo(x + r * 0.7, by - r * 1.25, x + r * 1.5, by - r * 0.1, x, by + r * 0.9);
+      g.closePath(); g.fill(); g.stroke();
+    }
+  } else if (acc === 'bandana') {
+    const w = hw * 0.95, dpt = Math.max(9, hw * 0.75);
+    g.beginPath(); g.moveTo(x - w, y + 1); g.quadraticCurveTo(x, y + 4.5, x + w, y + 1); g.lineTo(x + 1.5, y + 2 + dpt); g.closePath();
+    g.fillStyle = col; g.fill(); g.strokeStyle = SPR_LINE; g.lineWidth = 1.1; g.stroke();
+    g.fillStyle = 'rgba(255,248,236,0.9)';
+    for (const [dx, dy] of [[-w * 0.5, 3.2], [w * 0.45, 3.4], [0, 6], [-w * 0.15, 3], [1, dpt * 0.75]]) { g.beginPath(); g.arc(x + dx, y + dy, 0.9, 0, TAU); g.fill(); }
+    g.strokeStyle = dk; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - w * 0.9, y + 2); g.quadraticCurveTo(x, y + 5.2, x + w * 0.9, y + 2); g.stroke();
+  } else if (acc === 'bowtie') {
+    const by = y + 3.8;
+    g.fillStyle = col; g.strokeStyle = SPR_LINE; g.lineWidth = 1;
+    for (const sd of [-1, 1]) { g.beginPath(); g.moveTo(x, by); g.lineTo(x + sd * 10, by - 5.2); g.quadraticCurveTo(x + sd * 11.4, by, x + sd * 10, by + 5.2); g.closePath(); g.fill(); g.stroke(); }
+    g.fillStyle = dk; g.beginPath(); g.ellipse(x, by, 2.8, 3.3, 0, 0, TAU); g.fill(); g.stroke();
+    g.strokeStyle = lt; g.lineWidth = 0.9;
+    for (const sd of [-1, 1]) { g.beginPath(); g.moveTo(x + sd * 3.8, by - 1.5); g.lineTo(x + sd * 8, by - 3.4); g.stroke(); }
+  }
+}
+// A cream glow under dark sprites: one gradient canvas, made once, drawn scaled.
+let glowCv = null;
+function glowCanvas() {
+  if (glowCv) return glowCv;
+  glowCv = mkCanvas(128, 128);
+  const gg = glowCv.getContext('2d'), gr = gg.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,240,210,0.6)'); gr.addColorStop(0.55, 'rgba(255,232,196,0.24)'); gr.addColorStop(1, 'rgba(255,230,190,0)');
+  gg.fillStyle = gr; gg.fillRect(0, 0, 128, 128);
+  return glowCv;
+}
 /** Level id of the kitten: o.id, else the inverse of ui.js's breed/coat mapping (breed = (id−1)%6, coat = ⌊(id−1)/6⌋). */
 const kitIdOf = o => (o.id > 0 ? o.id | 0 : (o.coat | 0) * 6 + (o.breed | 0) + 1);
 /** The decoded sprite for this kitten (happy for stages 3–4), falling back to the other mood, or null. */
@@ -1493,11 +1654,15 @@ function drawKittenArt(g, x, y, s0, o, id, im) {
     else { dy = -Math.max(0, Math.sin(t * 2.2)) * 2; sy = 1 + Math.sin(t * 2.2) * 0.015; }
   }
   if (flinch > 0) { sy *= 1 - flinch * 0.12; sx *= 1 + flinch * 0.1; rot += Math.sin(t * 60) * 0.05 * flinch; }
-  const e = spriteOf(im), bb = e.bb;
+  const e = spriteOf(im), bb = e.bb, look = kitLook(id, im);
   const dh = s, dw = bb.w * s / bb.h;
   // ground shadow (stays on the ledge while the sprite jumps)
   g.fillStyle = 'rgba(30,14,20,0.26)';
   g.beginPath(); g.ellipse(x + 2, y + 1, dw * 0.36, Math.max(2, s * 0.05), 0, 0, TAU); g.fill();
+  if (look && look.dark && !o.golden) { // R4: soft cream glow so a dark kitten separates from a dark floor
+    const gw = dw * 1.5, gh = s * 1.25;
+    g.drawImage(glowCanvas(), x - gw / 2, y + dy * k - s * 0.5 - gh / 2, gw, gh);
+  }
   if (o.golden) { // warm halo behind a golden kitten
     const cy = y + dy * k - s * 0.5, R = s * 0.75;
     const gr = g.createRadialGradient(x, cy, s * 0.08, x, cy, R);
@@ -1514,7 +1679,11 @@ function drawKittenArt(g, x, y, s0, o, id, im) {
     for (let i = 0; i < Math.min(loops, 4); i++) drawLoopHalf(g, LOOP_SPR[i], cols[i % cols.length], false);
     g.restore();
   }
-  if (o.golden) g.drawImage(goldOf(im, e), -dw / 2, -dh, dw, dh);
+  if (look) {
+    const sc = dh / look.bh, p = look.pad * sc;
+    const src = o.golden ? goldOf(look.cv, look) : look.cv;
+    g.drawImage(src, -dw / 2 - p, -dh - p, look.cv.width * sc, look.cv.height * sc);
+  } else if (o.golden) g.drawImage(goldOf(im, e), -dw / 2, -dh, dw, dh);
   else g.drawImage(im, bb.x, bb.y, bb.w, bb.h, -dw / 2, -dh, dw, dh);
   if (loops > 0) {
     g.save(); g.scale(k, k);
@@ -1678,11 +1847,161 @@ function drawStarPath(g, x, y, r) {
   for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.48 : r; g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); }
   g.closePath();
 }
+// ---- render2 R2: the hero Kitty is painted now (same kie.ai style as every kitten), not the vector cat.
+// DECISION: three painted poses carry all seven anims: kit-hero-idle (idle / swat / sleep), kit-tabby-sad (sad /
+//   worried) and kit-tabby-happy (cheer / celebrate). Motion is code-side squash, lean, hop and spin around the
+//   same pivots the vector cat used, plus a falling tear (sad) and the old sweat drop (worried). The vector drawCat
+//   path stays as the fallback while a sprite is still decoding.
+// DECISION: shop outfits are the existing vector OUTFIT layers, re-anchored per pose: body layers (scarf, pumpkin,
+//   snow) are mapped onto the painted neck / torso, the sprite is redrawn through the head ellipse and the front
+//   paws / tail so they sit over the knit, then head layers (bow, witch hat, crown, helmet) go on top. Strokes use
+//   the paintings' plum outline colour at a matching weight. Each (pose, outfit, resolution) is baked once into an
+//   offscreen canvas (small LRU), so a frame is one drawImage — no per-frame paths or filters.
+// Anchors in the sprite's 100-unit frame (x from the bbox centre, y up from the feet; measured on grid sheets):
+//   head [cx, cy, half-width, tilt], neck [x, chin y, half-width], body [cx, cy, rx, ry, rot], front [ellipses].
+const KPOSE = {
+  hero: { id: 'kit-hero-idle', head: [-5, -72, 30, 0], neck: [-5, -51, 22], body: [-6, -27, 25, 23, 0], front: [[-15, -5, 14, 6], [19, -11, 17, 10]], cx: -5 },
+  sad: { id: 'kit-tabby-sad', head: [-3, -76, 32, 0], neck: [0, -54, 25], body: [1, -28, 30, 25, 0], front: [[-1, -46, 13, 9], [-14, -5, 10, 6], [21, -10, 18, 9]], cx: 0, tear: [17, -68] },
+  happy: { id: 'kit-tabby-happy', head: [0, -76, 30, -0.06], neck: [2, -53, 21], body: [5, -34, 21, 19, 0.2], front: [[-38, -42, 9, 21, -0.35], [36, -58, 9, 10], [-16, -6, 8, 7], [7, -5, 7, 6]], cx: 2 },
+};
+const KFX0 = -80, KFY0 = -150, KFW = 160, KFH = 156; // composite frame, units
+const kitComp = new Map(); // `${pose}|${outfit}|${P}` → canvas (LRU, oldest first)
+function kittyComp(pose, outfit, P) {
+  const key = pose + '|' + outfit + '|' + P;
+  let cv = kitComp.get(key);
+  if (cv) { kitComp.delete(key); kitComp.set(key, cv); return cv; }
+  const K = KPOSE[pose], of = OUTFIT[outfit], im = img(K.id);
+  if (!im || !of) return null;
+  const bb = spriteOf(im).bb, sw = bb.w * 100 / bb.h;
+  cv = mkCanvas(Math.ceil(KFW * P), Math.ceil(KFH * P));
+  const g = cv.getContext('2d');
+  g.setTransform(P, 0, 0, P, -KFX0 * P, -KFY0 * P);
+  const sprite = () => g.drawImage(im, bb.x, bb.y, bb.w, bb.h, -sw / 2, -100, sw, 100);
+  const c = { fur: KITTY.fur, line: SPR_LINE, lw: 2.1 };
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  sprite();
+  const [hx, hy, hw, tilt] = K.head, [nx, ny, nw] = K.neck, [bx, by, brx, bry, brot] = K.body;
+  const inT = (fn) => { g.save(); fn(); g.restore(); };
+  if (of.under && outfit === 'scarf') { // a scarf may drape past the silhouette
+    inT(() => { g.translate(nx, ny + 3); g.scale(nw / 25, nw / 25); g.translate(0, 30); of.under(g, c); });
+  } else if (of.under) {
+    // a jumper takes the painted body's shape: knit layer clipped to the silhouette, with the painting's plum
+    // outline put back along the silhouette edge (silhouette minus a copy eroded by ~1.3 units)
+    const L = mkCanvas(cv.width, cv.height), lg = L.getContext('2d');
+    lg.setTransform(P, 0, 0, P, -KFX0 * P, -KFY0 * P); lg.lineJoin = 'round'; lg.lineCap = 'round';
+    jumper(lg, outfit, K, c);
+    lg.setTransform(1, 0, 0, 1, 0, 0);
+    lg.globalCompositeOperation = 'destination-in'; lg.drawImage(cv, 0, 0);
+    const E = mkCanvas(cv.width, cv.height), eg = E.getContext('2d'), r = 1.3 * P;
+    eg.drawImage(cv, 0, 0); eg.globalCompositeOperation = 'destination-in';
+    for (let i = 0; i < 8; i++) { const a = i * TAU / 8; eg.drawImage(cv, Math.cos(a) * r, Math.sin(a) * r); }
+    eg.globalCompositeOperation = 'xor'; eg.drawImage(cv, 0, 0); // → the edge band only
+    eg.globalCompositeOperation = 'source-in'; eg.fillStyle = SPR_LINE; eg.fillRect(0, 0, E.width, E.height);
+    lg.globalCompositeOperation = 'source-atop'; lg.drawImage(E, 0, 0);
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(L, 0, 0); g.restore();
+    L.width = L.height = E.width = E.height = 1;
+  }
+  if (of.under) {
+    // head (down to the chin) and the front paws / tail back over the knit
+    inT(() => {
+      g.beginPath();
+      g.ellipse(hx, hy, hw * 1.12, ny - hy + 1, tilt, 0, TAU);
+      for (const [fx, fy, frx, fry, fr = 0] of K.front) { g.moveTo(fx + frx * Math.cos(fr), fy + frx * Math.sin(fr)); g.ellipse(fx, fy, frx, fry, fr, 0, TAU); }
+      g.clip(); sprite();
+    });
+  }
+  if (of.over) {
+    inT(() => {
+      if (outfit === 'bow') { g.translate(nx, ny + 3); g.scale(nw / 25, nw / 25); g.translate(0, 30); }
+      else { g.translate(hx, hy); g.rotate(tilt); g.scale(hw / 33, hw / 33); g.translate(0, 60); }
+      of.over(g, c);
+    });
+  }
+  kitComp.set(key, cv);
+  while (kitComp.size > 12) { const k0 = kitComp.keys().next().value; const old = kitComp.get(k0); kitComp.delete(k0); old.width = old.height = 1; }
+  return cv;
+}
+/** A jumper on a painted pose: knit everywhere below a curved neckline (the caller clips it to the silhouette), the
+ *  outfit's motif centred on the torso, and a rib collar along the neckline. Same colours as the vector OUTFIT. */
+function jumper(g, outfit, K, c) {
+  const [nx, ny, nw] = K.neck, [bx, by, brx, bry, brot] = K.body;
+  const pk = outfit === 'pumpkin', base = pk ? '#F07F22' : '#3D86EE', dark = pk ? '#C85F12' : '#2A63B8';
+  const y0 = ny + 3, sag = 5;
+  const p = new Path2D(); p.moveTo(-70, y0 - 4); p.quadraticCurveTo(nx, y0 + sag * 2, 70, y0 - 4); p.lineTo(70, 8); p.lineTo(-70, 8); p.closePath();
+  knit(g, p, base, dark);
+  g.save(); g.clip(p);
+  g.translate(bx, by); g.rotate(brot); g.scale(brx / 26.5, bry / 22); g.translate(0, 24);
+  if (pk) {
+    g.strokeStyle = dark; g.lineWidth = 2.4;
+    for (const x of [-16, 16]) { g.beginPath(); g.moveTo(x, -48); g.quadraticCurveTo(x * 1.35, -24, x, 0); g.stroke(); }
+    g.fillStyle = '#3B1F12';
+    g.beginPath(); g.moveTo(-9, -28); g.lineTo(-4, -28); g.lineTo(-6.5, -33); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(4, -28); g.lineTo(9, -28); g.lineTo(6.5, -33); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(-10, -22); g.lineTo(10, -22); g.lineTo(7, -17); g.lineTo(3, -20); g.lineTo(0, -16); g.lineTo(-3, -20); g.lineTo(-7, -17); g.closePath(); g.fill();
+  } else {
+    g.strokeStyle = CREAM; g.lineWidth = 2.2;
+    for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; g.beginPath(); g.moveTo(Math.cos(a) * 9, -26 + Math.sin(a) * 9); g.lineTo(-Math.cos(a) * 9, -26 - Math.sin(a) * 9); g.stroke(); }
+    g.fillStyle = CREAM; for (let x = -36; x <= 36; x += 6) { g.beginPath(); g.moveTo(x, -10); g.lineTo(x + 3, -6); g.lineTo(x, -2); g.lineTo(x - 3, -6); g.closePath(); g.fill(); }
+  }
+  g.restore();
+  // rib collar on the neckline
+  const rib = new Path2D(); rib.moveTo(nx - nw * 1.25, y0 - 1); rib.quadraticCurveTo(nx, y0 + sag * 2 + 1, nx + nw * 1.25, y0 - 1);
+  g.strokeStyle = c.line; g.lineWidth = 6.4; g.stroke(rib);
+  g.strokeStyle = pk ? '#5E8C2E' : CREAM; g.lineWidth = 4.2; g.stroke(rib);
+  g.strokeStyle = pk ? '#47701F' : '#D9C9B0'; g.lineWidth = 0.9; g.setLineDash([1.2, 1.6]); g.stroke(rib); g.setLineDash([]);
+}
+/** Painted Kitty; returns false when the pose's sprite is not decoded yet (caller falls back to the vector cat). */
+function drawKittyArt(g, x, y, s, anim, t, outfit) {
+  const pose = anim === 'sad' || anim === 'worried' ? 'sad' : anim === 'cheer' || anim === 'celebrate' ? 'happy' : 'hero';
+  const K = KPOSE[pose], im = img(K.id);
+  if (!im) return false;
+  const bb = spriteOf(im).bb, sw = bb.w * 100 / bb.h, u = s / 100;
+  let dx = 0, dy = 0, rot = 0, sx = 1, sy = 1;
+  switch (anim) {
+    case 'swat': { const p = clamp(t / 0.25, 0, 1), q = Math.sin(p * Math.PI); rot = 0.1 * q; dx = 3 * q; sy = 1 - 0.04 * q; sx = 1 + 0.03 * q; break; }
+    case 'cheer': { const h = Math.abs(Math.sin(t * 9)) * Math.max(0, 1 - t / 1.2); dy = -h * 8; sy = 1 + h * 0.04; sx = 1 - h * 0.03; break; }
+    case 'worried': dx = Math.sin(t * 31) * 0.45; sy = 1 + Math.sin(t * 3) * 0.008; break;
+    case 'celebrate': {
+      const p = clamp(t / 0.8, 0, 1);
+      dy = -Math.sin(p * Math.PI) * 30; rot = p < 1 ? ease(p) * TAU : 0;
+      if (t > 0.8) { const h = Math.abs(Math.sin(t * 6)); dy = -h * 6; sy = 1 + h * 0.03; }
+      break;
+    }
+    case 'sad': { const e = ease(clamp(t / 0.35, 0, 1)); sy = 1 - 0.05 * e + Math.sin(t * 1.6) * 0.01; sx = 1 + 0.03 * e; break; }
+    case 'sleep': sy = 0.96 + Math.sin(t * 1.5) * 0.015; break;
+    default: { const b = Math.sin(t * 2.2); sy = 1 + b * 0.012; sx = 1 - b * 0.006; }
+  }
+  // ground shadow stays on the floor while Kitty hops
+  const lift = clamp(-dy / 40, 0, 0.6);
+  g.fillStyle = 'rgba(30,14,20,0.25)'; g.globalAlpha = 1 - lift;
+  g.beginPath(); g.ellipse(x + 2 * u, y + u, 31 * u * (1 - lift * 0.4), Math.max(1.5, 5.5 * u), 0, 0, TAU); g.fill();
+  g.globalAlpha = 1;
+  g.save();
+  g.translate(x + (dx - K.cx) * u, y + dy * u);
+  if (rot) { g.translate(K.cx * u, -45 * u); g.rotate(rot); g.translate(-K.cx * u, 45 * u); }
+  g.scale(sx * u, sy * u);
+  const cv = outfit && outfit !== 'tabby' && OUTFIT[outfit]
+    ? kittyComp(pose, outfit, Math.abs(g.getTransform().a) > 3.6 ? 5 : 3.5) : null;
+  if (cv) g.drawImage(cv, KFX0, KFY0, KFW, KFH);
+  else g.drawImage(im, bb.x, bb.y, bb.w, bb.h, -sw / 2, -100, sw, 100);
+  if (pose === 'sad' && anim === 'sad') { // a tear rolls down from Kitty's eye
+    const q = (t * 0.8) % 1, [tx, ty] = K.tear, yy = ty + q * 13, r = 2.4;
+    g.globalAlpha = Math.sin(q * Math.PI);
+    g.fillStyle = '#9FDcF7'; g.strokeStyle = SPR_LINE; g.lineWidth = 0.9;
+    g.beginPath(); g.moveTo(tx, yy - r * 1.9); g.quadraticCurveTo(tx + r * 1.2, yy + r * 0.2, tx, yy + r); g.quadraticCurveTo(tx - r * 1.2, yy + r * 0.2, tx, yy - r * 1.9);
+    g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(tx - r * 0.35, yy - r * 0.1, r * 0.3, 0, TAU); g.fill();
+    g.globalAlpha = 1;
+  }
+  g.restore();
+  return true;
+}
 /**
  * drawKitty(g, x, y, s, anim, t, outfit) — the hero: orange tabby. (x,y) feet, s height.
  * anim: 'idle'|'swat'|'cheer'|'worried'|'celebrate'|'sad'|'sleep'; t = seconds since the anim started.
  */
 export function drawKitty(g, x, y, s, anim = 'idle', t = 0, outfit = 'tabby') {
+  if (drawKittyArt(g, x, y, s, anim, t, outfit)) { kittyFx(g, x, y, s, anim, t); return; }
   const o = { ...KITTY, ears: 'up', eyes: 'open', mouth: 'w', arms: 'down', tail: Math.sin(t * Math.PI) * 0.8, t };
   let dy = 0;
   const ph = t % 4.1;
@@ -1711,6 +2030,9 @@ export function drawKitty(g, x, y, s, anim = 'idle', t = 0, outfit = 'tabby') {
   const of = OUTFIT[outfit];
   if (of) { o.under = of.under; o.over = of.over; }
   drawCat(g, x, y + dy * s / 100, s, o);
+  kittyFx(g, x, y, s, anim, t);
+}
+function kittyFx(g, x, y, s, anim, t) {
   if (anim === 'sleep') {
     for (let i = 0; i < 3; i++) {
       const p = ((t * 0.45 + i / 3) % 1);
@@ -2395,7 +2717,7 @@ function drawRack(g, S, sess, rs, ui, T) {
   // next queue (NEXT larger, next-next smaller), with label + "+N" chip
   if (hasNext) {
     const n0 = rs.next[0];
-    text(g, 'NEXT', n0.x, n0.y - n0.h * 0.5 - n0.h * 0.16 - Math.max(8, 10 * ui), Math.max(10, 11 * ui), { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
+    text(g, 'NEXT', n0.x, n0.y - n0.h * 0.5 - n0.h * 0.16 - Math.max(8, 10 * ui), Math.max(12, 11 * ui), { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
     sess.nextQ.slice(0, 2).forEach((q, i) => {
       const p = rs.next[i];
       if (!p || !q) return;
@@ -2407,7 +2729,7 @@ function drawRack(g, S, sess, rs, ui, T) {
     const total = puz.spools ? puz.spools.length : (sess.level && sess.level.queue ? sess.level.queue.length : 0);
     const more = sess.moreN != null ? sess.moreN : total - (st.next || 0) - Math.min(2, sess.nextQ.length);
     if (more > 0 && rs.more) {
-      const r = Math.max(10, 12 * ui);
+      const r = Math.max(11.5, 12 * ui); // the chip text (r * 1.05) stays at 12 px or more (ui2)
       g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 2;
       rr(g, rs.more.x - r * 1.1, rs.more.y - r * 0.75, r * 2.2, r * 1.5, r * 0.75); g.fill(); g.stroke();
       text(g, '+' + more, rs.more.x, rs.more.y + 1, r * 1.05, { color: INK });

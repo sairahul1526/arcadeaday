@@ -44,6 +44,7 @@ import * as M from './meta.js';
 import * as LV from './levels.js';
 import { canPull } from './rules.js';
 import * as AU from './audio.js';
+import * as PL from './play.js';
 import { img, WINS, BOSSES } from './art.js';
 
 // ---------- style ----------
@@ -72,6 +73,7 @@ const HOMES = ['title', 'map', 'allbeaten'];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const e3 = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+const eOut = t => { t = clamp(t, 0, 1); return 1 - (1 - t) * (1 - t) * (1 - t); };
 const eBack = t => { t = clamp(t, 0, 1) - 1; return 1 + 2.70158 * t * t * t + 1.70158 * t * t; };
 const safe = (f, d) => { try { const v = f(); return v === undefined ? d : v; } catch (e) { return d; } };
 const TAU2 = Math.PI * 2;
@@ -330,6 +332,18 @@ function layoutOf(S) {
   return U.L;
 }
 const isLand = S => S.W / S.H >= 1.15;
+// DECISION (ui2 U7): the site's "how to play / more games" chips (index.html nav.back) only show on the title, the map
+//   and the all-beaten screen with no card up; play, cards and every dialog hide them (body.kk-play, see index.html),
+//   so a stray tap can't leave the game mid-level. They are hidden with visibility (not display), so layout.js still
+//   measures the same inset and S.L never goes stale; screens that hide the chips simply use the full height.
+const navShown = S => !!S && (S.screen === 'title' || S.screen === 'map' || S.screen === 'allbeaten') && !U.card;
+const dlgInset = S => (navShown(S) ? layoutOf(S).inset || 0 : 0);
+function syncNav(S) {
+  const show = navShown(S);
+  if (U.navShow === show) return;
+  U.navShow = show;
+  try { if (typeof document !== 'undefined' && document.body) document.body.classList.toggle('kk-play', !show); } catch (e) { /* no DOM */ }
+}
 
 // ---------- buttons ----------
 function reg(b) { if (U.reg) U.btns.push(b); return b; }
@@ -368,7 +382,7 @@ function pill(g, b) {
   const avail = b.w - 2 * pad - (iw ? iw + h * 0.12 : 0) - (b.badge ? h * 0.3 : 0);
   const stroke = fg === '#fff' ? INK : null;
   if (b.sub) {
-    const s1 = fitSize(g, b.label, avail, h * 0.46, FT, '', 0.2), s2 = fitSize(g, b.sub, avail, h * 0.19, FB, '900');
+    const s1 = fitSize(g, b.label, avail, h * 0.46, FT, '', 0.2), s2 = Math.max(11.2, fitSize(g, b.sub, avail, Math.max(11.5, h * 0.19), FB, '900'));
     txt(g, b.label, x + b.w / 2, cy - h * 0.1, s1, { col: fg, stroke, sk: 0.2 });
     txt(g, b.sub, x + b.w / 2, cy + h * 0.27, s2, { f: FB, w: '900', col: fg === '#fff' ? CREAM : INK });
   } else {
@@ -380,10 +394,10 @@ function pill(g, b) {
     txt(g, b.label, ix + (iw ? iw + h * 0.12 : 0) + lw / 2, cy + h * 0.02, size, { col: fg, stroke, sk: 0.2 });
   }
   g.restore();
-  if (b.badge) badge(g, b.x + b.w - h * 0.12, b.y + h * 0.05, h * 0.3, b.badge, d);
+  if (b.badge) badge(g, b.x + b.w - h * 0.12, b.y + h * 0.05, Math.max(10.6, h * 0.3), b.badge, d);
 }
 /** Count badge (ink circle) or price chip (gold, with a yarn ball). */
-function badge(g, x, y, r, bd, d) {
+function badge(g, x, y, r, bd, d, maxR = Infinity) {
   g.save();
   if (bd.n != null) {
     g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = INK; g.fill(); g.lineWidth = Math.max(1, r * 0.16); g.strokeStyle = CREAM; g.stroke();
@@ -391,6 +405,7 @@ function badge(g, x, y, r, bd, d) {
   } else if (bd.price != null) {
     const s = r * 1.05, label = String(bd.price);
     const w = tw(g, label, s, FT) + s * 1.5;
+    if (x + w / 2 > maxR) x = maxR - w / 2;
     rr(g, x - w / 2, y - r * 0.75, w, r * 1.5, r * 0.75); g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1, r * 0.14); g.strokeStyle = GOLD_D; g.stroke();
     aIcon(g, 'ball', x - w / 2 + s * 0.62, y, s * 0.95);
     txt(g, label, x - w / 2 + s * 1.2 + (w - s * 1.5) / 2, y + r * 0.05, s, { col: INK });
@@ -418,7 +433,8 @@ function iconBtn(g, b) {
   aIcon(g, b.icon, cx, cy, R0 * 1.05, b.iconCol || ICOL[b.icon] || CREAM);
   g.restore();
   if (b.dot) { g.beginPath(); g.arc(cx + R0 * 0.72, cy0 - R0 * 0.72, Math.max(4, R0 * 0.24), 0, 7); g.fillStyle = TOMATO; g.fill(); g.lineWidth = Math.max(1, 2 * d); g.strokeStyle = '#fff'; g.stroke(); }
-  if (b.badge) badge(g, cx + R0 * 0.72, cy0 + R0 * 0.62, Math.max(7, R0 * 0.36), b.badge, d);
+  // ui2: badge digits ≥ 11 px (r ≥ 10); a price chip slides left so it never pokes past the button's box
+  if (b.badge) badge(g, cx + R0 * 0.72, cy0 + R0 * 0.62, Math.max(10.6, R0 * 0.36), b.badge, d, b.x + b.w);
 }
 function slider(g, s) {
   if (U.reg) U.sliders.push(s);
@@ -435,7 +451,9 @@ function toggle(g, b) {
   reg(b);
   const d = b.d, on = !!b.on;
   txt(g, b.label, b.x, b.y + b.h / 2, 16 * d, { f: FB, w: '800', align: 'left', maxW: b.w - 70 * d });
-  const sw = Math.min(56 * d, b.w * 0.3), sh = Math.min(30 * d, b.h * 0.8), sx = b.x + b.w - sw, sy = b.y + (b.h - sh) / 2;
+  // ui2 U8: right edge lines up with the slider track end above (slider(): s.x + s.w - kr + 4d), not the knob's reach
+  const kr = Math.min(b.h * 0.42, 13 * d), re = b.x + b.w - Math.max(0, kr - 4 * d);
+  const sw = Math.min(56 * d, b.w * 0.3), sh = Math.min(30 * d, b.h * 0.8), sx = re - sw, sy = b.y + (b.h - sh) / 2;
   rr(g, sx, sy, sw, sh, sh / 2); g.fillStyle = on ? TEAL : STITCH; g.fill(); g.lineWidth = Math.max(1.5, 2.2 * d); g.strokeStyle = INK; g.stroke();
   g.beginPath(); g.arc(on ? sx + sw - sh / 2 : sx + sh / 2, sy + sh / 2, sh * 0.36, 0, 7); g.fillStyle = '#fff'; g.fill(); g.stroke();
 }
@@ -761,8 +779,9 @@ function drawTeach(g, S, L) {
     g.restore();
   }
   if (t.label) {
-    const an = firstAnchor(S, L, t.label.at);
-    if (an) drawTag(g, S, t.label.text, an, u, a);
+    const ck = [t.label.at, t.label.text, S.W, S.H, S.sess && S.sess.B ? Math.round(S.sess.B.y) : 0].join('|');
+    if (t.lk !== ck) { const an = firstAnchor(S, L, t.label.at); t.lk = ck; t.lp = an ? safe(() => placeTag(g, S, L, t.label.text, an, t.label.at, u), null) : null; }
+    drawTag(g, S, t.label.text, t.lp, u, a);
   }
 }
 
@@ -871,6 +890,9 @@ export function update(dt, S) {
     const s = S.sess;
     S.L.hideBasket = !!(s && s.kind === 'level' && s.id === 1 && s.st && s.st.basket && s.st.basket.every(c => c < 0)
       && !(s.flights || []).some(f => f && f.dest && f.dest.kind === 'basket'));
+    // ui2 L3: an empty tray (no basket, no booster unlocked) lends its height to the board + kitten group
+    const free = !!(S.L.hideBasket && S.L.board && !BK.some(k => safe(() => M.boosterUnlocked(k), false)));
+    if (S.L.board && !!S.L.board.trayFree !== free) { S.L.board.trayFree = free; if (s) safe(() => PL.onResize(S, s)); }
   }
   const playing = S.screen === 'play' && !U.card;
 
@@ -1009,6 +1031,10 @@ function finishWin(fn) {
   }
   for (const c of U.extra) if (!list.some(x => x.key === c.key)) list.push(c);
   U.extra = [];
+  // ui2 U6: a star gift landing on the same win as a booster unlock (15★ ≈ L5) rides on the unlock card, so the
+  //   player gets one reward moment instead of two cards back to back.
+  const un = list.find(x => x.type === 'unlockBooster'), gi = list.findIndex(x => x.type === 'gift');
+  if (un && gi >= 0 && !(un.data && un.data.extra)) { un.data = { ...(un.data || {}), extra: list[gi].data || {} }; list.splice(gi, 1); }
   U.card = null;
   if (!list.length) { fn(); return; }
   U.cards = list; U.after = fn;
@@ -1113,6 +1139,7 @@ export function draw(g, S) {
     if (U.card) { U.reg = true; drawCard(g, S); }
     if (U.toast) drawToast(g, S);
   } finally { g.restore(); }
+  syncNav(S);
   if (!S.ui || typeof S.ui !== 'object') S.ui = {};
   S.ui.btns = U.btns;
   S.ui.card = U.card ? U.card.type : null;
@@ -1201,7 +1228,11 @@ function drawTitle(g, S) {
     items.forEach(([id, ic, label, act, dot], i) => {
       const x = cx - total / 2 + i * (2 * r + gapX);
       iconBtn(g, { id: 't-' + id, label, x, y, w: 2 * r, h: 2 * r, icon: ic, act, dot, d: e });
-      txt(g, label, x + r, y + 2 * r + 9 * e, 12 * e, { f: FB, w: '800', col: '#fff', stroke: INK, sk: 0.3, maxW: 2 * r + gapX * 0.9 });
+      // ui2 U8: ≥12px labels on a soft ink backing so they read over any background art
+      const mw = 2 * r + gapX - 4, fs = Math.max(12, fitSize(g, label, mw - 8, Math.max(12, 13 * e), FB, '800')), lw = Math.min(mw, tw(g, label, fs, FB, '800') + fs * 0.9);
+      const ly = y + 2 * r + 10 * e;
+      rr(g, x + r - lw / 2, ly - fs * 0.72, lw, fs * 1.44, fs * 0.72); g.fillStyle = 'rgba(43,30,40,0.42)'; g.fill();
+      txt(g, label, x + r, ly, fs, { f: FB, w: '800', col: '#fff', stroke: INK, sk: 0.22, maxW: lw - 4 });
     });
   };
   const playBtn = (cx, y, w, e) => pill(g, { id: 'title-play', label: 'PLAY', sub: playSub || null, kind: 'primary', x: cx - w / 2, y, w, h: 72 * e, act: playAct, d: e });
@@ -1513,10 +1544,10 @@ function drawHUD(g, S, live) {
   const ts = Math.min(22 * u, h.h * 0.44);
   if (plaque) {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.4, ts, { col: INK, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.min(13 * u, h.h * 0.26), { f: FB, w: '800', col: TEAL_D, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.max(11, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: TEAL_D, maxW });
   } else {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.min(13 * u, h.h * 0.26), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.max(11, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
   }
 }
 function drawBoosters(g, S) {
@@ -1547,14 +1578,53 @@ function drawCallout(g, S, L) {
   const wf = wrapFit(g, c.text, maxW, b.h * 0.86, Math.min(18 * u, b.h * 0.62), 13 * u, FB, '800');
   const textW = Math.max(...wf.lines.map(l => tw(g, l, wf.size, FB, '800')));
   const pw = Math.min(b.w, textW + 2 * padX), ph = Math.min(b.h, wf.size * 1.14 * wf.lines.length + 10 * u);
+  let cx = b.x + b.w / 2, cy = b.y + b.h / 2, tail = null;
+  const side = calloutSide(g, S, L, pw, ph);
+  if (side) { cx = side.cx; cy = side.cy; tail = side.tail; }
   g.save();
   g.globalAlpha = a;
-  const sc = 0.92 + 0.08 * e3(c.t / 0.15), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-  g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
-  rr(g, cx - pw / 2, cy - ph / 2, pw, ph, Math.min(ph / 2, 16 * u)); g.fillStyle = CREAM; g.fill();
+  const sc = 0.92 + 0.08 * e3(c.t / 0.15);
+  g.translate(tail ? tail.x : cx, tail ? tail.y : cy); g.scale(sc, sc); g.translate(-(tail ? tail.x : cx), -(tail ? tail.y : cy));
+  g.beginPath(); rr(g, cx - pw / 2, cy - ph / 2, pw, ph, Math.min(ph / 2, 16 * u)); g.fillStyle = CREAM; g.fill();
   g.lineWidth = Math.max(1.5, 2.5 * u); g.strokeStyle = INK; g.stroke();
+  if (tail) {
+    const bx = cx - pw / 2 + 1, tp = Math.min(ph * 0.28, 10 * u);
+    g.beginPath(); g.moveTo(bx, tail.ty - tp); g.lineTo(tail.x, tail.y); g.lineTo(bx, tail.ty + tp);
+    g.fill(); g.stroke(); g.fillRect(bx - 3, tail.ty - tp + 2, 4, 2 * tp - 4);
+  }
   lines(g, wf, cx, cy + wf.size * 0.04);
   g.restore();
+}
+// DECISION (ui2 U1): on the split (desktop / square) layout a tutorial line that goes with the on-board hand docks
+//   right beside the board frame at the hand's height, with a tail pointing at it, instead of floating in the right
+//   column far from the hand. It slides up/down to dodge the rack, basket and boosters; if no clean spot exists it
+//   stays in the column band as before. Portrait keeps the band (it already sits right above the board).
+function calloutSide(g, S, L, pw, ph) {
+  const sess = S.sess, h = U.hand;
+  if (L.orient !== 'landscape' || !sess || !sess.B || !h || h.src !== 'tut' || U.t < h.t0 - 0.3) return null;
+  const pt = tapPoint(h.id);
+  if (!pt) return null;
+  const B = sess.B, u = L.u, fx = B.x + B.w + B.unit * 0.5, tl = Math.max(10, 14 * u), x0 = fx + tl;
+  if (x0 + pw > S.W - L.m * 0.5) return null;
+  const key = [h.id, S.W, S.H, Math.round(pw), Math.round(ph)].join('|');
+  if (U.cside && U.cside.key === key) return U.cside.v;
+  const ob = tagObstacles(S, L, 'callout');
+  let best = null;
+  for (let i = 0; i <= 12; i++) {
+    const dy = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * ph * 0.5;
+    const y = clamp(pt.y + dy - ph / 2, L.safe.y + 4, L.safe.y + L.safe.h - ph - 4);
+    let sc = 0;
+    for (const q of ob) { const w = Math.min(x0 + pw, q.x1) - Math.max(x0, q.x0), hh = Math.min(y + ph, q.y1) - Math.max(y, q.y0); if (w > 0 && hh > 0) sc += q.wt * w * hh; }
+    sc = sc / (pw * ph) + Math.abs(y + ph / 2 - pt.y) / Math.max(1, B.h) * 0.6;
+    if (!best || sc < best.sc) best = { sc, y };
+  }
+  let v = null;
+  if (best && best.sc < 0.35) {
+    const cy = best.y + ph / 2, ty = clamp(pt.y, best.y + ph * 0.3, best.y + ph * 0.7);
+    v = { cx: x0 + pw / 2, cy, tail: { x: fx, y: ty, ty } };
+  }
+  U.cside = { key, v };
+  return v;
 }
 // DECISION (fix 2): pops live in the CALLOUT BAND (the strip between the spool rack and the board; in landscape the
 //   band in the right column), never at the spool: the old spool anchor pushed big pops up over the HUD subtitle.
@@ -1651,38 +1721,114 @@ const FIRST = [
   { key: 'x_more', ok: s => moreOf(s) > 0, text: s => `+${moreOf(s)} = more spools still to come`, at: 'more', dur: 6 },
   { key: 'x_par', ok: s => parShown(s) >= 0, text: 'Keep yarn left of the ★ flag for 3★', at: 'par', dur: 7 },
 ];
+// DECISION (ui2 L1): a first-time tag knows its TARGET box (t) and a preferred side; placeTag tries every side
+//   (above / below / left / right), slides along the target and may shrink one step, scoring each spot by how much
+//   it covers the kitten, the rack badges, the HUD, boosters and the board. Result is cached per tag + layout so it
+//   never jitters. Nothing it covers is interactive for long (tags fade after their duration or the first tap).
 function firstAnchor(S, L, at) {
   const s = S.sess;
   if (at === 'basket' || at === 'par') {
     const sl = safe(() => basketSlots(L, (s.basket || []).length), []);
     if (!sl.length) return null;
     const r = sl[0].r;
-    if (at === 'basket') return { x: (sl[0].x + sl[sl.length - 1].x) / 2, y: sl[0].y - r * 1.5, dir: -1 };
+    if (at === 'basket') return { pref: 'above', t: { x0: sl[0].x - r * 1.1, y0: sl[0].y - r * 1.15, x1: sl[sl.length - 1].x + r * 1.1, y1: sl[0].y + r * 1.1 } };
     const par = parShown(s);
     const xm = par === 0 ? sl[0].x - r * 1.3 : (sl[par - 1].x + sl[par].x) / 2;
-    return { x: xm, y: sl[0].y - r * 2.3, dir: -1 };
+    return { pref: 'above', t: { x0: xm - 2, y0: sl[0].y - r * 1.9, x1: xm + 2, y1: sl[0].y + r } };
   }
   const rs = safe(() => rackSlots(L), null);
   if (!rs) return null;
-  if (at === 'next' && rs.next[0]) return { x: rs.next[0].x, y: rs.next[0].y + rs.next[0].h * 0.55, dir: 1 };
-  if (at === 'more' && rs.more) return { x: rs.more.x, y: rs.more.y + 14 * L.u, dir: 1 };
-  if (at === 'rack') { const a = rs.active[0], b = rs.active[1]; return { x: (a.x + b.x) / 2, y: a.y + a.h * 0.55, dir: 1 }; }
+  const box = p => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 });
+  if (at === 'next' && rs.next[0]) return { pref: 'below', t: box(rs.next[0]) };
+  if (at === 'more' && rs.more) { const r = Math.max(10, 12 * L.u); return { pref: 'below', t: { x0: rs.more.x - r * 1.1, y0: rs.more.y - r * 0.75, x1: rs.more.x + r * 1.1, y1: rs.more.y + r * 0.75 } }; }
+  if (at === 'rack') { const a = box(rs.active[0]), b = box(rs.active[1]); return { pref: 'below', t: { x0: a.x0, y0: a.y0, x1: b.x1, y1: a.y1 } }; }
   return null;
 }
-function drawTag(g, S, text, an, u, a) {
-  const size = clamp(14 * u, 12, 30), pad = size * 0.7, maxW = Math.min(S.W - 24, 320 * u);
-  const fs = fitSize(g, text, maxW - 2 * pad, size, FB, '900');
-  const w = tw(g, text, fs, FB, '900') + 2 * pad, h = fs * 2.1, tip = fs * 0.6;
-  const x = clamp(an.x - w / 2, 8, S.W - 8 - w), y = an.dir < 0 ? an.y - tip - h : an.y + tip;
-  const bob = Math.sin(U.t * 4) * 2 * an.dir * -1;
-  g.save(); g.globalAlpha = a; g.translate(0, bob);
+/** Boxes a tag should not cover, with weights (kitten worst). The tag's own target is left out. */
+function tagObstacles(S, L, at) {
+  const s = S.sess, o = [], add = (x0, y0, x1, y1, wt) => o.push({ x0, y0, x1, y1, wt });
+  if (L.hud) add(L.hud.x, L.hud.y, L.hud.x + L.hud.w, L.hud.y + L.hud.h, 2);
+  const B = s && s.B;
+  if (B) {
+    add(B.x, B.y, B.x + B.w, B.y + B.h, 1.2);
+    const k = B.kitten;
+    if (k && k.s) { const ks = k.s * (s.kind === 'level' && s.id % 10 === 0 ? 1.4 : 1); add(k.x - ks * 0.55, k.y - ks * 1.02, k.x + ks * 0.55, k.y + k.s * 0.08, 5); }
+  }
+  const rs = safe(() => rackSlots(L), null);
+  if (rs) {
+    for (const p of rs.active) add(p.x - p.w / 2, p.y - p.h * 0.95, p.x + p.w / 2, p.y + p.h / 2, 2.5);
+    rs.next.forEach((p, i) => add(p.x - p.w / 2, p.y - p.h * (i ? 0.9 : 1.25), p.x + p.w / 2, p.y + p.h / 2, 2.5));
+    if (rs.kitty) add(rs.kitty.x - rs.kitty.s * 0.45, rs.kitty.y - rs.kitty.s, rs.kitty.x + rs.kitty.s * 0.45, rs.kitty.y, 1.5);
+    if (rs.more && at !== 'more' && moreOf(s) > 0) { const r = Math.max(10, 12 * L.u); add(rs.more.x - r * 1.1, rs.more.y - r * 0.75, rs.more.x + r * 1.1, rs.more.y + r * 0.75, 2.5); }
+  }
+  if (L.basket && !L.hideBasket && at !== 'basket' && at !== 'par') add(L.basket.x, L.basket.y, L.basket.x + L.basket.w, L.basket.y + L.basket.h, 1.5);
+  const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
+  const br = keys.length ? safe(() => boosterRects(L, keys), {}) : {};
+  for (const k of keys) { const r = br[k]; if (r) add(r.x, r.y, r.x + r.w, r.y + r.h, 2.5); }
+  return o;
+}
+function placeTag(g, S, L, text, an, at, u) {
+  const t = an.t, W = S.W, H = S.H, ob = tagObstacles(S, L, at), base = clamp(14 * u, 12, 30);
+  const ov = (x0, y0, x1, y1) => { let sc = 0; for (const q of ob) { const w = Math.min(x1, q.x1) - Math.max(x0, q.x0), h = Math.min(y1, q.y1) - Math.max(y0, q.y0); if (w > 0 && h > 0) sc += q.wt * w * h; } return sc; };
+  let best = null;
+  for (const [si, size] of [base, Math.max(12, base * 0.86)].entries()) {
+    const fs = fitSize(g, text, Math.min(W - 24, 320 * u) - 1.4 * size, size, FB, '900');
+    const w = tw(g, text, fs, FB, '900') + 1.4 * fs, h = fs * 2.1, tip = fs * 0.6, gap = 2;
+    const tryAt = (side, x, y, tx, ty, pen) => {
+      if (x < 6 || y < 4 || x + w > W - 6 || y + h > H - 4) return;
+      const sc = ov(x, y, x + w, y + h) / (w * h) + pen + si * 0.12;
+      if (!best || sc < best.sc) best = { sc, side, x, y, w, h, tip, fs, tx, ty };
+    };
+    const N = 8;
+    for (const side of ['above', 'below']) {
+      const pen = side === an.pref ? 0 : 0.18;
+      const y = side === 'above' ? t.y0 - tip - gap - h : t.y1 + tip + gap;
+      const ty = side === 'above' ? t.y0 - gap : t.y1 + gap;
+      const lo = Math.max(t.x0 + 4, t.x0), hi = Math.max(lo, t.x1 - 4), cx = (t.x0 + t.x1) / 2;
+      for (let i = 0; i <= N; i++) {
+        const tx = lo + (hi - lo) * i / N;                    // tip position along the target
+        for (const f of [0.5, 0.15, 0.85]) {                  // where the tip sits along the tag
+          const x = clamp(tx - w * f, 6, W - 6 - w), txc = clamp(tx, x + h / 2, x + w - h / 2);
+          if (txc < t.x0 - 1 || txc > t.x1 + 1) continue;
+          tryAt(side, x, y, txc, ty, pen + 0.04 * Math.abs(tx - cx) / Math.max(1, t.x1 - t.x0));
+        }
+      }
+    }
+    for (const side of ['left', 'right']) {
+      const x = side === 'left' ? t.x0 - tip - gap - w : t.x1 + tip + gap, tx = side === 'left' ? t.x0 - gap : t.x1 + gap;
+      for (let i = 0; i <= 4; i++) {
+        const ty = t.y0 + (t.y1 - t.y0) * (0.2 + 0.6 * i / 4);
+        for (const f of [0.5, 0.25, 0.75]) {
+          const y = clamp(ty - h * f, 4, H - 4 - h), tyc = clamp(ty, y + h * 0.3, y + h * 0.7);
+          if (tyc < t.y0 - 1 || tyc > t.y1 + 1) continue;
+          tryAt(side, x, y, tx, tyc, 0.3);
+        }
+      }
+    }
+  }
+  return best;
+}
+function drawTag(g, S, text, p, u, a) {
+  if (!p) return;
+  const { x, y, w, h, tip, fs, side, tx, ty } = p, vert = side === 'above' || side === 'below';
+  const dir = side === 'above' || side === 'left' ? -1 : 1;
+  const bob = Math.sin(U.t * 4) * 2 * -dir;
+  g.save(); g.globalAlpha = a; if (vert) g.translate(0, bob); else g.translate(bob, 0);
   g.fillStyle = 'rgba(43,36,64,0.25)'; rr(g, x + 2, y + 3, w, h, h / 2); g.fill();
   g.beginPath(); rr(g, x, y, w, h, h / 2);
   g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(2, 2.4 * u); g.strokeStyle = INK; g.stroke();
-  const tx = clamp(an.x, x + h / 2, x + w - h / 2), ty = an.dir < 0 ? y + h : y;
-  g.beginPath(); g.moveTo(tx - tip, ty); g.lineTo(tx, an.dir < 0 ? ty + tip : ty - tip); g.lineTo(tx + tip, ty);
-  g.fillStyle = CREAM; g.fill(); g.stroke();
-  g.fillRect(tx - tip + 2, an.dir < 0 ? ty - 3 : ty, 2 * tip - 4, 3);
+  g.beginPath();
+  if (vert) {
+    const by = side === 'above' ? y + h : y;
+    g.moveTo(tx - tip, by); g.lineTo(tx, ty); g.lineTo(tx + tip, by);
+    g.fillStyle = CREAM; g.fill(); g.stroke();
+    g.fillRect(tx - tip + 2, side === 'above' ? by - 3 : by, 2 * tip - 4, 3);
+  } else {
+    const bx = side === 'left' ? x + w - 1 : x + 1;
+    g.moveTo(bx, ty - tip); g.lineTo(tx, ty); g.lineTo(bx, ty + tip);
+    g.fillStyle = CREAM; g.fill(); g.stroke();
+    g.fillRect(side === 'left' ? bx - 3 : bx, ty - tip + 2, 3, 2 * tip - 4);
+  }
   txt(g, text, x + w / 2, y + h / 2 + 1, fs, { f: FB, w: '900', col: INK });
   g.restore();
 }
@@ -1703,30 +1849,57 @@ function drawFirst(g, S, L) {
   const f = U.first.f;
   if (!safe(() => f.ok(s, L), false)) { U.first = null; return; }
   if (U.pop || (U.hand && U.hand.src === 'tut')) return;
-  const an = firstAnchor(S, L, f.at);
-  if (!an) return;
+  const text = typeof f.text === 'function' ? f.text(s) : f.text;
+  const ck = [f.key, text, S.W, S.H, s.B ? Math.round(s.B.y) : 0].join('|');
+  if (U.first.ck !== ck) {
+    const an = firstAnchor(S, L, f.at);
+    U.first.ck = ck; U.first.pl = an ? safe(() => placeTag(g, S, L, text, an, f.at, L.u), null) : null;
+  }
+  if (!U.first.pl) return;
   const a = Math.min(1, (U.t - U.first.t0) / 0.25, U.first.dur ? (U.first.dur - (U.t - U.first.t0)) / 0.3 : 1);
-  drawTag(g, S, typeof f.text === 'function' ? f.text(s) : f.text, an, L.u, clamp(a, 0, 1));
+  drawTag(g, S, text, U.first.pl, L.u, clamp(a, 0, 1));
 }
-/** TOUGH KNOT banner across the board at the start of a mini/boss knot level. */
+/** TOUGH KNOT banner at the start of a mini/boss knot level. */
+// DECISION (ui2 U4): the banner sits on the board's TOP edge (it may cover the first row, never the middle, and it is
+//   gone in 2.3 s). A boss level shows the sad, tangled boss in a round portrait plus "<name> is tangled!" so the
+//   stakes are personal; a mini knot keeps "TOUGH KNOT!".
 function drawBanner(g, S, L) {
   const b = U.banner;
   if (!b) return;
   const t = U.t - b.t0;
   if (t < 0) return;
   if (t > 2.3) { U.banner = null; return; }
-  const u = L.u, bd = L.board, w = Math.min(bd.w * 0.94, 380 * u), h = Math.min(86 * u, bd.h * 0.3);
-  const cx = bd.x + bd.w / 2, cy = bd.y + bd.h * 0.42, sc = t < 0.3 ? eBack(t / 0.3) : 1, a = t > 1.9 ? 1 - (t - 1.9) / 0.4 : 1;
-  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.04); g.scale(sc, sc);
+  const sess = S.sess, u = L.u, bd = sess && sess.B ? sess.B : L.board;
+  const boss = b.kind === 'boss' && sess && sess.kind === 'level';
+  const h = Math.max(54, Math.min((boss ? 92 : 86) * u, bd.h * 0.26)), n0 = h * 0.32 + 8;
+  // the ribbon may run past a narrow phone board's sides (never off screen) so its text stays ≥ 12 px
+  const w = Math.min(S.W - 2 * n0, Math.max(bd.w * 0.96, Math.min(S.W - 2 * n0, boss ? 330 : 280)), (boss ? 440 : 380) * Math.max(u, 0.8));
+  const cx = clamp(bd.x + bd.w / 2, w / 2 + n0, S.W - w / 2 - n0), cy = Math.max(bd.y + h * 0.62, h * (boss ? 0.72 : 0.56) + 4), sc = t < 0.3 ? eBack(t / 0.3) : 1, a = t > 1.9 ? 1 - (t - 1.9) / 0.4 : 1;
+  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.03); g.scale(sc, sc);
   const n = h * 0.32;
   g.beginPath(); g.moveTo(-w / 2 - n, -h * 0.3); g.lineTo(-w / 2, -h * 0.3); g.lineTo(-w / 2, h * 0.42); g.lineTo(-w / 2 - n, h * 0.42); g.lineTo(-w / 2 - n * 0.5, h * 0.06); g.closePath();
   g.moveTo(w / 2 + n, -h * 0.3); g.lineTo(w / 2, -h * 0.3); g.lineTo(w / 2, h * 0.42); g.lineTo(w / 2 + n, h * 0.42); g.lineTo(w / 2 + n * 0.5, h * 0.06); g.closePath();
   g.fillStyle = TOMATO_D; g.fill(); g.lineWidth = Math.max(2, 3 * u); g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
-  rr(g, -w / 2, -h / 2, w, h, h * 0.18); g.fillStyle = TOMATO; g.fill(); g.stroke();
+  g.beginPath(); rr(g, -w / 2, -h / 2, w, h, h * 0.18); g.fillStyle = TOMATO; g.fill(); g.stroke();
   g.setLineDash([6 * u, 5 * u]); g.lineWidth = Math.max(1, 1.6 * u); g.strokeStyle = 'rgba(255,244,228,0.7)';
-  rr(g, -w / 2 + 6 * u, -h / 2 + 6 * u, w - 12 * u, h - 12 * u, h * 0.12); g.stroke(); g.setLineDash([]);
-  txt(g, 'TOUGH KNOT!', 0, -h * 0.1, h * 0.46, { col: '#fff', stroke: INK, sk: 0.2, maxW: w - 24 * u });
-  txt(g, b.kind === 'boss' ? 'Boss level: take your time' : 'Take your time', 0, h * 0.3, h * 0.2, { f: FB, w: '900', col: CREAM, maxW: w - 24 * u });
+  g.beginPath(); rr(g, -w / 2 + 6 * u, -h / 2 + 6 * u, w - 12 * u, h - 12 * u, h * 0.12); g.stroke(); g.setLineDash([]);
+  if (boss) {
+    const id = sess.id | 0, nm = kName(id - 1) || 'The boss', r = h * 0.66, px = -w / 2 + r * 0.82, py = -h * 0.04;
+    g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(2, 3 * u); g.strokeStyle = INK; g.stroke();
+    g.save(); g.beginPath(); g.arc(px, py, r - Math.max(1.5, 2 * u), 0, Math.PI * 2); g.clip();
+    safe(() => aKitten(g, px, py + r * 1.02, r * 1.75, { id, stage: 0, loops: 3, flinch: 0, freeT: -1, breed: breedOf(id), coat: coatOf(id), golden: false, bossScale: false, t: U.t, loopColors: [0, 1, 3] }));
+    g.restore();
+    const tx0 = px + r + 8 * u, tw0 = w / 2 - 10 * u - tx0, tcx = tx0 + tw0 / 2;
+    const title = `${nm} is tangled!`;
+    let ts = fitSize(g, title, tw0, h * 0.34, FT, '', 0.2);
+    let tt = title;
+    if (ts < h * 0.24) { const last = nm.split(' ').pop(); tt = `${last} is tangled!`; ts = fitSize(g, tt, tw0, h * 0.34, FT, '', 0.2); }
+    txt(g, tt, tcx, -h * 0.1, ts, { col: '#fff', stroke: INK, sk: 0.2, maxW: tw0 });
+    txt(g, 'Boss level: take your time', tcx, h * 0.27, h * 0.19, { f: FB, w: '900', col: CREAM, maxW: tw0 });
+  } else {
+    txt(g, 'TOUGH KNOT!', 0, -h * 0.1, h * 0.46, { col: '#fff', stroke: INK, sk: 0.2, maxW: w - 24 * u });
+    txt(g, 'Take your time', 0, h * 0.3, h * 0.2, { f: FB, w: '900', col: CREAM, maxW: w - 24 * u });
+  }
   g.restore();
 }
 /** Gold double ring on the strands that cover a tapped one ("tap the one on top"), 0.9 s. */
@@ -1825,7 +1998,7 @@ function drawHand(g, S) {
 // ---------- pause ----------
 function drawPause(g, S) {
   dim(g, S, 0.5);
-  const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S);
   const pw = Math.min(W - 24 * d, 360 * d), px = (W - pw) / 2, pad = 20 * d, iw = pw - 2 * pad;
   const set = safe(() => M.settings(), { music: 0.7, sfx: 0.9, haptics: true });
   const list = [
@@ -1862,7 +2035,7 @@ function setSet(k, v) { safe(() => M.setSetting(k, v)); bus.emit('settings', { k
 
 // ---------- generic dialog frame ----------
 function dialogFrame(g, S, maxW, list, opt = {}) {
-  const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S);
   const pw = Math.min(W - 20 * d, maxW * d), px = (W - pw) / 2, pad = 18 * d;
   const lay = rows(list(pw - 2 * pad, px + pad), d, H - 20 * d - 2 * pad);
   const ph = opt.full ? H - 20 * d : lay.h + 2 * pad * lay.k, py = (H - ph) / 2;
@@ -1895,7 +2068,7 @@ function drawSettings(g, S) {
       } });
       if (arm) { rr(g, W / 2 - bw / 2, y, bw, 44 * e, 22 * e); g.lineWidth = 3 * e; g.strokeStyle = TOMATO; g.stroke(); }
     } });
-    l.push({ h: 30, fn: (y, hh, e) => txt(g, 'Fonts: Lilita One, Nunito (SIL OFL)', W / 2, y + hh / 2, 12 * e, { f: FB, w: '700', col: '#6E6377', maxW: iw }) });
+    l.push({ h: 30, fn: (y, hh, e) => txt(g, 'Fonts: Lilita One, Nunito (SIL OFL)', W / 2, y + hh / 2, Math.max(12, 12 * e), { f: FB, w: '700', col: '#6E6377', maxW: iw }) });
     l.push({ h: 6 });
     l.push({ h: 56, fn: (y, hh, e) => { const bw = Math.min(iw, 240 * e); pill(g, { id: 's-close', label: 'CLOSE', kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 52 * e, act: close, d: e }); } });
     return l;
@@ -1930,7 +2103,7 @@ function shopBuy() {
   }
 }
 function drawShop(g, S) {
-  const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S);
   const pw = Math.min(W - 16 * d, 560 * d), ph = Math.min(H - 16 * d, 760 * d), px = (W - pw) / 2, py = (H - ph) / 2;
   const wasReg = U.reg;
   if (U.shop.confirm) U.reg = false;
@@ -2125,10 +2298,61 @@ function portrait(g, id, cx, cy, s, st, dpr) {
   }
   if (boss) crown(g, cx - s * 0.33, cy - s * 0.35, s * 0.24);
 }
+// DECISION (ui2 U3 + B1): Kitten Corner is a six-page album, one page per world (9 kittens + the world's boss).
+//   The old 60-tile grid had no room for names (tiles were ~50 px on phones) and its tap bubble had nowhere to go on
+//   the top row except over the header (blocker B1). Pages give big tiles with a name caption under each one, so the
+//   bubble is gone entirely (nothing floats over the header any more); a tap still hops, purrs and floats hearts.
+//   Page = the world of the newest rescue on open; ‹ › buttons, page dots, swipe and ←/→ keys turn pages.
+function kitLayout(iw, gh, d) {
+  const capOf = c => clamp(c * 0.2, 17, 36);
+  let best = null;
+  for (const mode of ['below', 'right']) {
+    let c = 60;
+    for (let k = 0; k < 3; k++) {
+      const ch = capOf(c);
+      c = mode === 'below' ? Math.min(iw / 3, (gh - 4 * ch) / 4.3) : Math.min(iw / 4.5, (gh - 3 * ch) / 3);
+    }
+    c = Math.max(10, Math.min(c, 170 * d));
+    if (!best || c > best.c) best = { mode, c, ch: capOf(c) };
+  }
+  const { c, ch, mode } = best, bc = c * 1.3;
+  const w = mode === 'below' ? 3 * c : 3 * c + 1.5 * c, h = mode === 'below' ? 3 * (c + ch) + bc + ch : 3 * (c + ch);
+  return { ...best, bc, w, h };
+}
+function kitPageOf(ks) {
+  let last = -1;
+  ks.forEach((v, i) => { if (v > 0) last = i; });
+  return clamp(worldOf(Math.min(LEVELS, last + 2)), 1, 6);
+}
+function arrowBtn(g, b, dir) {
+  reg(b);
+  const d = U.du, R0 = Math.min(b.w, b.h) / 2, cx = b.x + b.w / 2, cy0 = b.y + b.h / 2;
+  const down = isDown(b) && !b.disabled, hv = hov(b), lip = Math.max(1.5, R0 * 0.1), cy = cy0 - lip / 2 + (down ? lip * 0.8 : 0) - (hv ? 2 : 0);
+  g.save();
+  if (b.disabled) g.globalAlpha *= 0.35;
+  g.beginPath(); g.arc(cx, cy0 + lip / 2, R0 - lip / 2, 0, 7); g.fillStyle = SHADE; g.fill();
+  g.beginPath(); g.arc(cx, cy, R0 - lip / 2, 0, 7); g.fillStyle = CREAM; g.fill();
+  if (hv) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fill(); }
+  g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
+  const k = R0 * 0.32;
+  g.beginPath(); g.moveTo(cx - dir * k * 0.55, cy - k); g.lineTo(cx + dir * k * 0.6, cy); g.lineTo(cx - dir * k * 0.55, cy + k);
+  g.lineWidth = Math.max(2, R0 * 0.2); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = TEAL_D; g.stroke();
+  g.restore();
+}
+function kitTurn(dir, click) {
+  const p = clamp((U.kPage || 1) + dir, 1, 6);
+  if (p === U.kPage) return false;
+  U.kPage = p; U.kTurn = { t0: U.t, dir }; U.kHop = null;
+  if (click) bus.emit('click', {});
+  return true;
+}
 function drawKittens(g, S) {
-  const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0), land = isLand(S);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S), land = isLand(S);
   const ks = safe(() => M.kittens(), Array(LEVELS).fill(0));
   const got = ks.filter(v => v > 0).length;
+  if (!U.kPage || U.t - (U.kSeen || -9) > 0.6) U.kPage = kitPageOf(ks);
+  U.kSeen = U.t;
+  const wd = U.kPage, base = (wd - 1) * PER_WORLD;
   const pw = Math.min(W - 16 * d, land ? 900 * d : 520 * d), ph = H - 16 * d, px = (W - pw) / 2, py = 8 * d;
   panel(g, px, py, pw, ph, d);
   const pad = 16 * d, ix = px + pad, iw = pw - 2 * pad;
@@ -2137,72 +2361,85 @@ function drawKittens(g, S) {
   const cnt = `${got} / ${LEVELS}`, cs = 18 * d, cw = tw(g, cnt, cs) + 16 * d;
   txt(g, cnt, px + pw - pad - 42 * d - cw / 2, hy + d, cs, { col: TEAL_D });
   txt(g, 'Kitten Corner', ix, hy, 26 * d, { align: 'left', maxW: iw - 50 * d - cw });
-  const gy = hy + 28 * d, gh = py + ph - pad - 60 * d - gy;
-  const cols = land ? 10 : 6, rowsN = LEVELS / cols;
-  const cell = Math.min(iw / cols, gh / rowsN);
-  const gw = cell * cols, gh2 = cell * rowsN, gx = ix + (iw - gw) / 2, gy2 = gy + (gh - gh2) / 2;
-  const dpr = S.dpr || 1;
-  // the cached grid is redrawn as illustrated sprites finish decoding (count of ready sprites is part of the key)
-  let sprN = 0;
-  if (R.kittenSprite) for (let i = 1; i <= LEVELS; i++) if (R.kittenSprite(i, true)) sprN++;
-  const key = [Math.round(gw), Math.round(gh2), dpr, cols, ks.join(''), sprN].join('|');
-  if (U.kc.key !== key && typeof document !== 'undefined') {
-    const c = U.kc.cv || document.createElement('canvas');
-    c.width = Math.max(1, Math.ceil(gw * dpr)); c.height = Math.max(1, Math.ceil(gh2 * dpr));
-    const x = c.getContext('2d');
-    x.setTransform(dpr, 0, 0, dpr, 0, 0);
-    x.clearRect(0, 0, gw, gh2);
-    for (let i = 0; i < LEVELS; i++) {
-      const col = i % cols, row = Math.floor(i / cols);
-      x.save(); portrait(x, i + 1, (col + 0.5) * cell, (row + 0.5) * cell, cell * 0.9, ks[i], dpr); x.restore();
+  // pager: ‹ World n · name (rescued k/10) ›
+  const pr = 21 * d, pyc = hy + 26 * d + pr, pgW = Math.min(iw, 460 * d), pgX = ix + (iw - pgW) / 2; // arrows hug the title
+  arrowBtn(g, { id: 'k-prev', label: 'Previous world', x: pgX, y: pyc - pr, w: 2 * pr, h: 2 * pr, disabled: wd <= 1, act: () => kitTurn(-1) }, -1);
+  arrowBtn(g, { id: 'k-next', label: 'Next world', x: pgX + pgW - 2 * pr, y: pyc - pr, w: 2 * pr, h: 2 * pr, disabled: wd >= 6, act: () => kitTurn(1) }, 1);
+  const wGot = ks.slice(base, base + PER_WORLD).filter(v => v > 0).length;
+  const tW = pgW - 4 * pr - 16 * d;
+  txt(g, (WORLDS[wd] || {}).name || `World ${wd}`, ix + iw / 2, pyc - 7 * d, 20 * d, { col: INK, maxW: tW });
+  { // page dots + this world's count
+    const dr = 3.6 * d, gap = 12 * d, lab = `${wGot} / ${PER_WORLD}`, ls = clamp(13 * d, 12, 26);
+    const lw = tw(g, lab, ls, FB, '900'), total = 6 * gap + 8 * d + lw, x0 = ix + iw / 2 - total / 2, dy = pyc + 13 * d;
+    for (let i = 1; i <= 6; i++) {
+      g.beginPath(); g.arc(x0 + (i - 0.5) * gap, dy, i === wd ? dr * 1.35 : dr, 0, 7);
+      g.fillStyle = i === wd ? TOMATO : STITCH; g.fill(); g.lineWidth = Math.max(1, 1.2 * d); g.strokeStyle = INK; g.stroke();
     }
-    U.kc = { key, cv: c };
+    txt(g, lab, x0 + 6 * gap + 8 * d, dy + 0.5 * d, ls, { f: FB, w: '900', col: TEAL_D, align: 'left' });
   }
+  const fh = 52 * d, fy = py + ph - pad - fh;
+  const gy = pyc + pr + 10 * d, gh = fy - 10 * d - gy;
+  const K = kitLayout(iw, gh, d);
+  const turn = U.kTurn && U.t - U.kTurn.t0 < 0.22 ? U.kTurn : null;
+  const slide = turn ? (1 - eOut((U.t - turn.t0) / 0.22)) * 40 * d * turn.dir : 0;
+  const gx = ix + (iw - K.w) / 2 + slide, gy2 = gy + Math.max(0, (gh - K.h) / 2);
+  const dpr = S.dpr || 1;
+  const cellOf = j => { // j = 0..8 regular, 9 = boss → { cx, cy (tile centre), s (cell), capY }
+    if (j < 9) { const col = j % 3, row = Math.floor(j / 3); return { cx: gx + (col + 0.5) * K.c, cy: gy2 + row * (K.c + K.ch) + K.c / 2, s: K.c, capY: gy2 + row * (K.c + K.ch) + K.c + K.ch * 0.42 }; }
+    if (K.mode === 'below') return { cx: gx + K.w / 2, cy: gy2 + 3 * (K.c + K.ch) + K.bc / 2, s: K.bc, capY: gy2 + 3 * (K.c + K.ch) + K.bc + K.ch * 0.42 };
+    const by = gy2 + (K.h - K.bc - K.ch) / 2;
+    return { cx: gx + 3 * K.c + 0.2 * K.c + K.bc / 2, cy: by + K.bc / 2, s: K.bc, capY: by + K.bc + K.ch * 0.42 };
+  };
   { // polish: a warm hearth glow behind the kittens
-    const wg = g.createRadialGradient(gx + gw / 2, gy2 + gh2 * 0.55, 0, gx + gw / 2, gy2 + gh2 * 0.55, Math.max(gw, gh2) * 0.7);
+    const wg = g.createRadialGradient(gx + K.w / 2, gy2 + K.h * 0.55, 0, gx + K.w / 2, gy2 + K.h * 0.55, Math.max(K.w, K.h) * 0.7);
     wg.addColorStop(0, 'rgba(255,190,90,0.32)'); wg.addColorStop(1, 'rgba(255,190,90,0)');
-    g.fillStyle = wg; g.fillRect(gx - cell * 0.3, gy2 - cell * 0.3, gw + cell * 0.6, gh2 + cell * 0.6);
+    g.fillStyle = wg; g.fillRect(Math.max(ix, gx - K.c * 0.3), gy2 - K.c * 0.2, Math.min(iw, K.w + K.c * 0.6), K.h + K.c * 0.4);
   }
-  if (U.kc.cv) g.drawImage(U.kc.cv, gx, gy2, gw, gh2);
-  // polish (kid): tapping a rescued kitten makes it hop, float hearts, say its name and purr
-  const hop = U.kHop && U.t - U.kHop.t0 < 1.6 ? U.kHop : null;
+  const hop = U.kHop && U.t - U.kHop.t0 < 1.6 && U.kHop.i >= base && U.kHop.i < base + PER_WORLD ? U.kHop : null;
+  g.save();
+  if (turn) g.globalAlpha *= 0.4 + 0.6 * eOut((U.t - turn.t0) / 0.22);
+  for (let j = 0; j < PER_WORLD; j++) {
+    const i = base + j, c = cellOf(j), st = ks[i] | 0;
+    if (!(hop && hop.i === i)) { g.save(); portrait(g, i + 1, c.cx, c.cy, c.s * 0.9, st, dpr); g.restore(); }
+    // caption: the kitten's name once rescued, the level that frees it while locked
+    const boss = j === 9, nm = st ? (kName(i) || `Kitten ${i + 1}`) : `Level ${i + 1}`;
+    const maxW = c.s * (boss ? 1.25 : 0.98), f0 = clamp(K.ch * 0.62, 12, 24);
+    let label = st === 2 ? '★ ' + nm : nm, fs = fitSize(g, label, maxW, f0, FB, '900');
+    if (fs < 11.5 && label.includes(' ')) { label = (st === 2 ? '★ ' : '') + nm.split(' ').pop(); fs = fitSize(g, label, maxW, f0, FB, '900'); }
+    txt(g, label, c.cx, c.capY, Math.max(11, fs), { f: FB, w: '900', col: st === 2 ? GOLD_D : st ? INK : '#8A7F7A' });
+  }
+  g.restore();
+  // polish (kid): tapping a rescued kitten makes it hop, float hearts and purr (its name is already captioned)
   if (hop) {
-    const i = hop.i, col = i % cols, row = Math.floor(i / cols), t = U.t - hop.t0;
-    const cx = gx + (col + 0.5) * cell, cy = gy2 + (row + 0.5) * cell;
-    const jump = t < 0.5 ? Math.sin(t / 0.5 * Math.PI) * cell * 0.28 : t < 0.8 ? Math.sin((t - 0.5) / 0.3 * Math.PI) * cell * 0.08 : 0;
-    g.fillStyle = CREAM; g.fillRect(cx - cell / 2 + 0.5, cy - cell / 2 + 0.5, cell - 1, cell - 1);
-    g.save(); g.globalAlpha = 0.25; g.fillStyle = INK; g.beginPath(); g.ellipse(cx, cy + cell * 0.4, cell * 0.3 * (1 - jump / cell), cell * 0.06, 0, 0, TAU2); g.fill(); g.restore();
+    const i = hop.i, c = cellOf(i - base), cell = c.s, t = U.t - hop.t0;
+    const cx = c.cx, cy = c.cy;
+    const jump = t < 0.5 ? Math.sin(t / 0.5 * Math.PI) * cell * 0.22 : t < 0.8 ? Math.sin((t - 0.5) / 0.3 * Math.PI) * cell * 0.06 : 0;
+    g.save(); g.globalAlpha = 0.25; g.fillStyle = INK; g.beginPath(); g.ellipse(cx, cy + cell * 0.4, cell * 0.3 * (1 - jump / cell), cell * 0.05, 0, 0, TAU2); g.fill(); g.restore();
     g.save(); portrait(g, i + 1, cx, cy - jump, cell * 0.9 * (1 + 0.06 * Math.sin(t * 12) * Math.max(0, 1 - t)), ks[i], dpr); g.restore();
-    for (let k = 0; k < 5; k++) { // hearts
+    for (let k = 0; k < 5; k++) { // hearts, kept inside the tile's own column and below the pager
       const q = (t - k * 0.12) / 1.1;
       if (q <= 0 || q >= 1) continue;
-      const hx = cx + Math.sin(k * 2.1 + q * 5) * cell * 0.3, hy = cy - cell * 0.3 - q * cell * 0.9, hs = cell * (0.12 + 0.04 * (k % 2));
+      const hx = cx + Math.sin(k * 2.1 + q * 5) * cell * 0.3, hy = Math.max(gy + cell * 0.1, cy - cell * 0.3 - q * cell * 0.7), hs = cell * (0.1 + 0.03 * (k % 2));
       g.save(); g.globalAlpha = 1 - q; g.translate(hx, hy); g.fillStyle = k % 2 ? TOMATO : '#FF8FA3'; g.strokeStyle = INK; g.lineWidth = Math.max(1, hs * 0.12);
       g.beginPath(); g.moveTo(0, hs * 0.35); g.bezierCurveTo(-hs, -hs * 0.3, -hs * 0.45, -hs, 0, -hs * 0.45); g.bezierCurveTo(hs * 0.45, -hs, hs, -hs * 0.3, 0, hs * 0.35); g.fill(); g.stroke();
       g.restore();
     }
-    const nm = hop.name, a = Math.min(1, t / 0.15, (1.6 - t) / 0.3);
-    if (nm && a > 0) {
-      const fs = clamp(15 * d, 12, 40), bw = tw(g, nm, fs, FB, '900') + fs * 1.4, bh = fs * 2;
-      const bx = clamp(cx - bw / 2, px + 8 * d, px + pw - 8 * d - bw), by = Math.max(py + 6 * d, cy - cell * 0.5 - jump - bh - fs * 0.5);
-      g.save(); g.globalAlpha = a; rr(g, bx, by, bw, bh, bh / 2); g.fillStyle = '#fff'; g.fill(); g.lineWidth = Math.max(1.5, 2.2 * d); g.strokeStyle = INK; g.stroke();
-      txt(g, nm, bx + bw / 2, by + bh / 2 + 1, fs, { f: FB, w: '900', col: INK }); g.restore();
-    }
   }
-  // tap a portrait → hop + name (or how to meet it); invisible buttons over the cached grid
-  for (let i = 0; i < LEVELS; i++) {
-    const col = i % cols, row = Math.floor(i / cols);
-    reg({ id: 'k-cell' + i, x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell, hit: { x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell },
+  // tap a portrait → hop (or how to meet it); invisible buttons over the tiles
+  for (let j = 0; j < PER_WORLD; j++) {
+    const i = base + j, c = cellOf(j), s = c.s * 0.9;
+    const r = { x: c.cx - s / 2, y: c.cy - s / 2, w: s, h: s };
+    reg({ id: 'k-cell' + i, label: st0(ks[i]) ? kName(i) : `Level ${i + 1}`, ...r, hit: r,
       act: () => {
         if (!(ks[i] > 0)) { toast(`Beat level ${i + 1} to meet this kitten`); return; }
-        const nm = kName(i);
-        U.kHop = { i, t0: U.t, name: nm ? `${nm}${ks[i] > 1 ? ' (golden!)' : ''}` : `Level ${i + 1} kitten` };
+        U.kHop = { i, t0: U.t };
         sfx('purr', 1.1); setTimeoutUI(() => sfx('mew'), 0.15);
       } });
   }
   const fw = Math.min(iw, 240 * d);
-  pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: py + ph - pad - 52 * d, w: fw, h: 52 * d, act: () => api.go(U.ret) });
+  pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: fy, w: fw, h: fh, act: () => api.go(U.ret) });
 }
+const st0 = v => (v | 0) > 0;
 
 // ---------- daily ----------
 function addDays(key, n) { const t = Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) + n * 86400000; return new Date(t).toISOString().slice(0, 10); }
@@ -2233,7 +2470,7 @@ function drawDaily(g, S) {
       for (let i = 0; i < 7; i++) {
         const k2 = addDays(key, i - 6), wd = 'SMTWTFS'[new Date(k2 + 'T00:00:00Z').getUTCDay()];
         const x = x0 + sp * (i + 0.5), cy = y + hh * 0.62;
-        txt(g, wd, x, y + hh * 0.14, 11 * e, { f: FB, w: '900', col: '#6E6377' });
+        txt(g, wd, x, y + hh * 0.14, Math.max(12, 12 * e), { f: FB, w: '900', col: '#6E6377' });
         g.beginPath(); g.arc(x, cy, r, 0, 7); g.fillStyle = info.stamps[i] ? TOMATO : '#F6E6CF'; g.fill();
         g.lineWidth = i === 6 ? 3 * e : 2 * e; g.strokeStyle = i === 6 ? GOLD_D : INK; g.stroke();
         if (info.stamps[i]) aIcon(g, 'paw', x, cy, r * 1.15, '#fff');
@@ -2253,7 +2490,7 @@ function drawDaily(g, S) {
     } },
     { h: 30, fn: (y, hh, e) => txt(g, info.won ? `New knot in ${hh2}h ${mm2}m` : `Win up to ${reward} yarn balls`, W / 2, y + hh / 2, 16 * e, { f: FB, w: '800', maxW: iw }) },
     { h: 52, fn: (y, hh, e) => {
-      const s = 40 * e, label = "Tomorrow's kitten", ts = 14 * e, w2 = s + 10 * e + tw(g, label, ts, FB, '800');
+      const s = 40 * e, label = "Tomorrow's kitten", ts = Math.max(12, 14 * e), w2 = s + 10 * e + tw(g, label, ts, FB, '800');
       const x = W / 2 - Math.min(w2, iw) / 2, c = silhouette((dayNum(key) + 1) % 6, 0, s * 0.9, S.dpr || 1);
       if (c) g.drawImage(c, x + s / 2 - s * 0.9 * 0.75, y + hh / 2 + s * 0.45 - s * 0.9 * 1.38, s * 0.9 * 1.5, s * 0.9 * 1.5);
       txt(g, label, x + s + 10 * e, y + hh / 2, ts, { f: FB, w: '800', align: 'left', col: '#5A5066', maxW: iw - s - 10 * e });
@@ -2281,7 +2518,7 @@ function flame(g, x, y, s, on) {
 
 // ---------- all beaten ----------
 function drawAllBeaten(g, S) {
-  const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S);
   const fixed = 16 + 50 + 30 + 10 + 120 + 16 + 58 + 54 + 16;
   const k = Math.min(1, H / (fixed * d)), e = d * k;
   let y = Math.max(8 * e, (H - fixed * e) / 2) + 16 * e;
@@ -2382,7 +2619,9 @@ function drawWinCard(g, S, c) {
   }
   // celebration illustration (art.js WINS), varied per level: level id picks a start; the first loaded one from there
   if (!c.winId) {
-    const n = WINS.length, b0 = ((sess.id | 0) + Math.floor((sess.id | 0) / 4) + (kind === 'level' ? 0 : U.winN)) % n;
+    // ui2 U5: L1-L4 walk 0,1,2,3 and L5-L8 walk 1,2,3,0 (every 4 levels shift by one), so each run of four levels
+    //   shows all four illustrations before one repeats
+    const lid = Math.max(0, (sess.id | 0) - 1), n = WINS.length, b0 = (lid + Math.floor(lid / 4) + (kind === 'level' ? 0 : U.winN)) % n;
     for (let i = 0; i < n && !c.winId; i++) if (img(WINS[(b0 + i) % n])) c.winId = WINS[(b0 + i) % n];
   }
   const winIm = c.winId ? img(c.winId) : null;
@@ -2391,22 +2630,30 @@ function drawWinCard(g, S, c) {
   const showBest = kind === 'level' && !res.firstWin && (res.newStars | 0) > 0;
   const bonusN = (res.bonus | 0) || (sess.bonusYarn | 0);
   const peak = res.peak ?? 0, par = res.par ?? 0;
-  const statLine = sess.capped && st < 3 ? 'You used Snip or +1 Slot, so 2★ is the most'
-    : st >= 3 ? (peak ? `Tidy! Your basket held ${peak} at most` : 'Spotless! Nothing waited in the basket')
-      : par > 0 ? `Your basket held ${peak}. Hold ${par} or fewer for 3★` : `Your basket held ${peak}. Keep it empty for 3★`;
+  const statLine = sess.capped && st < 3 ? 'Snip or +1 Slot used, so 2★ is the most'
+    : st >= 3 ? (peak ? `Tidy! Basket held ${peak} at most` : 'Spotless! Basket stayed empty')
+      : par > 0 ? `Basket held ${peak}. Hold ${par} or fewer for 3★` : `Basket held ${peak}. Keep it empty for 3★`;
   const kid = res.kittenId || 0;
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
+  const winStack = bonusN > 0 && tw(g, statLine, 12, FB, '800') + tw(g, `+${bonusN} combo`, 12, FB, '900') + 2 * 24 * d + 14 * d > iw0;
   const list = [
     { h: 44, fn: (y, hh, e) => txt(g, title, area.x + area.w / 2, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw0 }) },
     { h: 70, fn: (y, hh, e) => {
       const sr = Math.min(26 * e, iw0 / 8);
       if (c.hype > 0) { // celebration scales with stars / tough knot / combo: a turning sunburst behind the stars
+        // squashed to the row's height, faded at the rim and clipped to the row: it never reaches the title above (QA 10-30)
         const k = clamp((U.t - c.t0 - 0.3) / 0.4, 0, 1), cx = area.x + area.w / 2, cy = y + hh / 2, n = 8 + 4 * c.hype;
         const R2 = Math.min(iw0 * 0.5, sr * (2.6 + 0.5 * c.hype)) * e3(k);
-        g.save(); g.globalAlpha = 0.18 + 0.1 * c.hype; g.fillStyle = c.hype >= 3 ? AMBER : GOLD; g.beginPath();
-        for (let i = 0; i < n; i++) { const a = U.t * 0.6 + i * TAU2 / n; g.moveTo(cx, cy); g.arc(cx, cy, R2, a, a + Math.PI / n); g.closePath(); }
-        g.fill(); g.restore();
+        if (R2 > 1) {
+          const col = c.hype >= 3 ? '255,170,60' : '255,210,90', gr = g.createRadialGradient(0, 0, 0, 0, 0, R2);
+          gr.addColorStop(0, `rgba(${col},1)`); gr.addColorStop(0.55, `rgba(${col},0.7)`); gr.addColorStop(1, `rgba(${col},0)`);
+          g.save(); g.beginPath(); g.rect(area.x, y, area.w, hh); g.clip();
+          g.translate(cx, cy); g.scale(1, Math.min(1, (hh * 0.5) / R2));
+          g.globalAlpha = 0.22 + 0.1 * c.hype; g.fillStyle = gr; g.beginPath();
+          for (let i = 0; i < n; i++) { const a = U.t * 0.6 + i * TAU2 / n; g.moveTo(0, 0); g.arc(0, 0, R2, a, a + Math.PI / n); g.closePath(); }
+          g.fill(); g.restore();
+        }
       }
       for (let i = 0; i < 3; i++) {
         const t = (U.t - c.t0 - 0.35 - i * 0.25) / 0.3, on = i < st;
@@ -2425,18 +2672,37 @@ function drawWinCard(g, S, c) {
       txt(g, label, 0, e, s, { col: INK, maxW: w2 - 14 * e });
       g.restore();
     } }] : []),
-    { h: 24, fn: (y, hh, e) => {
-      const line = statLine, s = 15 * e;
-      const lw = tw(g, line, s, FB, '800'), ic = 18 * e, total = Math.min(iw0, lw + ic + 6 * e);
-      const x0 = area.x + area.w / 2 - total / 2;
-      aIcon(g, 'slot', x0 + ic / 2, y + hh / 2, ic);
-      txt(g, line, x0 + ic + 6 * e, y + hh / 2, s, { f: FB, w: '800', align: 'left', maxW: iw0 - ic - 6 * e });
+    // ui2 U2: the basket stat and the combo bonus share ONE row ([basket] stat · [ball] +N combo). If both don't fit
+    //   on one line at ≥ 12 px the combo chip drops under the stat inside the same (taller) row.
+    { h: winStack ? 44 : bonusN > 0 ? 26 : 24, fn: (y, hh, e) => {
+      const ic = 18 * e, gp = 6 * e, combo = bonusN > 0 ? `+${bonusN} combo` : '';
+      const cW = sz => (combo ? tw(g, combo, sz, FB, '900') + ic + gp : 0);
+      const one = sz => tw(g, statLine, sz, FB, '800') + ic + gp + (combo ? 14 * e + cW(sz) : 0);
+      let sz = 15 * e;
+      while (sz > 12 && one(sz) > iw0) sz -= 0.5;
+      const stack = combo && (winStack || one(sz) > iw0);
+      const seg = (x0, cy, sz2) => {
+        aIcon(g, 'slot', x0 + ic / 2, cy, ic);
+        txt(g, statLine, x0 + ic + gp, cy, sz2, { f: FB, w: '800', align: 'left', maxW: iw0 - ic - gp });
+        return x0 + ic + gp + Math.min(iw0 - ic - gp, tw(g, statLine, sz2, FB, '800'));
+      };
+      const chip = (x0, cy, sz2) => {
+        aIcon(g, 'ball', x0 + ic / 2, cy, ic);
+        txt(g, combo, x0 + ic + gp, cy + e * 0.5, sz2, { f: FB, w: '900', align: 'left', col: TEAL_D });
+      };
+      if (!stack) {
+        const total = Math.min(iw0, one(sz)), x0 = area.x + area.w / 2 - total / 2;
+        const xe = seg(x0, y + hh / 2, sz);
+        if (combo) {
+          g.fillStyle = 'rgba(43,36,64,0.35)'; g.beginPath(); g.arc(xe + 7 * e, y + hh / 2, 2 * e, 0, TAU2); g.fill();
+          chip(xe + 14 * e, y + hh / 2, sz);
+        }
+      } else {
+        const s1 = Math.max(12, Math.min(15 * e, sz)), w1 = Math.min(iw0, tw(g, statLine, s1, FB, '800') + ic + gp);
+        seg(area.x + area.w / 2 - w1 / 2, y + hh * 0.3, s1);
+        chip(area.x + area.w / 2 - cW(s1) / 2, y + hh * 0.78, s1);
+      }
     } },
-    ...(bonusN > 0 ? [{ h: 24, fn: (y, hh, e) => { // contract (polish): combo bonus line
-      const s = 16 * e, label = `Combo bonus +${bonusN}`, lw = tw(g, label, s), ic = 18 * e, x0 = area.x + area.w / 2 - (lw + ic + 6 * e) / 2;
-      aIcon(g, 'ball', x0 + ic / 2, y + hh / 2, ic);
-      txt(g, label, x0 + ic + 6 * e, y + hh / 2 + e, s, { align: 'left', col: TEAL, stroke: INK, sk: 0.24, maxW: iw0 - ic });
-    } }] : []),
     { h: 40, fn: (y, hh, e) => {
       const tB = c.t0 + 0.35 + 0.75 + 0.1, n = Math.round((res.balls || 0) * e3((U.t - tB) / 0.8));
       const label = `+${n}`, s = 26 * e, w2 = tw(g, label, s) + 30 * e, x0 = area.x + area.w / 2 - w2 / 2;
@@ -2444,7 +2710,7 @@ function drawWinCard(g, S, c) {
       txt(g, label, x0 + 30 * e, y + hh / 2 + e, s, { align: 'left', col: GOLD, stroke: INK, sk: 0.22 });
     } },
     bossId ? { h: 150, fn: (y, hh, e) => { // boss: the grand illustrated boss over a turning gold burst, with its grand name
-      const cx = area.x + area.w / 2, capH = 40 * e, s = Math.max(20 * e, hh - capH - 6 * e), feet = y + s + 2 * e;
+      const cx = area.x + area.w / 2, capH = Math.max(40 * e, 36), s = Math.max(20 * e, hh - capH - 6 * e), feet = y + s + 2 * e;
       const k = e3(clamp((U.t - c.t0 - 0.2) / 0.5, 0, 1)), R2 = Math.min(iw0 * 0.5, s * 0.72) * k, cy = feet - s * 0.5;
       g.save(); g.globalAlpha = 0.3; g.fillStyle = GOLD; g.beginPath();
       for (let i = 0; i < 14; i++) { const a = -U.t * 0.4 + i * TAU2 / 14; g.moveTo(cx, cy); g.arc(cx, cy, R2, a, a + Math.PI / 14); g.closePath(); }
@@ -2454,10 +2720,23 @@ function drawWinCard(g, S, c) {
       g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, Math.max(1, R2), 0, TAU2); g.fill();
       R.drawKitten(g, cx, feet, s * (0.85 + 0.15 * k), { id: bossId, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(bossId), coat: coatOf(bossId), golden: false, bossScale: false, t: U.t, loopColors: [], memKey: c });
       const nm = kName(bossId - 1) || 'The boss kitten';
-      txt(g, `${res.golden ? 'Golden ' : ''}${nm} is free!`, cx, y + hh - capH * 0.66, 19 * e, { col: '#fff', stroke: INK, sk: 0.22, maxW: iw0 });
-      txt(g, kid ? 'Off to your Kitten Corner' : 'Boss knot beaten again', cx, y + hh - capH * 0.14, 13 * e, { f: FB, w: '800', col: '#5A5066', maxW: iw0 });
-    } } : { h: 104, fn: (y, hh, e) => { // rescued kitten (illustrated) + a celebration illustration; code-drawn fallbacks
-      const cx = area.x + area.w / 2, capH = kid ? 22 * e : 0, s = Math.min(78 * e, hh - capH - 6 * e), feet = y + s + 3 * e;
+      // ui2 U5: "Golden" is a gold sticker on the burst, the caption stays "<name> is free!"
+      if (res.golden) {
+        const k2 = clamp((U.t - c.t0 - 0.7) / 0.25, 0, 1);
+        if (k2 > 0) {
+          const ls = Math.max(12, 13 * e), lw = tw(g, '★ GOLDEN', ls) + 20 * e, lh = 22 * e, bx = Math.min(cx + s * 0.42, area.x + area.w - pad - lw / 2), by = y + lh * 0.8;
+          g.save(); g.translate(bx, by); g.rotate(0.12); g.scale(eBack(k2), eBack(k2));
+          g.beginPath(); rr(g, -lw / 2, -lh / 2, lw, lh, lh / 2); g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1.5, 2 * e); g.strokeStyle = INK; g.stroke();
+          txt(g, '★ GOLDEN', 0, e * 0.5, ls, { col: INK, maxW: lw - 8 * e });
+          g.restore();
+        }
+      }
+      txt(g, `${nm} is free!`, cx, y + hh - capH * 0.66, Math.max(15, 19 * e), { col: '#fff', stroke: INK, sk: 0.22, maxW: iw0 });
+      const sub2 = kid ? 'Off to your Kitten Corner' : 'Boss knot beaten again';
+      txt(g, sub2, cx, y + hh - capH * 0.16, Math.max(12, fitSize(g, sub2, iw0, 13 * e, FB, '800')), { f: FB, w: '800', col: '#5A5066', maxW: iw0 });
+    } } : { h: 130, fn: (y, hh, e) => { // rescued kitten (illustrated) + a celebration illustration; code-drawn fallbacks
+      // ui2 U2: the hero row is ~130 px (was 104) so the rescued kitten reads as the reward, not a thumbnail
+      const cx = area.x + area.w / 2, capH = kid ? 22 * e : 0, s = Math.min(100 * e, hh - capH - 6 * e, iw0 / 2.6), feet = y + s + 3 * e;
       const art2 = (x, sz) => { if (winIm) drawArtFit(g, winIm, x, feet, sz); else aKitty(g, x, feet - 1 * e, sz * 0.85, 'celebrate', U.t, wear); };
       if (kid) {
         if (R.kittenSprite && R.kittenSprite(kid, true)) R.drawKitten(g, cx - s * 0.62, feet, s * 0.9, { id: kid, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(kid), coat: coatOf(kid), golden: !!res.golden, t: U.t, loopColors: [], memKey: c });
@@ -2542,16 +2821,28 @@ function drawLoseCard(g, S, c) {
   // polish (grandparent): plain words, big high-contrast ink text (no small grey line)
   const why = marks.length ? 'The ✕ yarn has nowhere to go' : 'No yarn fits a spool or the basket';
   const list = [
-    { h: 38, fn: (y, hh, e) => txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
+    { h: 38, fn: (y, hh, e) => {
+      // ui2 U8: a round Map button sits at the title's left so the lose card is never a retry-only dead end. It lives
+      //   in the title row (not the button row) so the three pills keep their width in narrow side columns.
+      const ir = Math.min(20 * e, hh / 2), bx = area.x + pad * 0.7, mr = Math.max(0, 22 - ir);
+      iconBtn(g, { id: 'l-map', label: 'Map', icon: 'home', x: bx, y: y + hh / 2 - ir, w: 2 * ir, h: 2 * ir, d: e,
+        hit: { x: bx - mr, y: y + hh / 2 - ir - mr, w: 2 * (ir + mr), h: 2 * (ir + mr) },
+        act: () => { U.loseDone = true; U.card = null; api.go('map'); } });
+      txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw - 4 * (ir + 4 * e) });
+    } },
     { h: 26, fn: (y, hh, e) => txt(g, warm.slice(warm.indexOf('!') + 2), area.x + area.w / 2, y + hh / 2, 19 * e, { f: FB, w: '900', col: TOMATO_D, maxW: iw }) },
     { h: 25, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, 17 * e, { f: FB, w: '900', col: INK, maxW: iw }) },
     { h: 8 },
     { h: 54, fn: (y, hh, e) => {
-      const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length;
-      btns.forEach((b, i) => pill(g, { ...b, x: area.x + pad + i * (bw + gap), y, w: bw, h: 50 * e, d: e, icon: bw > 120 * e ? b.icon : null }));
+      // ui2: in a narrow side column a 50e-tall pill leaves its label ~bw - h px, so cap the height by the width
+      const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length, bh = Math.min(50 * e, Math.max(36, bw * 0.5));
+      btns.forEach((b, i) => pill(g, { ...b, x: area.x + pad + i * (bw + gap), y: y + (50 * e - bh) / 2, w: bw, h: bh, d: e, icon: bw > 120 * e ? b.icon : null }));
     } },
   ];
-  const lay = rows(list, d, area.h - 2 * pad);
+  let lay = rows(list, d, area.h - 2 * pad);
+  // ui2: on short columns (compact landscape) drop the "why" line before the copy shrinks under ~12px; the ✕ marks
+  //   on the board still say it
+  if (lay.k < 0.9) { list.splice(2, 1); lay = rows(list, d, area.h - 2 * pad); }
   const rh = lay.h + 2 * pad * lay.k;
   const rect = { x: area.x, y: area.y + Math.max(0, area.h - rh), w: area.w, h: rh }; // docked to the bottom of its area
   const L = layoutOf(S);
@@ -2577,12 +2868,24 @@ function drawGiftCard(g, S, c) {
   let title, sub, rewards = [];
   if (c.type === 'gift') { title = 'Star gift!'; sub = `You reached ${data.at || 15} ★`; rewards = [['ball', `+${data.balls || 60}`]]; if (data.booster) rewards.push([data.booster, '+1']); }
   else if (c.type === 'chest') { title = 'World chest!'; sub = `${(WORLDS[data.world] || {}).name || 'World'} complete`; rewards = [['ball', `+${data.balls || 150}`]]; for (const k of data.boosters || []) rewards.push([k, '+1']); }
-  else { title = 'New booster!'; sub = BDESC[data.k] || ''; rewards = [[data.k || 'undo', `×${data.n || 1} free`]]; }
+  else {
+    title = 'New booster!'; sub = BDESC[data.k] || ''; rewards = [[data.k || 'undo', `×${data.n || 1} free`]];
+    const x = data.extra;
+    if (x) { // same booster from the star gift: one bigger count instead of the same icon twice
+      if (x.booster === data.k) rewards[0][1] = `×${(data.n || 1) + 1} free`;
+      rewards.push(['ball', `+${x.balls || 60}`]);
+      if (x.booster && x.booster !== data.k) rewards.push([x.booster, '+1']);
+    }
+  }
   const list = [
     { h: 44, fn: (y, hh, e) => txt(g, title, W / 2, y + hh / 2, 30 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
   ];
   if (c.type === 'unlockBooster') list.push({ h: 34, fn: (y, hh, e) => txt(g, BNAME[data.k] || '', W / 2, y + hh / 2, 24 * e, { col: TEAL_D, maxW: iw }) });
   list.push({ h: 44, fn: (y, hh, e) => lines(g, wrapFit(g, sub, iw, hh, 16 * e, 12 * e), W / 2, y + hh / 2) });
+  if (c.type === 'unlockBooster' && data.extra) list.push({ h: 28, fn: (y, hh, e) => {
+    const label = `Plus a star gift for reaching ${data.extra.at || 15} ★`, s2 = Math.max(12, 14 * e);
+    txt(g, label, W / 2, y + hh / 2, fitSize(g, label, iw, s2, FB, '900'), { f: FB, w: '900', col: GOLD_D, maxW: iw });
+  } });
   list.push({ h: 86, fn: (y, hh, e) => {
     const n = rewards.length, cw = Math.min(90 * e, iw / n), x0 = W / 2 - cw * n / 2;
     rewards.forEach(([ic, label], i) => {
@@ -2610,10 +2913,10 @@ function drawToast(g, S) {
   if (a <= 0) return;
   const s = 15 * d, maxW = S.W - 40 * d, size = fitSize(g, U.toast.text, maxW - 28 * d, s, FB, '800');
   const w = tw(g, U.toast.text, size, FB, '800') + 28 * d, h = size * 2.2;
-  let y = S.H - (layoutOf(S).inset || 0) - 90 * d - h;
+  let y = S.H - dlgInset(S) - 90 * d - h;
   const dl = U.dlg;
   if (dl) { // over a dialog: sit in the gap above (or below) the panel, never over its text or buttons
-    const sb = S.H - (layoutOf(S).inset || 0);
+    const sb = S.H - dlgInset(S);
     if (dl.y - h - 4 * d >= 2 * d) y = Math.max(2 * d, dl.y - h - 8 * d);
     else if (dl.y + dl.h + h + 4 * d <= sb) y = dl.y + dl.h + 6 * d;
     else if (dl.toastY != null) y = Math.max(dl.toastMin || dl.y + 60 * d, dl.toastY - h); // inside, above the footer
@@ -2688,6 +2991,7 @@ export function pointer(type, x, y, S) {
   const scr = S.screen, modal = !!U.card || scr !== 'play';
   const m = U.map;
   if (type === 'down') {
+    U.kSw = scr === 'kittens' && !U.card ? { x, y } : null;
     if (scr === 'play') { U.idle = 0; clearHand('idle'); if (U.ghost) U.ghost.loops = 0; teachDismiss(); }
     const b = hitBtn(x, y);
     U.hover = null;
@@ -2717,6 +3021,10 @@ export function pointer(type, x, y, S) {
   }
   if (type === 'up' || type === 'cancel') {
     if (U.drag) { U.drag = null; return true; }
+    if (U.kSw && scr === 'kittens') { // ui2: swipe the Kitten Corner album sideways to turn pages
+      const dx = x - U.kSw.x, dy = y - U.kSw.y; U.kSw = null;
+      if (type === 'up' && Math.abs(dx) > 48 && Math.abs(dx) > 1.5 * Math.abs(dy)) { U.press = null; kitTurn(dx < 0 ? 1 : -1, true); return true; }
+    }
     if (m.down && scr === 'map') {
       const wasDrag = m.drag, d0 = m.down;
       m.down = null; m.drag = false;
@@ -2764,6 +3072,7 @@ export function key(e, S) {
     if (b) { press(b); return true; }
     return false;
   }
+  if (scr === 'kittens' && !U.card && (k === 'ArrowLeft' || k === 'ArrowRight')) { kitTurn(k === 'ArrowRight' ? 1 : -1, true); return true; }
   if (scr === 'map' && !U.card && (k === 'ArrowUp' || k === 'ArrowDown')) {
     const cur = Math.min(LEVELS, safe(() => M.cur(), 1));
     mapSelect(clamp((U.map.sel || 1) + (k === 'ArrowUp' ? 1 : -1), 1, cur));

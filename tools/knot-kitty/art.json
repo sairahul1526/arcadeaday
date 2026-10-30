@@ -201,10 +201,10 @@
   {
    "id": "boss-b20-happy",
    "refs": [
-    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+    "../../studio/art-raw/knot-kitty/art/boss-b20-sad.png"
    ],
    "max": 512,
-   "prompt": "Boss character: Count Whiskerton: a grand black cat wearing a purple velvet cape with a high collar and a tiny pumpkin brooch, playful Halloween style, not scary, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+   "prompt": "The same character as the reference image: Count Whiskerton, a grand solid black cat (fully black fur everywhere, NO white chest, NO white muzzle, no white patches) wearing the identical purple velvet cape with high collar and the tiny pumpkin brooch. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body."
   },
   {
    "id": "boss-b30-sad",
@@ -233,10 +233,10 @@
   {
    "id": "boss-b40-happy",
    "refs": [
-    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+    "../../studio/art-raw/knot-kitty/art/boss-b40-sad.png"
    ],
    "max": 512,
-   "prompt": "Boss character: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+   "prompt": "The same character as the reference image: Baron Von Purr, a grand grey tabby cat with the curly moustache-like whisker tuft, the gold monocle on a chain and the same small dark brown barista apron with the coffee-bean emblem exactly as in the reference. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body."
   },
   {
    "id": "boss-b50-sad",
@@ -349,6 +349,86 @@
    ],
    "max": 384,
    "prompt": "Celebration illustration: a kitten dancing on hind legs twirling a long teal ribbon in a swirl, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "bgw-den",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-den.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same cosy autumn living-room den as the reference image (same fireplace, armchair with knitted blanket, window with falling orange leaves, patterned rug, lamp, baskets, warm lamp light, same colours), now seen as a wide view from a little further back so the room continues to the left and right: fireplace and mantel with pumpkins on the left side, window with autumn leaves in the middle background, armchair and side table with lamp on the right side, the patterned rug across the floor. Do NOT include the small sleeping cat from the reference. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-pumpkin",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-pumpkin.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same friendly Halloween night porch as the reference image (same wooden porch, railing, purple dusk sky with a big round moon, string fairy lights, carved jack-o-lanterns, autumn leaves, same colours), now seen as a wide view so the porch continues to the left and right: the big moon and railing on the left, the front door with a wreath on the right, pumpkins and leaves along the bottom. Jack-o-lanterns have simple triangle-eyed smiling faces, never cat faces. Cute, not scary. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-cabin",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-cabin.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same snowy log-cabin interior as the reference image (same log walls, frosted windows with snowfall, wood stove, hanging mittens and knitted stocking on a garland, shelves with mugs, armchair, patterned rug, soft blue and warm amber light, same colours), now seen as a wide view so the cabin continues to the left and right: wood stove and firewood on the left, two frosted windows in the background, armchair and bookshelf on the right, rug across the floor. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-cafe",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-cafe.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same charming cafe interior as the reference image (same wooden counter with cakes under glass domes, hanging plants, shelves of mugs and teapots, blank dark chalkboards with nothing written on them, big sunny autumn windows, cushions on the wooden floor, sunny warm light, same colours), now seen as a wide view so the cafe continues to the left and right: big autumn windows and an armchair on the left, the round counter with cakes in the middle background, shelves with mugs and plants on the right. Chalkboards are completely blank. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-attic",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-attic.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same moonlit attic as the reference image (same slanted wooden beams, round window with moonlight, old suitcases and trunks, dress form, small desk with an oil lamp, dangling string lights, cool blue and lilac palette, same colours), now seen as a wide view so the attic continues to the left and right: trunks and suitcases on the left, the round moonlit window in the middle background under the beams, dress form and desk on the right. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-roof",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-roof.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same starry rooftop at night as the reference image (same tiled colourful roofs, chimney pots, huge starry sky with a crescent moon and a shooting star, distant glowing town windows, same colours), now seen as a wide panoramic view so the rooftops continue to the left and right: chimneys and the gable of a house on the left, rows of distant town roofs with glowing windows along the middle, tiled roofs and chimney pots on the right, the crescent moon in the sky. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "kit-hero-idle",
+   "max": 384,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "The same chubby orange tabby kitten as the reference (identical design, stripes, colours, eye colour and proportions), calm and content: sitting upright facing the viewer, ears up, big bright open eyes with a white highlight, small gentle closed-mouth smile, front paws planted together on the floor in front of the body so the chest and neck are clearly visible, tail curled around the side, plain white background, centered, full body."
   }
  ]
 }

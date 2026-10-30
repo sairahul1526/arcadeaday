@@ -448,7 +448,17 @@ The user does every account, upload, submission and email. Runs prepare everythi
 - **Set `rawDir: studio/art-raw/<slug>/media`** in every media spec. The default derives the folder from outDir's parent, so `dist/portals/<slug>/media/raw` became `studio/art-raw/media/raw`, which the next game would overwrite.
 - **Portal covers:** make three concepts at 1K, pick one by thumbnail contrast (bright subject on a dark, saturated sky won), then re-make it at 16:9 (2K), 2:3 and 1:1 with the pick as the ref. `node tools/portal-media.mjs <slug> "<Title>"` renders the exact sizes, clean and titled.
 - **Serve `games/` as the web root** for local QA (`npx http-server games -p <port>`). Serving the repo root 404s `/site.css` and the "more games" thumbnails, and every agent reports those as console errors.
-- **Portal SDK timing:** CrazyGames v3 `game.*` calls are only valid after `await SDK.init()`. The GameDistribution SDK may keep its own reference to `GD_OPTIONS.onEvent`, so hook into the forwarder the portal build defines (`window.__gdOnEvent`); don't replace onEvent after load.
+- **Portal SDK timing:** CrazyGames v3 `game.*` calls are only valid after `await SDK.init()`. The GameDistribution SDK may keep its own reference to `GD_OPTIONS.onEvent`, so hook into the forwarder the portal build defines (`window.__gdOnEvent`); don't replace onEvent after load. `firstFrame()` can run before `loadData()`, so every CG call path must call `initPortal()` first.
+
+## Lessons: the 5-lane QA swarm (2026-10-30)
+- **Five lanes in parallel (layout, first-time, perf, chaos + portals, art) found 6 blockers in about 45 minutes** that one generalist pass had missed, and three lanes found the same one (the win sunburst). Give every lane the §4 blocker list and a port, and serve `games/` as the root.
+- **Decorative layers drawn after text count as text overlap.** A row's glow or sunburst must be clipped to its own row (`g.rect` clip) or drawn before the rows above it.
+- **Settings must apply live:** a slider that saves but only takes effect on reload is a blocker. Wire the settings bus to the audio setters and test it in the same session (`qa/perf/perf-audio.mjs` measures RMS through an analyser).
+- **Frame governors:** budget backing pixels, not dpr, and skip about 30 frames after every window resize (re-bakes are slow by design). A dpr cap ratchet turned a resize drag into half resolution for the whole session.
+- **Input guards:** a lost `pointerup` must not freeze input for long. 2 s is enough to ignore a real second finger.
+- **Web chrome over the canvas** ("how to play", "more games") is an accidental-tap risk during play. Show it on the title and map only.
+- **Two tabs of a whole-save game erase each other** (last write wins). On the web, merge before every save and on `P.onStoredChange`: progress takes the max or union, and currency, boosters and settings come together from the newest write, so a merge never duplicates yarn. Read through `P.readStored()`, never `localStorage` (Playables warns, even about the word in a comment).
+- **Every small label is 12 px or more on compact screens:** queue labels, chips, badges and sub-captions all need `Math.max(12, …)`. A text-size matrix at 10 sizes finds them; eyeballing 2 sizes does not.
 
 ## Lessons: QA and tuning (Days 1–9)
 These still apply in v2. Give the relevant ones to every QA, bot and video agent.

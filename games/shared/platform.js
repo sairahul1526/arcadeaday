@@ -139,6 +139,15 @@ const P = {
     }
   },
 
+  /** Web only: the raw stored save string (null on yt or when storage is blocked), for multi-tab merges. */
+  readStored() { return Y ? null : ls.get(opts.store + 'save'); },
+
+  /** Web only: cb(raw) whenever another tab writes this game's save (raw is null when it was removed). */
+  onStoredChange(cb) {
+    if (Y || typeof addEventListener !== 'function') return;
+    try { addEventListener('storage', e => { if (e.key === opts.store + 'save') cb(e.newValue); }); } catch {}
+  },
+
   /** Report a score. Raises data.best when n is higher, saves, and on yt sends it (integer). */
   best(n) {
     n = Math.max(0, Math.floor(+n || 0));
@@ -224,6 +233,7 @@ const P = {
 // CrazyGames SDK v3: game.* calls are only valid once init() has resolved, so every call waits on it (order kept).
 let cgReady = Promise.resolve();
 const cg = fn => {
+  initPortal(); // firstFrame() can come before loadData(): init first so loadingStart waits for sdk.init() (QA 10-30)
   const sdk = window.CrazyGames && window.CrazyGames.SDK;
   if (sdk) cgReady.then(() => { if (sdk.game) sdkCall(() => fn(sdk.game)); });
 };

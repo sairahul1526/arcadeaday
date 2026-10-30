@@ -22,7 +22,7 @@ import {
   drawMiniBoard, drawYarnRun, drawKitten,
 } from './render.js';
 import { getLevel } from './levels.js';
-import { img, bgArt } from './art.js';
+import { img, want, bgArt, bgWideArt } from './art.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -1556,13 +1556,25 @@ function devScale(g) {
 //   middle with feathered edges. A warm vignette + slight dim keeps the board and HUD on top readable.
 //   Live ambient tied to procedural geometry (window panes, mug steam, armchair cat) is skipped; a cheap per-world
 //   particle layer (leaves, fireflies, embers, motes, stars) keeps the room alive.
+// DECISION (render2 R1): wider than WIDE_AT the bake uses a 16:9 painting of the same room (art.js bgWideArt), loaded
+//   lazily on the first such frame (phones never ask for it), cover-fitted. 1.16 is where the portrait painting and the
+//   16:9 painting crop equally (sqrt(0.75 × 1.79)). Until the wide image decodes (or if it 404s) the old landscape
+//   treatment stays: sharp contain-fit centre + blurred mirrored wings. Between 1.0 and WIDE_AT the portrait painting is
+//   simply cover-fitted (keeps ≥ 65 % of its height, no seam).
 const ART_VARIANTS = new Set(['', 'title', 'og', 'map']);
-function artFor(world, variant) { return ART_VARIANTS.has(variant || '') ? img(bgArt(world)) : null; }
-function bakeArt(g, G, im, world, variant, dpr) {
-  const { W, H } = G;
+const WIDE_AT = 1.16;
+function artFor(world, variant, W, H) {
+  if (!ART_VARIANTS.has(variant || '')) return null;
+  if (W / H > WIDE_AT) { const w = want(bgWideArt(world)); if (w) return { im: w, wide: true }; }
+  const im = img(bgArt(world));
+  return im ? { im, wide: false } : null;
+}
+function bakeArt(g, G, art, world, variant, dpr) {
+  const { W, H } = G, im = art.im;
   const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
   const cover = ay => { const sc = Math.max(W / iw, H / ih), dw = iw * sc, dh = ih * sc; g.drawImage(im, (W - dw) / 2, (H - dh) * ay, dw, dh); };
-  if (W / H <= 1.0 || variant === 'map') cover(variant === 'map' ? 0.7 : 0.55);
+  if (art.wide) cover(0.55);
+  else if (W / H <= WIDE_AT || variant === 'map') cover(variant === 'map' ? 0.7 : 0.55);
   else {
     const dh = H, dw = iw * (dh / ih), dx = (W - dw) / 2;
     g.save();
@@ -1634,12 +1646,18 @@ function artAmbient(g, G, world, t) {
   g.globalAlpha = 1;
 }
 
-function getBake(W, H, world, dpr, variant) {
-  const s = Math.min(dpr, Math.sqrt(BAKE_MAX / Math.max(1, W * H)));
-  const art = artFor(world, variant);
-  const key = [world, Math.round(W), Math.round(H), s.toFixed(4), variant || '', art ? 'art' : ''].join('|');
+const bakeS = (W, H, dpr) => Math.min(dpr, Math.sqrt(BAKE_MAX / Math.max(1, W * H)));
+const baseKey = (W, H, world, s, variant) => [world, Math.round(W), Math.round(H), s.toFixed(4), variant || ''].join('|');
+let bakesThisFrame = 0;
+function getBake(W, H, world, dpr, variant, peek) {
+  const s = bakeS(W, H, dpr);
+  const art = artFor(world, variant, W, H);
+  const base = baseKey(W, H, world, s, variant);
+  const key = base + '|' + (art ? (art.wide ? 'artw' : 'art') : '');
   let e = cache.get(key);
   if (e) { cache.delete(key); cache.set(key, e); return e; } // LRU touch
+  if (peek) return null;
+  bakesThisFrame++;
   const G = geom(W, H);
   const bw = Math.max(1, Math.ceil(W * s - 1e-6)), bh = Math.max(1, Math.ceil(H * s - 1e-6));
   const cv = mkCanvas(bw, bh), cg = cv.getContext('2d');
@@ -1659,9 +1677,9 @@ function getBake(W, H, world, dpr, variant) {
     }
     cv.width = cv.height = 1; // free the big canvas now
   }
-  e = { tiles, bw, bh, s, A, G, Wd, world };
+  e = { tiles, bw, bh, s, A, G, Wd, world, base, lvl: art ? (art.wide ? 2 : 1) : 0 };
   cache.set(key, e);
-  while (cache.size > 12) cache.delete(cache.keys().next().value);
+  while (cache.size > 14) cache.delete(cache.keys().next().value);
   return e;
 }
 function blitBake(g, e, W, H) {
@@ -1682,10 +1700,28 @@ function clipPanes(g, panes) {
   for (const p of panes) { if (p.circle) { g.moveTo(p.x + p.r, p.y); g.arc(p.x, p.y, p.r, 0, TAU); } else g.rect(p.x, p.y, p.w, p.h); }
   g.clip();
 }
+// DECISION (render2 R7): when a better backdrop arrives for the same screen (procedural → painting, or portrait
+//   painting → 16:9 painting on desktop) the new bake fades in over FADE_S instead of popping. Both bakes already
+//   exist, so a fade frame costs one extra blit; nothing is allocated per frame.
+const FADE_S = 0.25;
+const shown = new Map(); // base key → { e, from, t0 }
+const nowS = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
 function drawWorld(g, W, H, world, t, variant) {
   if (!(W > 0 && H > 0)) return null;
   const e = getBake(W, H, world, devScale(g).s, variant);
-  blitBake(g, e, W, H);
+  let f = shown.get(e.base);
+  if (!f) {
+    shown.set(e.base, f = { e, from: null, t0: 0 });
+    if (shown.size > 32) shown.delete(shown.keys().next().value);
+  } else if (f.e !== e) {
+    if (e.lvl > f.e.lvl && variant !== 'og') { f.from = f.e; f.t0 = nowS(); }
+    f.e = e;
+  }
+  const fp = f.from ? (nowS() - f.t0) / FADE_S : 1;
+  if (fp < 1) {
+    blitBake(g, f.from, W, H);
+    g.save(); g.globalAlpha = ease(clamp(fp, 0, 1)); blitBake(g, e, W, H); g.restore();
+  } else { f.from = null; blitBake(g, e, W, H); }
   if (e.A.art) { if (variant !== 'map') { g.save(); artAmbient(g, e.G, e.world, t); g.restore(); } return e; }
   g.save(); clipPanes(g, e.A.panes); e.Wd.winLive(g, e.G, e.A, t); g.restore();
   g.save(); e.Wd.live(g, e.G, e.A, t); g.restore();
@@ -1695,6 +1731,12 @@ function drawWorld(g, W, H, world, t, variant) {
 /** Full-screen layered scene for S.world (or the seasonal title scene on the title screen). */
 export function drawScene(g, S) {
   if (!S || !(S.W > 0)) return;
+  bakesThisFrame = 0;
+  VIEW.W = S.W; VIEW.H = S.H;
+  if (S.screen !== 'play') prebakeMap(S.W, S.H, devScale(g).s);
+  // the map's world bands tile the whole screen (ui.js drawMap), so the world scene under it is never seen: skip its
+  // bake + blit (on first map entry from the title that bake was part of the long task)
+  if (S.screen === 'map') return;
   if (S.screen === 'title') { drawTitleScene(g, S.W, S.H, S.T || 0, S.world === 2 ? 'pumpkin' : 'den'); return; }
   drawWorld(g, S.W, S.H, clamp(S.world | 0 || 1, 1, 6), S.T || 0, '');
 }
@@ -1705,13 +1747,54 @@ export function drawTitleScene(g, W, H, t, season) {
 }
 
 /** Map strip: a mini version of a world scene filling rect (clipped). */
+// DECISION (render2 R6/R8): a world band on the map used to bake its painting cover-fitted to the whole band (taller
+//   than the screen for worlds 1 and 6), so the 955×1280 painting was upscaled 1.74× at dpr 2 (in levels: 1.32×), and
+//   the first map entry baked 2 such bands in one ~1 s task at 4× CPU. Now every band shows a viewport-sized bake
+//   (W × screen H, the same zoom as the level backdrop) through its band rect, "sticky": it rides in with the band's
+//   top edge, holds still while the band fills the screen, and rides out with its bottom edge. One bake size per
+//   world, known before the map opens, so prebakeMap() makes them at idle time on the title / win screens, one world
+//   per slice. If a band still needs a bake on the map, at most one bake happens per frame (others draw a flat
+//   world tint for that frame), so map entry never stacks several bakes into one long task.
+const VIEW = { W: 0, H: 0 };
+const MAP_TINT = [null, '#7A4E3A', '#3B2A4A', '#5A3B2C', '#6B4A36', '#4A4458', '#2A2848'];
 export function drawRoomVignette(g, rect, world, t) {
   if (!rect || !(rect.w > 2 && rect.h > 2)) return;
+  world = clamp(world | 0 || 1, 1, 6);
+  const d = devScale(g);
+  const Hv = Math.abs(rect.w - VIEW.W) < 0.5 && VIEW.H > 0 ? VIEW.H : (g.canvas && g.canvas.height ? g.canvas.height / d.s : rect.h);
+  const top = rect.y, bot = rect.y + rect.h;
+  const lo = Math.min(top, bot - Hv), hi = Math.max(top, bot - Hv);
+  const y0 = clamp(0, lo, hi);
   g.save();
   g.beginPath(); g.rect(rect.x, rect.y, rect.w, rect.h); g.clip();
-  g.translate(rect.x, rect.y);
-  drawWorld(g, rect.w, rect.h, clamp(world | 0 || 1, 1, 6), t || 0, 'map');
+  if (bakesThisFrame > 0 && !getBake(rect.w, Hv, world, d.s, 'map', true)) {
+    g.fillStyle = MAP_TINT[world]; g.fillRect(rect.x, rect.y, rect.w, rect.h); // one bake per frame; this one next frame
+  } else {
+    g.translate(rect.x, y0);
+    drawWorld(g, rect.w, Hv, world, t || 0, 'map');
+  }
   g.restore();
+}
+
+// Idle-time pre-bake of the six map bakes (only for worlds whose painting has decoded; a procedural bake would be
+// thrown away when the painting lands). One world per idle slice; re-armed when the size, dpr or decoded art changes.
+let pre = { sig: '', busy: false };
+const idle = fn => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 600 }) : setTimeout(fn, 120));
+function prebakeMap(W, H, s) {
+  if (pre.busy || !(W > 0 && H > 0)) return;
+  let sig = `${Math.round(W)}|${Math.round(H)}|${s.toFixed(3)}|`;
+  for (let w = 1; w <= 6; w++) sig += artFor(w, 'map', W, H) ? (W / H > WIDE_AT && artFor(w, 'map', W, H).wide ? 'w' : 'a') : '-';
+  if (sig === pre.sig) return;
+  pre.sig = sig; pre.busy = true;
+  let w = 0;
+  const step = () => {
+    if (VIEW.W !== W || VIEW.H !== H) { pre.busy = false; pre.sig = ''; return; } // resized: re-arm on next frame
+    while (++w <= 6 && (!artFor(w, 'map', W, H) || getBake(W, H, w, s, 'map', true))) { /* skip: no art yet or done */ }
+    if (w > 6) { pre.busy = false; return; }
+    try { getBake(W, H, w, s, 'map'); } catch (e) { pre.busy = false; return; }
+    idle(step);
+  };
+  idle(step);
 }
 
 // ------------------------------------------------------------------ OG (§12.2), 1200×630 design space

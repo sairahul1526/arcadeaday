@@ -32,7 +32,7 @@ import * as Sc from './scene.js';
 import * as M from './meta.js';
 import * as Au from './audio.js';
 import LVDATA from './levels-data.js';
-import { loadArt, kittenArt, bgArt } from './art.js';
+import { loadArt, kittenArt, bgArt, bgWideArt } from './art.js';
 
 const Q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 const on = k => Q.get(k) === '1' || Q.get(k) === 'true';
@@ -85,7 +85,9 @@ function whenBooted(fn) {
 // the take's art. kittenArt for both moods, the OG's calico, and the backdrops of the take's world and Pumpkin Night.
 async function artReady(lv) {
   const w = Math.min(6, Math.max(1, Math.ceil(lv / 10)));
-  const ids = [kittenArt(lv, false), kittenArt(lv, true), kittenArt(3, false), bgArt(w), bgArt(2)];
+  // render2: + the painted Kitty (end card) and the 16:9 backdrops (the 1200×630 OG and landscape takes use them)
+  const ids = [kittenArt(lv, false), kittenArt(lv, true), kittenArt(3, false), bgArt(w), bgArt(2), 'kit-hero-idle',
+    'kit-tabby-happy', 'kit-tabby-sad', bgWideArt(w), bgWideArt(2)];
   try { await Promise.race([loadArt(ids), new Promise(r => setTimeout(r, 8000))]); } catch (e) { /* fallbacks draw */ }
 }
 async function fontsReady() {

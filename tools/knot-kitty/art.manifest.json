@@ -364,30 +364,30 @@
     "at": "2026-10-30T07:52:31.207Z"
   },
   "boss-b20-happy": {
-    "prompt": "Boss character: Count Whiskerton: a grand black cat wearing a purple velvet cape with a high collar and a tiny pumpkin brooch, playful Halloween style, not scary, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "prompt": "The same character as the reference image: Count Whiskerton, a grand solid black cat (fully black fur everywhere, NO white chest, NO white muzzle, no white patches) wearing the identical purple velvet cape with high collar and the tiny pumpkin brooch. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body.",
     "aspect": "1:1",
     "model": "nano-banana-2",
     "cutout": true,
     "max": 512,
     "tasks": [
-      "dec062fe9c3bd2dacf3b2f8ac4ebf29f",
-      "8e68ef5e426c582d6b6605b78231d84f"
+      "96d0ef6b917b1fc726cfe4c48eb08aa8",
+      "588af5f1d9e5c6e355ef40a6a5f36eea"
     ],
-    "bytes": 25460,
-    "at": "2026-10-30T07:53:09.057Z"
+    "bytes": 26700,
+    "at": "2026-10-30T09:05:51.687Z"
   },
   "boss-b40-happy": {
-    "prompt": "Boss character: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "prompt": "The same character as the reference image: Baron Von Purr, a grand grey tabby cat with the curly moustache-like whisker tuft, the gold monocle on a chain and the same small dark brown barista apron with the coffee-bean emblem exactly as in the reference. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body.",
     "aspect": "1:1",
     "model": "nano-banana-2",
     "cutout": true,
     "max": 512,
     "tasks": [
-      "89b0671fe267e4bec05f4538f18ac180",
-      "2047ec091d9c2954f6e7c4a911562ade"
+      "96c295303498838e2f4c6ba16cd76ade",
+      "235690069bf86483794660c95966feac"
     ],
-    "bytes": 29620,
-    "at": "2026-10-30T07:53:25.078Z"
+    "bytes": 26708,
+    "at": "2026-10-30T09:04:40.535Z"
   },
   "boss-b40-sad": {
     "prompt": "Boss character, bigger and more ornate than a kitten: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
@@ -590,5 +590,90 @@
     ],
     "bytes": 23638,
     "at": "2026-10-30T07:57:05.012Z"
+  },
+  "bgw-pumpkin": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same friendly Halloween night porch as the reference image (same wooden porch, railing, purple dusk sky with a big round moon, string fairy lights, carved jack-o-lanterns, autumn leaves, same colours), now seen as a wide view so the porch continues to the left and right: the big moon and railing on the left, the front door with a wreath on the right, pumpkins and leaves along the bottom. Jack-o-lanterns have simple triangle-eyed smiling faces, never cat faces. Cute, not scary. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "15e400c70e47c305540557ace7568594"
+    ],
+    "bytes": 95744,
+    "at": "2026-10-30T09:04:49.221Z"
+  },
+  "bgw-cabin": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same snowy log-cabin interior as the reference image (same log walls, frosted windows with snowfall, wood stove, hanging mittens and knitted stocking on a garland, shelves with mugs, armchair, patterned rug, soft blue and warm amber light, same colours), now seen as a wide view so the cabin continues to the left and right: wood stove and firewood on the left, two frosted windows in the background, armchair and bookshelf on the right, rug across the floor. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "a71bce1291941b11d0bf36380795447e"
+    ],
+    "bytes": 128548,
+    "at": "2026-10-30T09:05:22.616Z"
+  },
+  "bgw-cafe": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same charming cafe interior as the reference image (same wooden counter with cakes under glass domes, hanging plants, shelves of mugs and teapots, blank dark chalkboards with nothing written on them, big sunny autumn windows, cushions on the wooden floor, sunny warm light, same colours), now seen as a wide view so the cafe continues to the left and right: big autumn windows and an armchair on the left, the round counter with cakes in the middle background, shelves with mugs and plants on the right. Chalkboards are completely blank. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "c2a591ee68857e29163999e4178dcaa5"
+    ],
+    "bytes": 141672,
+    "at": "2026-10-30T09:05:23.979Z"
+  },
+  "bgw-den": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same cosy autumn living-room den as the reference image (same fireplace, armchair with knitted blanket, window with falling orange leaves, patterned rug, lamp, baskets, warm lamp light, same colours), now seen as a wide view from a little further back so the room continues to the left and right: fireplace and mantel with pumpkins on the left side, window with autumn leaves in the middle background, armchair and side table with lamp on the right side, the patterned rug across the floor. Do NOT include the small sleeping cat from the reference. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "0bd34362966934f251c8002cfbca92ac"
+    ],
+    "bytes": 127400,
+    "at": "2026-10-30T09:05:25.443Z"
+  },
+  "bgw-attic": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same moonlit attic as the reference image (same slanted wooden beams, round window with moonlight, old suitcases and trunks, dress form, small desk with an oil lamp, dangling string lights, cool blue and lilac palette, same colours), now seen as a wide view so the attic continues to the left and right: trunks and suitcases on the left, the round moonlit window in the middle background under the beams, dress form and desk on the right. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "a7718bd6b8b678f4e58cb71df36e039d"
+    ],
+    "bytes": 82188,
+    "at": "2026-10-30T09:06:01.998Z"
+  },
+  "bgw-roof": {
+    "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same starry rooftop at night as the reference image (same tiled colourful roofs, chimney pots, huge starry sky with a crescent moon and a shooting star, distant glowing town windows, same colours), now seen as a wide panoramic view so the rooftops continue to the left and right: chimneys and the gable of a house on the left, rows of distant town roofs with glowing windows along the middle, tiled roofs and chimney pots on the right, the crescent moon in the sky. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "1fde70819839129551bb8657070e9a09"
+    ],
+    "bytes": 117132,
+    "at": "2026-10-30T09:06:04.310Z"
+  },
+  "kit-hero-idle": {
+    "prompt": "The same chubby orange tabby kitten as the reference (identical design, stripes, colours, eye colour and proportions), calm and content: sitting upright facing the viewer, ears up, big bright open eyes with a white highlight, small gentle closed-mouth smile, front paws planted together on the floor in front of the body so the chest and neck are clearly visible, tail curled around the side, plain white background, centered, full body.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 384,
+    "tasks": [
+      "a86172879cc7cd8d684c7acba30dfeb1",
+      "276f979624eca7b1636b303eb266dd04"
+    ],
+    "bytes": 16142,
+    "at": "2026-10-30T09:06:16.874Z"
   }
 }

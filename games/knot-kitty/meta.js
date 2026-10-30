@@ -74,7 +74,7 @@ const arr60 = (a, hi) => Array.from({ length: LEVELS }, (_, i) => int(Array.isAr
 const isBoss = id => id % PER_WORLD === 0;
 const validId = id => Number.isInteger(id) && id >= 1 && id <= LEVELS;
 const D = () => P.data;
-const save = () => P.save();
+const save = () => { mergeStored(); P.save(); };
 
 function addDays(key, n) {
   const [y, m, d] = key.split('-').map(Number);
@@ -151,6 +151,92 @@ export function migrate(old) {
   return o;
 }
 
+// ---------- multi-tab safety (ui2 S1) ----------
+// DECISION (ui2 S1): two tabs of the game on the web each hold the whole save in memory and each write it whole, so the
+//   last writer used to erase the other tab's progress. Now (web only, never in ?record / ?og, which never save):
+//   1. every meta save() first merges the stored save (P.readStored) into P.data (this tab's write is the newest);
+//   2. a 'storage' listener merges another tab's write as it lands (that write is the newest).
+//   Merge rule: progress only grows (max of stars, kittens, cur, best, bonus, giftsClaimed, stats; OR of chests and
+//   gifted; union of outfits, tut and daily wins, the later daily.last carrying its streak). Currency, boosters,
+//   settings and the worn outfit come together from the newest write, so a cross-tab merge can never duplicate yarn.
+//   The stored value is only trusted when it parses to a v ≥ 1 object with a stars array; anything else (corrupt,
+//   truncated, foreign) is ignored and never lowers this tab's data. Save format and SAVE_V are unchanged.
+//   resetAll writes through at once (no merge), and another tab adopts a reset (a valid save with no stars and no
+//   wins) instead of merging its old progress back in.
+const Qs = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+const qOn = k => !!Qs && (Qs.get(k) === '1' || Qs.get(k) === 'true');
+const SYNC = P.env === 'web' && !qOn('record') && !qOn('og');
+function lsRead() { try { return P.readStored ? P.readStored() : null; } catch { return null; } }
+function parseStored(raw) {
+  if (typeof raw !== 'string' || !raw) return null;
+  let o = null;
+  try { o = JSON.parse(raw); } catch { return null; }
+  return isObj(o) && (+o.v | 0) >= 1 && Array.isArray(o.stars) ? o : null;
+}
+const isResetSave = o => o.stars.every(v => !(+v > 0)) && !(isObj(o.stats) && +o.stats.wins > 0);
+/** Merges the stored save `o` into d in place; `theirsNewer` picks whose yarn/boosters/settings/outfit win. */
+function mergeInto(d, o, theirsNewer) {
+  const t = sanitize(o);
+  d.best = Math.max(int(d.best, 0, MAX_SCORE, 0), t.best);
+  for (let i = 0; i < LEVELS; i++) {
+    d.stars[i] = Math.max(d.stars[i] | 0, t.stars[i]);
+    d.kittens[i] = Math.max(d.kittens[i] | 0, t.kittens[i]);
+  }
+  d.cur = Math.max(d.cur | 0, t.cur);
+  for (const k of BK) d.gifted[k] = d.gifted[k] === true || t.gifted[k];
+  d.outfits = OUTFIT_IDS.filter(id => id === 'tabby' || d.outfits.includes(id) || t.outfits.includes(id));
+  for (const k of Object.keys(t.tut)) d.tut[k] = 1;
+  for (const k of ['plays', 'wins', 'pulls']) d.stats[k] = Math.max(d.stats[k] | 0, t.stats[k]);
+  const dl = d.daily, tl = t.daily;
+  dl.won = [...new Set([...dl.won, ...tl.won])].sort().slice(-DAILY_KEEP);
+  if (tl.last > dl.last) { dl.last = tl.last; dl.streak = tl.streak; } else if (tl.last === dl.last) dl.streak = Math.max(dl.streak, tl.streak);
+  d.bonus = Math.max(d.bonus | 0, t.bonus);
+  d.giftsClaimed = Math.max(d.giftsClaimed | 0, t.giftsClaimed);
+  d.chests = (d.chests | 0) | t.chests;
+  if (theirsNewer) {
+    d.balls = t.balls;
+    for (const k of BK) d.boost[k] = t.boost[k];
+    d.set = { ...t.set };
+    d.wear = t.wear;
+  }
+  if (!d.outfits.includes(d.wear)) d.wear = 'tabby';
+}
+/** Before this tab writes: fold in what another tab may have stored since. Never throws. */
+function mergeStored() {
+  const d = D();
+  if (!syncWired || !d) return; // only once initMeta has sanitised P.data
+  try { const o = parseStored(lsRead()); if (o && !isResetSave(o)) mergeInto(d, o, false); } catch (e) { P.error && P.error(e); }
+}
+function onStorage(raw) {
+  const d = D();
+  if (!d) return;
+  try {
+    const o = parseStored(raw);
+    if (!o) return; // removed, corrupt or foreign: keep this tab's data, never lose progress
+    const before = JSON.stringify(d);
+    if (isResetSave(o) && d.stars.some(v => v > 0)) { // the other tab reset progress: adopt it, do not resurrect
+      const clean = sanitize(o);
+      clean.v = d.v;
+      for (const k of Object.keys(d)) delete d[k];
+      Object.assign(d, clean);
+      bus.emit && bus.emit('saveSync', { reset: true });
+      return;
+    }
+    mergeInto(d, o, true);
+    const after = JSON.stringify(d);
+    if (after === before) return;
+    bus.emit && bus.emit('saveSync', { reset: false });
+    // this tab held progress the other did not: write the union back (no merge: the other write is already in)
+    if (after !== JSON.stringify({ ...sanitize(o), v: d.v })) P.save();
+  } catch (err) { P.error && P.error(err); }
+}
+let syncWired = false;
+function wireSync() {
+  if (syncWired || !SYNC || !P.onStoredChange) return;
+  syncWired = true;
+  P.onStoredChange(onStorage);
+}
+
 let wired = false;
 /** After P.init: sanitise P.data in place, wire stats, report the score. */
 export function initMeta() {
@@ -160,6 +246,7 @@ export function initMeta() {
   clean.v = Math.max(SAVE_V, int(d.v, 0, 1e6, SAVE_V));
   for (const k of Object.keys(d)) delete d[k];
   Object.assign(d, clean);
+  wireSync();
   save();
   if (!wired) {
     wired = true;
@@ -446,7 +533,8 @@ export function resetAll() {
   const keep = { best: d.best, set: { ...d.set } };
   for (const k of Object.keys(d)) delete d[k];
   Object.assign(d, defaults(), keep);
-  save();
+  // ui2 S1: write the reset through now and without the multi-tab merge, which would bring the old progress back
+  P.save(); P.flush();
 }
 
 export const qaOldSave = () => ({ save: '{"v":0,"best":0,"at":3}', progress: 3 });

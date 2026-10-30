@@ -44,23 +44,34 @@ const REF_W = 9.2, REF_H = 11.6, GATE = 24.4;
 /** GDD §9.1. Returns { W, H, u, orient, m, safe, hud, rack, callout, board, tray, basket, boosters, boostDir }. */
 export function computeLayout(W, H) {
   W = Math.max(1, W); H = Math.max(1, H);
-  const orient = H / W >= 1.15 ? 'portrait' : W / H >= 1.15 ? 'landscape' : 'square';
-  let u = orient === 'portrait' ? Math.min(W / 390, H / 700)
-    : orient === 'square' ? Math.min(W / 520, H / 700)
+  const shape = H / W >= 1.15 ? 'portrait' : W / H >= 1.15 ? 'landscape' : 'square';
+  // DECISION (ui2 L2): square screens (1080×1080) used the phone stack inside a 520u-wide column, so the board was
+  //   13–15 % of the screen; they now use the desktop split (board left, HUD/rack/basket column right) at
+  //   u = min(W, H)/700, which roughly doubles the board. Portrait tablets (H/W < 1.6, W ≥ 600: 768×1024,
+  //   820×1180) keep the stack, but their bands scale with H/820 instead of H/700: every band is height-bound
+  //   there, so ~15 % thinner bands buy a ~20 % bigger board unit. Phones (H/W ≥ 1.6) are unchanged.
+  //   L.orient is the LAYOUT kind ('landscape' = split) because ui.js keys the plaque HUD / card docking on it;
+  //   L.shape keeps the screen's real shape.
+  const tab = shape === 'portrait' && H / W < 1.6 && W >= 600;
+  const orient = shape === 'portrait' ? 'portrait' : 'landscape';
+  let u = shape === 'portrait' ? Math.min(W / 390, H / (tab ? 820 : 700))
+    : shape === 'square' ? Math.min(W / 700, H / 700)
       : Math.min(W / 900, H / 520);
   // Fix 1: the old 2.6 ceiling left 4K with phone-sized UI and a capped board; scale on up to 4.4 (≈ 4K).
   u = clamp(u, 0.3, 4.4);
   const m = Math.min(8 * u, 0.035 * Math.min(W, H));
+  // ui2 U7: L.inset is still measured for the menus (title, map), but the site chips are hidden during play, so the
+  //   play safe rect no longer gives that strip away.
   const inset = webBottomInset(H);
 
   // safe rect
   let sw, sh;
-  if (orient === 'landscape') { sw = Math.min(W, 2.1 * H, 1100 * u); sh = Math.min(H - inset, 700 * u); }
-  else { sw = Math.min(W, 520 * u); sh = Math.min(H - inset, 2.3 * W); }
-  const safe = R(Math.round((W - sw) / 2), Math.round((H - inset - sh) / 2), sw, sh);
+  if (orient === 'landscape') { sw = Math.min(W, 2.1 * H, 1100 * u); sh = Math.min(H, 700 * u); }
+  else { sw = Math.min(W, 520 * u); sh = Math.min(H, 2.3 * W); }
+  const safe = R(Math.round((W - sw) / 2), Math.round((H - sh) / 2), sw, sh);
   const sx = safe.x, sy = safe.y, sr = safe.x + safe.w, sb = safe.y + safe.h;
 
-  const L = { W, H, u, orient, m, safe, inset, boostDir: 'tray' };
+  const L = { W, H, u, orient, shape, m, safe, inset, boostDir: 'tray' };
   const hudH = 52 * u;
   const gap = Math.max(3, 4 * u);
 
@@ -155,6 +166,10 @@ export function computeLayout(W, H) {
       L.boosters = R(sx + m + bkW + m, L.tray.y, bw - bkW - m, trayH);
       L.board = R(sx + m, top, bw, bh);
     }
+    // DECISION (ui2 L3): height under the board rect that only the tray uses. When the tray is empty (L1: basket
+    //   hidden, no booster unlocked yet) ui.js sets L.board.trayFree and play's onResize re-fits the board into it, so
+    //   the board + kitten group no longer leaves the bottom quarter of a tall phone blank.
+    L.board.trayH = Math.max(0, bottom - (L.board.y + L.board.h) - m * 0.25);
   } else {
     // DECISION (fix 1, phone m4 / desktop M1): the HUD moves into the right column so the board gets the full
     //   safe height; leftover column height grows the boosters (≥ 46), then the rack (bigger spools), then the
@@ -201,6 +216,7 @@ export function computeLayout(W, H) {
 
 /** GDD §9.1 fitBoard. level needs { cols, rows }. Fix 1 (contract 5): no px cap, the board scales with the viewport. */
 export function fitBoard(level, rect) {
+  if (rect.trayFree && rect.trayH > 0) rect = { ...rect, h: rect.h + rect.trayH };
   const cols = level.cols || 4, rows = level.rows || 4;
   const gw = cols - 1 + 1.2, gh = rows - 1 + 1.2;
   const kres = rect.kitRes || 0;

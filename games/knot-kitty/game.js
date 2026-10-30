@@ -21,7 +21,10 @@
 //   interval is > 22 ms AND the median in-callback work is > GOV_WORK ms (so a 30 Hz display / iOS Low Power Mode,
 //   where frames are slow but work is tiny, never triggers it), the dpr cap steps down (×0.5–0.85, by how slow)
 //   and the canvas is re-sized. Floor GOV_FLOOR = 1 (only a device that cannot hold ~45 fps ever gets there).
-//   It only ever steps down within a page load (no oscillation); S.gov exposes {cap, med, work, steps} for QA.
+//   It only ever steps down within a page load (no oscillation); S.gov exposes {cap, px, med, work, steps} for QA.
+//   QA 10-30: the cap is a backing-pixel budget (GOV.px), not a dpr, so a step taken at 2560×1440 doesn't blur a
+//   later 390×844; and every window resize clears the window and skips 30 frames, because the re-bakes after a
+//   resize are slow by design and a resize storm used to ratchet a fast device down to dpr 1.
 // DECISION: S.world: title = 2 (Pumpkin Night) until SEASON_END (IST), else 1; map = world of meta.cur();
 //   play = world of the level (daily/bonus: world of meta.cur()). audio.playWorld(0) on title/map, (world) in play.
 //   The daily screen keeps the world it was opened over (title → daily does not swap the background).
@@ -65,7 +68,7 @@ const MAX_PIXELS = 6.0e6, HARD_PIXELS = 3840 * 2160;
 const GOV_N = 16, GOV_SLOW = 22, GOV_WORK = 1.5, GOV_FLOOR = 1;
 
 const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false, pending: new Set() };
-const GOV = { cap: Infinity, iv: [], wk: [], skip: 30, steps: 0, med: 0, work: 0 };
+const GOV = { cap: Infinity, px: Infinity, iv: [], wk: [], skip: 30, steps: 0, med: 0, work: 0 };
 S.gov = GOV;
 
 // host pause, wired at module load (before P.init awaits the save; see DECISION above)
@@ -91,6 +94,7 @@ function report(e) {
 // ------------------------------------------------------------------ sizing
 function resize(W, H, dpr) {
   W = Math.max(1, Math.round(W)); H = Math.max(1, Math.round(H));
+  GOV.cap = Math.sqrt(GOV.px / (W * H));
   const want = Math.min(DPR_CAP, dpr || 1, GOV.cap);
   dpr = Math.max(Math.min(1, want), Math.min(want, Math.sqrt(MAX_PIXELS / (W * H)))); // budget, but not below 1
   dpr = Math.max(0.5, Math.min(dpr, Math.sqrt(HARD_PIXELS / (W * H))));
@@ -111,6 +115,7 @@ function fitWindow() {
   const H = window.innerHeight || document.documentElement.clientHeight || 844;
   const dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
   if (W === S.W && H === S.H && dpr === S.dpr) return;
+  GOV.iv = []; GOV.wk = []; GOV.skip = Math.max(GOV.skip, 30);
   resize(W, H, dpr);
 }
 
@@ -126,7 +131,8 @@ function govern(iv, work) {
   const floor = Math.min(GOV_FLOOR, S.dpr);
   if (GOV.med > GOV_SLOW && GOV.work > GOV_WORK && S.dpr > floor + 0.01) {
     const f = Math.max(0.5, Math.min(0.85, Math.sqrt(14 / GOV.med)));
-    GOV.cap = Math.max(floor, S.dpr * f);
+    const d2 = Math.max(floor, S.dpr * f);
+    GOV.px = S.W * S.H * d2 * d2;
     GOV.steps++;
     GOV.skip = 8; // let the re-bakes settle before judging again
     resize(S.W, S.H, Math.min(DPR_CAP, window.devicePixelRatio || 1));
@@ -336,7 +342,7 @@ function pointer(type, x, y, id = -1) {
   if (S.screen === 'loading') return;
   if (hostPaused()) { dropGesture(); return; } // the host has paused us: no input until it resumes
   if (type === 'down') {
-    if (ptr && ptr.id !== id && performance.now() - ptr.t < 8000) return; // second simultaneous pointer
+    if (ptr && ptr.id !== id && performance.now() - ptr.t < 2000) return; // second simultaneous pointer (a lost pointerup frees input after 2 s, QA 10-30)
     const owner = ui.pointer('down', x, y, S) ? 'ui' : 'core';
     ptr = { id, owner, t: performance.now() };
     if (owner === 'core' && S.screen === 'play' && S.sess) play.press(x, y, S);
@@ -469,6 +475,12 @@ bus.on('levelStart', d => {
   P.event('level_start', { id: d.id, kind: d.kind });
 });
 bus.on('press', d => { if (lvl && d && d.ok) lvl.moves++; });
+// the Music / Sounds sliders take effect at once, not on the next load (QA 10-30)
+bus.on('settings', d => {
+  if (!d) return;
+  if (d.k === 'music') safe(audio.setMusic, d.v);
+  else if (d.k === 'sfx') safe(audio.setSfx, d.v);
+});
 bus.on('win', d => {
   if (!lvl || lvl.done) return;
   lvl.done = true;
