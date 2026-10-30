@@ -1831,7 +1831,15 @@ function firstAnchor(S, L, at) {
   if (!rs) return null;
   const box = p => ({ x0: p.x - p.w / 2, y0: p.y - p.h / 2, x1: p.x + p.w / 2, y1: p.y + p.h / 2 });
   if (at === 'next' && rs.next[0]) return { pref: 'below', t: box(rs.next[0]) };
-  if (at === 'more') { const mc = moreBox(S, L, rs); return mc ? { pref: 'below', t: mc } : null; }
+  // fix4 (critic r3, art 1 / grandparent: on phone the L7 "+1" bubble sat on the active spools' badges for ~3 s): in
+  //   the target reaches down to the shelf, so the bubble hangs under the rack (portrait: over the board's top edge;
+  //   landscape: it used to sit on the HUD world name)
+  if (at === 'more') {
+    const mc = moreBox(S, L, rs);
+    if (!mc) return null;
+    const rk = L.rack, shelf = rk && rk.h > 0 ? rk.y + rk.h : 0;
+    return { pref: 'below', t: shelf > mc.y1 ? { x0: mc.x0, y0: mc.y0, x1: mc.x1, y1: shelf } : mc };
+  }
   if (at === 'rack') { const a = box(rs.active[0]), b = box(rs.active[1]); return { pref: 'below', t: { x0: a.x0, y0: a.y0, x1: b.x1, y1: a.y1 } }; }
   return null;
 }
@@ -3096,12 +3104,23 @@ function prepShare(c, sess, res) {
 function shareWin(sess, res, c) {
   if (!P.canShare) return;
   const text = shareText(sess, res), url = SHARE_URL, nav = typeof navigator !== 'undefined' ? navigator : {};
-  const copy = () => {
-    const done = () => toast('Copied!');
-    try { if (nav.clipboard && nav.clipboard.writeText) { nav.clipboard.writeText(text + ' ' + url).then(done, () => toast('arcadeaday.com/knot-kitty')); return; } } catch {}
+  const f = c && c.shareFile;
+  // fix4 (critic r3, viral 1: desktop Share was text-only): with no Web Share the picture goes on the clipboard with
+  //   the text beside it (an image paster gets the card, a text box gets the dare + link); text-only copy if that fails
+  const copyText = () => {
+    try { if (nav.clipboard && nav.clipboard.writeText) { nav.clipboard.writeText(text + ' ' + url).then(() => toast('Copied!'), () => toast('arcadeaday.com/knot-kitty')); return; } } catch {}
     toast('arcadeaday.com/knot-kitty');
   };
-  const f = c && c.shareFile;
+  const copy = () => {
+    try {
+      if (f && nav.clipboard && nav.clipboard.write && typeof ClipboardItem === 'function') {
+        const item = new ClipboardItem({ 'image/png': f, 'text/plain': new Blob([text + ' ' + url], { type: 'text/plain' }) });
+        nav.clipboard.write([item]).then(() => toast('Picture copied!'), copyText);
+        return;
+      }
+    } catch {}
+    copyText();
+  };
   try {
     if (f && nav.share && nav.canShare && nav.canShare({ files: [f] })) {
       // a failed file share (not a user cancel) falls back to the text share, then the copy

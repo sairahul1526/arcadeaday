@@ -165,7 +165,10 @@ if (cmd === 'table') {
   const secs = +(a2 || 60);
   for (const id of ids(a1)) {
     const L0 = LEVELS[id - 1];
-    if (!BREATHER.has(id) || isKnot(L0)) { console.log(`L${id}: not a breather, skipped`); continue; }
+    // fix4 (critic r3, kid13 + mobile: L8 is a cliff; a mechanic's first level should be easy): KK4_FORCE=1 eases a
+    //   non-breather too, knot levels by cap + 1 only (a re-dress would drop the knot)
+    const force = !!process.env.KK4_FORCE, capOnly = force && isKnot(L0);
+    if (!force && (!BREATHER.has(id) || isKnot(L0))) { console.log(`L${id}: not a breather, skipped`); continue; }
     const before = critic(L0);
     let out = null;
     // 1) same board, cap + 1
@@ -177,9 +180,11 @@ if (cmd === 'table') {
       const m = measure(puz, 777 + id, 1000);
       console.log(`  L${id} cap+1: opt ${sol.peak} (par ${L0.par}) critic avg ${pct(c.average)} cas ${pct(c.casual)} | 1000: avg ${pct(m.average)} cas ${pct(m.casual)} exp ${pct(m.expert)}`);
       if (sol.exact && sol.peak === L0.par && okRelief(c) && m.average >= 0.86 && m.casual >= 0.61 && m.expert >= 0.999) out = stamp(L, { how: 'relief:cap+1', sol });
+      // a forced ease only has to soften the cliff, not reach breather level
+      else if (force && sol.exact && sol.peak === L0.par && m.average >= 0.75 && m.casual >= 0.5 && m.expert >= 0.999) out = stamp(L, { how: 'ease:cap+1', sol });
     }
     // 2) re-dress the kept geometry; 3) fresh geometry from the same spec
-    for (const fresh of [false, true]) {
+    for (const fresh of capOnly ? [] : [false, true]) {
       if (out) break;
       const res = redress(L0, fresh ? secs * 1.5 : secs, fresh);
       if (!res.best) { console.log(`  L${id} ${fresh ? 'fresh' : 'redress'}: no candidate`, res.tried, JSON.stringify(res.fails)); continue; }
