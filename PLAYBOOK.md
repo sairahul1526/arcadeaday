@@ -170,6 +170,40 @@ default-src 'none'; script-src 'report-sample' 'self' 'unsafe-eval' 'unsafe-inli
 ### Official test suite
 The official test suite is at https://developers.google.com/youtube/gaming/playables/test_suite. After deploy, drive it with Playwright: enter `https://arcadeaday.com/yt/<slug>/` as the Game URL and read the MUST/SHOULD results. If it insists on an invite code we don't have, note that in the report and rely on `playables-check.mjs`.
 
+### `tools/art/kie.mjs`: AI art (kie.ai, added 2026-10-30)
+Every game from Day 10 on uses real illustrated art: characters, bosses, backgrounds, win art, the portal cover and the icon. Code-drawn shapes are no longer the default. The key is `KIE_API_KEY` in `~/.config/arcadeaday.env`; never print, log or commit it.
+
+Commands:
+- `node tools/art/kie.mjs credits`: balance. Log it before and after each art batch.
+- `node tools/art/kie.mjs batch tools/<slug>/art.json [--only a,b] [--force]`:
+  - the main path; runs 4 at a time
+  - skips assets that already exist
+  - writes `games/<slug>/art/<id>.webp` (shipped) and keeps the raw 1K PNGs in `studio/art-raw/` (never shipped)
+  - writes prompts and task ids to `tools/<slug>/art.manifest.json`
+- `gen --prompt … --out x.webp [--cutout] [--ref a.png] [--aspect 16:9] [--max 512]`: one-offs.
+- `cutout in.png out.png`: removes the background (Recraft).
+- `optimize in.png out.webp --max 256`: sips plus cwebp, keeping alpha.
+
+Defaults:
+- model `nano-banana-2` at 1K, with `--ref` image inputs for style consistency
+- about 9 credits per image with cutout
+
+Rules:
+- **One style for the whole game.**
+  - The spec's `style` string is the art bible in one paragraph: line weight, shading, palette, camera, mood. It's prefixed to every prompt.
+  - Generate the hero character first. Approve it, then pass it as a `refs` entry for every other character so they all match.
+  - Prompts always say "plain white background, centered, full body" for anything that gets `cutout: true`.
+- **Variety is cheap now.** Make 6–12 character variants, a distinct look for every boss, 3–5 backgrounds (one per world or band), and several win/celebration illustrations, instead of recolouring one sprite.
+- **Size budget:**
+  - sprites `max` 256 (512 for hero and boss)
+  - backgrounds 1024–1280 without cutout
+  - the whole `art/` folder under 3 MB
+  - preload behind the loading screen, then call `firstFrameReady` once the first screen's art is decoded
+- **Same-origin only:** load images by relative path (`art/x.webp`). Playables' CSP allows `img-src 'self'`, so never hot-link kie URLs.
+- **Portal media** (cover, icon, banner at each portal's sizes): generate them from the same refs into `dist/portals/<slug>/media/`. The cover is the most important image we make, because it decides clicks on every portal. Make 3 options and have the viral-marketer critic pick.
+- **Review:** look at every generated image before it's wired in. Regenerate anything off-model, with extra fingers or limbs, garbled text, or the wrong style. The art-direction QA lane (G10) and the art-director critic judge the final art.
+- No text inside generated images. The UI renders text, so it's crisp and translatable.
+
 ## 4. The studio pipeline
 **You** (the scheduled session) are the executive producer and orchestrator.
 - **Spawning:** spawn subagents with the Agent tool, `run_in_background: true`, many in one message for parallel fan-out. The Workflow tool is fine for big fan-outs: the user explicitly asked for multi-agent orchestration at any scale.
@@ -198,7 +232,7 @@ The stages:
 | **C. Tournament** | 6 judges score all 32 on §5, independently: Playables curator, top mobile designer (Royal Match / Block Blast calibre), 13-year-old gamer, art director, viral marketer, producer (scope realism). Then a devil's advocate attacks the top 5. | `tournament.md` | top 3 finalists ≥ 42/50, none vetoed for scope |
 | **D. Prototype bake-off** | 3 builders, one per finalist (~90 min): greybox core loop, 5 levels, `?qa=1` bot. Then 4 playtesters (casual adult, gamer kid, designer, Playables curator) play all 3 with Playwright at phone and desktop sizes, with screenshots. | `proto-*/`, `playtest.md` | winner chosen by **play**, not pitch: fun in 30 s, wants more, bot metrics |
 | **E. GDD** | 1 lead designer writes it; 2 reviewers (designer, engineer) attack it; the lead finalizes. | `docs/gdd/<date>-<slug>.md` (committed) | covers every item below |
-| **F. Production** | 6–8 specialists on separate files to the GDD's interfaces: core/engine, levels + solver, renderer/art, UI/menus/tutorial, audio, meta/economy/save, modes (record/og/qa) + platform wiring. Then 1 integrator wires it all together and plays it end to end. | `games/<slug>/` | plays start to finish with no errors |
+| **F. Production** | 6–8 specialists on separate files to the GDD's interfaces: core/engine, levels + solver, **art generation** (`tools/<slug>/art.json` → `tools/art/kie.mjs batch`, starting on day one of F so the renderer can draw real sprites), renderer, UI/menus/tutorial, audio, meta/economy/save, modes (record/og/qa) + platform wiring. Then 1 integrator wires it all together and plays it end to end. | `games/<slug>/` | plays start to finish with no errors |
 | **G. QA swarm** | 10, each writing a report with screenshots (detail below). | `qa/*.md` | |
 | **H. Fix rounds** | You triage every QA finding into one prioritized list. Fix agents work in parallel by file ownership, then the failing QA lanes re-run. Repeat until clean. | | zero blockers |
 | **I. Critic gate** | 6 critics, fresh agents that never saw the build process, play the game cold and score 1–10 with reasons: Playables curator, top mobile designer, 13-year-old, art director, viral marketer, first-time grandparent. | `critics.md` | **every critic ≥ 8 and mean ≥ 9, with zero blockers.** Otherwise a polish round targets the lowest scores (F–H again). |
@@ -211,7 +245,7 @@ The GDD (stage E) must contain:
 - the level list and twist schedule
 - the difficulty curve
 - what "score" means
-- the art bible: palette, shapes, scene layers, characters, animation list, UI style
+- the art bible: palette, shapes, scene layers, characters, animation list, UI style, plus the **art list** for `tools/<slug>/art.json`: the style paragraph, every asset id, its prompt, size and cutout, and the portal cover concepts
 - the audio bible
 - every screen and flow
 - the tutorial script
