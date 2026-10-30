@@ -1,0 +1,442 @@
+{
+ "style": "Cozy storybook mobile-game illustration in one consistent style: soft gouache-like painted shading with gentle gradients, clean medium-weight dark plum outlines (#2B2440), chunky rounded shapes, big glossy expressive eyes with a white highlight, small pink nose, soft warm rim light from the upper left, warm autumn palette of cream, pumpkin orange, tomato red, teal, mustard and dusk blue, premium casual-game quality like Royal Match or Homescapes characters, family friendly, no text, no letters, no watermark.",
+ "outDir": "games/knot-kitty/art",
+ "defaults": {
+  "aspect": "1:1",
+  "res": "1K",
+  "cutout": true,
+  "max": 256
+ },
+ "items": [
+  {
+   "id": "kit-tabby-sad",
+   "max": 320,
+   "prompt": "Hero character: a chubby orange tabby kitten sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body."
+  },
+  {
+   "id": "kit-tabby-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "The same orange tabby kitten (identical design and colours as the reference), overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body."
+  },
+  {
+   "id": "kit-tuxedo-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a black-and-white tuxedo kitten with white chest, white socks and a white muzzle, green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-tuxedo-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a black-and-white tuxedo kitten with white chest, white socks and a white muzzle, green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-calico-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a calico kitten with patches of orange, black and white, amber eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-calico-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a calico kitten with patches of orange, black and white, amber eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-siamese-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a Siamese kitten with cream body, dark chocolate ears, face mask, paws and tail, bright blue eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-siamese-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a Siamese kitten with cream body, dark chocolate ears, face mask, paws and tail, bright blue eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-black-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a sleek black kitten with big golden-yellow eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-black-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a sleek black kitten with big golden-yellow eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-grey-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a round blue-grey British Shorthair kitten with copper eyes and chubby cheeks, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-grey-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a round blue-grey British Shorthair kitten with copper eyes and chubby cheeks, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-persian-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a fluffy white long-haired Persian kitten with a flat cute face and blue eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-persian-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a fluffy white long-haired Persian kitten with a flat cute face and blue eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-browntabby-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a brown mackerel tabby kitten with bold dark stripes and green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-browntabby-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a brown mackerel tabby kitten with bold dark stripes and green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-cream-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a cream-coloured kitten with white socks and a white tail tip, hazel eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-cream-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a cream-coloured kitten with white socks and a white tail tip, hazel eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-bengal-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a spotted golden Bengal kitten with leopard-like rosettes and green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-bengal-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a spotted golden Bengal kitten with leopard-like rosettes and green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-tortie-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a tortoiseshell kitten with mottled black and ginger fur and amber eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-tortie-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a tortoiseshell kitten with mottled black and ginger fur and amber eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-ginger-white-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a ginger-and-white bicolour kitten with a white face blaze, white belly and one ginger ear spot, green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "kit-ginger-white-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "A chubby a ginger-and-white bicolour kitten with a white face blaze, white belly and one ginger ear spot, green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b10-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Duchess Marmalade: a grand fluffy orange Persian cat with a pearl necklace and a tiny golden tiara, regal, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b10-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character: Duchess Marmalade: a grand fluffy orange Persian cat with a pearl necklace and a tiny golden tiara, regal, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b20-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Count Whiskerton: a grand black cat wearing a purple velvet cape with a high collar and a tiny pumpkin brooch, playful Halloween style, not scary, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b20-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/boss-b20-sad.png"
+   ],
+   "max": 512,
+   "prompt": "The same character as the reference image: Count Whiskerton, a grand solid black cat (fully black fur everywhere, NO white chest, NO white muzzle, no white patches) wearing the identical purple velvet cape with high collar and the tiny pumpkin brooch. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body."
+  },
+  {
+   "id": "boss-b30-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Lady Snowpaw: a grand white Norwegian forest cat with a knitted red earmuff headband and a long striped scarf, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b30-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character: Lady Snowpaw: a grand white Norwegian forest cat with a knitted red earmuff headband and a long striped scarf, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b40-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b40-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/boss-b40-sad.png"
+   ],
+   "max": 512,
+   "prompt": "The same character as the reference image: Baron Von Purr, a grand grey tabby cat with the curly moustache-like whisker tuft, the gold monocle on a chain and the same small dark brown barista apron with the coffee-bean emblem exactly as in the reference. Same character, same markings, same outfit, same proportions, now happy and celebrating: delighted and proud, one paw raised in a triumphant wave, eyes sparkling, big smile, plain white background, centered, full body."
+  },
+  {
+   "id": "boss-b50-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Princess Moonbeam: a grand lilac-grey long-haired cat with a crescent-moon tiara and a starry shawl, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b50-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character: Princess Moonbeam: a grand lilac-grey long-haired cat with a crescent-moon tiara and a starry shawl, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b60-sad",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character, bigger and more ornate than a kitten: Queen Yarnabelle: a majestic calico cat with a crown made of coloured yarn balls and a royal red cape with gold trim, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "boss-b60-happy",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 512,
+   "prompt": "Boss character: Queen Yarnabelle: a majestic calico cat with a crown made of coloured yarn balls and a royal red cape with gold trim, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "bg-den",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Game background scene, no characters, no text: a cosy autumn living-room den: a crackling fireplace on the left, an armchair with a knitted blanket, a window with falling orange leaves, a rug, warm lamp light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "bg-pumpkin",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Empty game background scene with NO animals, NO cats, NO creatures, NO people and no text (an empty environment only): a friendly Halloween night porch: carved smiling jack-o-lanterns, a purple dusk sky with a big round moon, fairy lights, autumn leaves, cute not scary. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "bg-cabin",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Game background scene, no characters, no text: a snowy log-cabin interior: frosted windows showing snowfall, a wood stove, hanging mittens, a knitted stocking, soft blue and warm amber light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "bg-cafe",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Game background scene, no characters, no text: a charming cat cafe: wooden counter with cakes under glass domes, hanging plants, shelves of mugs, chalkboard-shaped shapes without writing, sunny warm light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "bg-attic",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Game background scene, no characters, no text: a moonlit attic: slanted wooden beams, a round window with moonlight, old trunks, a dress form, dangling string lights, cool blue and lilac palette. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "bg-roof",
+   "aspect": "3:4",
+   "cutout": false,
+   "max": 1280,
+   "q": 78,
+   "prompt": "Game background scene, no characters, no text: a starry rooftop at night: chimney pots and tiled roofs, a huge starry sky with a crescent moon and shooting star, distant glowing town windows. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom."
+  },
+  {
+   "id": "win-yarnhug",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 384,
+   "prompt": "Celebration illustration: a happy orange tabby kitten hugging a giant ball of red yarn, sparkles around, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "win-pile",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 384,
+   "prompt": "Celebration illustration: three happy kittens (tabby, tuxedo and calico) piled together cheering with confetti, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "win-nap",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 384,
+   "prompt": "Celebration illustration: a content kitten curled up asleep inside a wicker yarn basket, tiny hearts floating, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "win-ribbon",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "max": 384,
+   "prompt": "Celebration illustration: a kitten dancing on hind legs twirling a long teal ribbon in a swirl, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "bgw-den",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-den.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same cosy autumn living-room den as the reference image (same fireplace, armchair with knitted blanket, window with falling orange leaves, patterned rug, lamp, baskets, warm lamp light, same colours), now seen as a wide view from a little further back so the room continues to the left and right: fireplace and mantel with pumpkins on the left side, window with autumn leaves in the middle background, armchair and side table with lamp on the right side, the patterned rug across the floor. Do NOT include the small sleeping cat from the reference. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-pumpkin",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-pumpkin.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same friendly Halloween night porch as the reference image (same wooden porch, railing, purple dusk sky with a big round moon, string fairy lights, carved jack-o-lanterns, autumn leaves, same colours), now seen as a wide view so the porch continues to the left and right: the big moon and railing on the left, the front door with a wreath on the right, pumpkins and leaves along the bottom. Jack-o-lanterns have simple triangle-eyed smiling faces, never cat faces. Cute, not scary. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-cabin",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-cabin.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same snowy log-cabin interior as the reference image (same log walls, frosted windows with snowfall, wood stove, hanging mittens and knitted stocking on a garland, shelves with mugs, armchair, patterned rug, soft blue and warm amber light, same colours), now seen as a wide view so the cabin continues to the left and right: wood stove and firewood on the left, two frosted windows in the background, armchair and bookshelf on the right, rug across the floor. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-cafe",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-cafe.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same charming cafe interior as the reference image (same wooden counter with cakes under glass domes, hanging plants, shelves of mugs and teapots, blank dark chalkboards with nothing written on them, big sunny autumn windows, cushions on the wooden floor, sunny warm light, same colours), now seen as a wide view so the cafe continues to the left and right: big autumn windows and an armchair on the left, the round counter with cakes in the middle background, shelves with mugs and plants on the right. Chalkboards are completely blank. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-attic",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-attic.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same moonlit attic as the reference image (same slanted wooden beams, round window with moonlight, old suitcases and trunks, dress form, small desk with an oil lamp, dangling string lights, cool blue and lilac palette, same colours), now seen as a wide view so the attic continues to the left and right: trunks and suitcases on the left, the round moonlit window in the middle background under the beams, dress form and desk on the right. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "bgw-roof",
+   "aspect": "16:9",
+   "res": "2K",
+   "cutout": false,
+   "max": 1920,
+   "q": 72,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/bg-roof.png"
+   ],
+   "prompt": "Wide 16:9 landscape game background scene. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing. It shows the same starry rooftop at night as the reference image (same tiled colourful roofs, chimney pots, huge starry sky with a crescent moon and a shooting star, distant glowing town windows, same colours), now seen as a wide panoramic view so the rooftops continue to the left and right: chimneys and the gable of a house on the left, rows of distant town roofs with glowing windows along the middle, tiled roofs and chimney pots on the right, the crescent moon in the sky. Same painting style, line weight, palette and lighting as the reference. Soft painterly depth, slightly blurred and lower-contrast in the central area so a puzzle board can sit on top, details spread to the far left and right edges and along the bottom. Empty environment only: NO animals, NO cats, NO kittens, NO creatures, NO people, NO faces of any kind, no text, no letters, no writing."
+  },
+  {
+   "id": "kit-hero-idle",
+   "max": 384,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "The same chubby orange tabby kitten as the reference (identical design, stripes, colours, eye colour and proportions), calm and content: sitting upright facing the viewer, ears up, big bright open eyes with a white highlight, small gentle closed-mouth smile, front paws planted together on the floor in front of the body so the chest and neck are clearly visible, tail curled around the side, plain white background, centered, full body."
+  },
+  {
+   "id": "paw-sleepy",
+   "max": 256,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Game prop: one fluffy orange tabby kitten front paw with a short chubby forearm, resting flat and relaxed as if its owner is fast asleep, seen from directly above. The forearm comes in from the bottom-left corner and the round paw rests at the top-right, with three soft pink toe beans peeking out, soft stripes on the fur, fluffy tufts at the edges. Same fur colours, plum outline and painted style as the reference kitten. Isolated single object on a plain white background, no body, no face, no shadow, no text."
+  }
+ ]
+}

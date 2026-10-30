@@ -1,0 +1,18 @@
+/* Self-hosted fonts for Arcade a Day v2 games (SIL OFL 1.1, see fonts/ofl-*.txt).
+   Link it from a game's index.html as  <link rel="stylesheet" href="../shared/fonts.css">
+   (tools/build-playables.mjs rewrites that to ./fonts.css). Latin subset only.
+   In canvas code, await document.fonts.load('40px "Lilita One"') before the first text draw. */
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(fonts/lilita-one-latin.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: block;
+  src: url(fonts/nunito-latin-var.woff2) format('woff2');
+}

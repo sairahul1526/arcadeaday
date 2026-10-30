@@ -15,6 +15,7 @@ Tiny, addictive browser games. A new one every day. Free, no download, no sign-u
 | **Cap Flip**: hold to flip a water bottle across the room, let go when it's upright to land it. Stick it on the cap for 5x. | 2026-10-13 | [play](https://arcadeaday.com/cap-flip/) |
 | **Bin It**: flick a paper ball into the office bin. Easy, until the fan turns on and the wind hates you. | 2026-10-14 | [play](https://arcadeaday.com/bin-it/) |
 | **Reel Greedy**: drop your hook deep, then catch every fish on the way back up. Sharks eat whatever's on your line. | 2026-10-15 | [play](https://arcadeaday.com/reel-greedy/) |
+| **Knot Kitty**: tap the yarn on top to wind it onto its spool, plan your basket and free the kitten across 60 cosy levels. | 2026-10-30 | [play](https://arcadeaday.com/knot-kitty/) |
 
 ## Layout
 

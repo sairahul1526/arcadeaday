@@ -1,0 +1,86 @@
+{
+  "cover-a": {
+    "prompt": "Game cover art, no text: a cute orange tabby kitten tangled in colourful yarn strands (red, teal, mustard, purple) looking pleadingly at the viewer, in a cosy autumn den, the yarn strands crossing over each other in a satisfying knot, bright, high contrast, reads at thumbnail size, kitten large on the right third. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "bebf2dc3e5eded0d3db99b935123e2fb"
+    ],
+    "bytes": 72646,
+    "at": "2026-10-30T07:57:26.517Z"
+  },
+  "cover-c": {
+    "prompt": "Game cover art, no text: a joyful orange tabby kitten bursting free from a tangle of colourful yarn, strands flying apart, sparkles and confetti, starry purple night sky behind, dramatic and bright, kitten centered and large. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "e48ae675771158e5c3cfea2d1051ee4f"
+    ],
+    "bytes": 146216,
+    "at": "2026-10-30T07:57:33.494Z"
+  },
+  "cover-b": {
+    "prompt": "Game cover art, no text: a giant wooden board with pegs and crossing coloured yarn strands forming a cat-head shaped knot, three kittens (tabby, tuxedo, calico) peeking from behind it, one pulling a strand with its paw, warm light, high contrast, reads at thumbnail size. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "8ef06e32440cb023c7f18e28477a2352"
+    ],
+    "bytes": 174854,
+    "at": "2026-10-30T07:57:39.469Z"
+  },
+  "icon": {
+    "prompt": "App icon, no text: close-up of a cute orange tabby kitten face peeking out of a big ball of red and teal yarn, bold simple shapes, warm cream background, reads at 64 px. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 512,
+    "tasks": [
+      "4db3e4f8c4d1e959d54080f707fc6bb3"
+    ],
+    "bytes": 41990,
+    "at": "2026-10-30T08:00:59.167Z"
+  },
+  "cover-square": {
+    "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Square composition: kitten large and centred, tangle around and below, a little calm sky at the top, bright and high contrast, reads at 200 px.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 800,
+    "tasks": [
+      "0c202daf3e71c3c5eaf28f7d5a3234bc"
+    ],
+    "bytes": 136246,
+    "at": "2026-10-30T08:05:30.374Z"
+  },
+  "cover-wide": {
+    "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Wide 16:9 composition: kitten large and slightly right of centre, flying yarn strands filling the frame, calmer starry sky in the upper left third (space for a title), bright and high contrast, reads at thumbnail size.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1920,
+    "tasks": [
+      "d5b4b8f7c91e78532fd97e60aeae3d14"
+    ],
+    "bytes": 249082,
+    "at": "2026-10-30T08:05:53.220Z"
+  },
+  "cover-tall": {
+    "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Tall 2:3 portrait composition: kitten large in the lower-middle bursting up out of the tangle, strands flying upward, calmer starry sky across the top quarter (space for a title), bright and high contrast.",
+    "aspect": "2:3",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1200,
+    "tasks": [
+      "aa756074bbcc4dd9248b5bffa7adfbed"
+    ],
+    "bytes": 175336,
+    "at": "2026-10-30T08:06:34.979Z"
+  }
+}

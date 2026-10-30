@@ -1,0 +1,80 @@
+{
+ "style": "Cozy storybook mobile-game illustration in one consistent style: soft gouache-like painted shading with gentle gradients, clean medium-weight dark plum outlines (#2B2440), chunky rounded shapes, big glossy expressive eyes with a white highlight, small pink nose, soft warm rim light from the upper left, warm autumn palette of cream, pumpkin orange, tomato red, teal, mustard and dusk blue, premium casual-game quality like Royal Match or Homescapes characters, family friendly, no text, no letters, no watermark.",
+ "outDir": "dist/portals/knot-kitty/media/raw",
+ "rawDir": "studio/art-raw/knot-kitty/media",
+ "defaults": {
+  "aspect": "16:9",
+  "res": "1K",
+  "cutout": false,
+  "max": 1280,
+  "q": 88
+ },
+ "items": [
+  {
+   "id": "cover-a",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Game cover art, no text: a cute orange tabby kitten tangled in colourful yarn strands (red, teal, mustard, purple) looking pleadingly at the viewer, in a cosy autumn den, the yarn strands crossing over each other in a satisfying knot, bright, high contrast, reads at thumbnail size, kitten large on the right third. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "cover-b",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Game cover art, no text: a giant wooden board with pegs and crossing coloured yarn strands forming a cat-head shaped knot, three kittens (tabby, tuxedo, calico) peeking from behind it, one pulling a strand with its paw, warm light, high contrast, reads at thumbnail size. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "cover-c",
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Game cover art, no text: a joyful orange tabby kitten bursting free from a tangle of colourful yarn, strands flying apart, sparkles and confetti, starry purple night sky behind, dramatic and bright, kitten centered and large. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "icon",
+   "aspect": "1:1",
+   "max": 512,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "App icon, no text: close-up of a cute orange tabby kitten face peeking out of a big ball of red and teal yarn, bold simple shapes, warm cream background, reads at 64 px. Same art style, line weight and proportions as the reference kitten."
+  },
+  {
+   "id": "cover-wide",
+   "aspect": "16:9",
+   "res": "2K",
+   "max": 1920,
+   "q": 90,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/media/cover-c.png",
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Wide 16:9 composition: kitten large and slightly right of centre, flying yarn strands filling the frame, calmer starry sky in the upper left third (space for a title), bright and high contrast, reads at thumbnail size."
+  },
+  {
+   "id": "cover-tall",
+   "aspect": "2:3",
+   "res": "2K",
+   "max": 1200,
+   "q": 90,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/media/cover-c.png",
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Tall 2:3 portrait composition: kitten large in the lower-middle bursting up out of the tangle, strands flying upward, calmer starry sky across the top quarter (space for a title), bright and high contrast."
+  },
+  {
+   "id": "cover-square",
+   "aspect": "1:1",
+   "res": "1K",
+   "max": 800,
+   "q": 90,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/media/cover-c.png",
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Same scene, characters, colours and art style as the first reference image (a joyful orange tabby kitten bursting free from a tangle of colourful yarn strands, sparkles and confetti, starry purple night sky with a big moon), no text, no letters. Square composition: kitten large and centred, tangle around and below, a little calm sky at the top, bright and high contrast, reads at 200 px."
+  }
+ ]
+}
