@@ -32,6 +32,7 @@ import * as Sc from './scene.js';
 import * as M from './meta.js';
 import * as Au from './audio.js';
 import LVDATA from './levels-data.js';
+import { loadArt, kittenArt, bgArt } from './art.js';
 
 const Q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 const on = k => Q.get(k) === '1' || Q.get(k) === 'true';
@@ -79,6 +80,13 @@ function whenBooted(fn) {
     setTimeout(tick, 25);
   };
   tick();
+}
+// Record / OG frame 0 must show the illustrated kitten and backdrop, not the code-drawn fallback: wait (bounded) for
+// the take's art. kittenArt for both moods, the OG's calico, and the backdrops of the take's world and Pumpkin Night.
+async function artReady(lv) {
+  const w = Math.min(6, Math.max(1, Math.ceil(lv / 10)));
+  const ids = [kittenArt(lv, false), kittenArt(lv, true), kittenArt(3, false), bgArt(w), bgArt(2)];
+  try { await Promise.race([loadArt(ids), new Promise(r => setTimeout(r, 8000))]); } catch (e) { /* fallbacks draw */ }
 }
 async function fontsReady() {
   try {
@@ -217,6 +225,7 @@ function installRecord() {
   };
   whenBooted(async () => {
     await fontsReady();
+    await artReady(LV);
     prepShowcaseSave(LV);
     REC.showcase = applyShowcase();
     A.resize(1080, 1920, REC_DPR);
@@ -730,6 +739,12 @@ function handPos() {
 }
 function uOf(S) { return (S.L && S.L.u) || Math.min(S.W / 390, S.H / 700, 2.6); }
 const kitBox = S => { const B = S.sess && S.sess.B, k = B && B.kitten; return k && k.s ? k : null; };
+// The game's own kitten height cap (render.drawPlay: never cover the board's bottom strands).
+const heroMaxH = (s, kb) => { const B = s && s.B; return B && B.y != null && B.h ? Math.max(kb.s, kb.y - (B.y + B.h - 0.3 * B.unit)) : Infinity; };
+const heroGameH = (s, kb) => {
+  const id = typeof Rn.kitArtId === 'function' ? Rn.kitArtId(s) : 0;
+  return typeof Rn.isBossKitten === 'function' && Rn.isBossKitten(id) ? Math.max(kb.s, Math.min(kb.s * 1.4, heroMaxH(s, kb))) : kb.s;
+};
 
 // Camera (logical px): centre + zoom. Push-in after the pop, rescue zoom on kittenFree, hard cut back for the win card.
 function camAt(S, t) {
@@ -831,7 +846,10 @@ function drawHero(g, S, t) {
   else if (t < HERO_OUT + 0.45) boost = 3.1 - 2.1 * ease((t - HERO_OUT) / 0.45);
   if (REC.freeT != null) boost = 1 + 0.3 * easeOut((t - REC.freeT) / 0.5);
   if (boost <= 1.001) return; // identical to the game's own kitten underneath
-  const ks = kb.s * boost;
+  // Boss sprites draw 1.4× in game (capped). The hero adds that extra height on top of the boost instead of multiplying
+  // it (4.3× hid the board); at boost 1 it equals the game's kitten exactly, so the shrink-out has no pop.
+  const gameH = heroGameH(s, kb);
+  const ks = kb.s * boost + (gameH - kb.s);
   g.save();
   if (help) { // warm spotlight so the face reads over the board
     const gr = g.createRadialGradient(kb.x, kb.y - ks * 0.5, ks * 0.1, kb.x, kb.y - ks * 0.5, ks * 0.85);
@@ -844,7 +862,10 @@ function drawHero(g, S, t) {
   for (const st of s.puz.strands) if (st.c >= 0 && st.c < 6 && !lc.includes(st.c)) lc.push(st.c);
   try {
     Rn.drawKitten(g, kb.x, kb.y, ks, { stage: kit.stage, loops: kit.loops, flinch: 0, freeT: kit.freeT, golden: kit.golden, t: S.T,
-      breed: id > 0 ? (id - 1) % 6 : 0, coat: id > 0 ? Math.floor((id - 1) / 6) : 0, loopColors: lc.slice(0, 4), memKey: HERO_MEM });
+      breed: id > 0 ? (id - 1) % 6 : 0, coat: id > 0 ? Math.floor((id - 1) / 6) : 0, loopColors: lc.slice(0, 4), memKey: HERO_MEM,
+      // illustrated sprite (boss art on L20): same id + boss scale/cap as the game's kitten, scaled by the boost so the
+      // shrink-out lands exactly on the in-game kitten
+      id: typeof Rn.kitArtId === 'function' ? Rn.kitArtId(s) : id, bossScale: false });
   } catch (e) { P.error(e); }
   if (help) helpBubble(g, kb.x + ks * 0.43, kb.y - ks * 0.9, 1.75 * (1 + 0.035 * Math.sin(t * 7)));
   g.restore();
@@ -1094,6 +1115,7 @@ function installOG() {
   bus.emit = (t, d) => (MUTED.has(t) ? undefined : emit0.call(bus, t, d));
   whenBooted(async () => {
     await fontsReady();
+    await artReady(LV);
     prepShowcaseSave(LV);
     OG.showcase = applyShowcase();
     try {

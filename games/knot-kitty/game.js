@@ -55,6 +55,7 @@ import * as ui from './ui.js';
 import * as audio from './audio.js';
 import * as meta from './meta.js';
 import * as modes from './modes.js';
+import { loadArt, FIRST } from './art.js';
 
 const cvs = document.getElementById('c');
 const g = cvs.getContext('2d');
@@ -446,8 +447,50 @@ const api = {
   resize,
 };
 
+// ------------------------------------------------------------------ analytics + portal lifecycle
+// One tracker derived from bus events: level_start / level_complete / level_fail / quit_level / session_end,
+// and gameplayStart/Stop (true only while a level is on screen, unpaused and unfinished). Never gates gameplay.
+const sessionT0 = performance.now();
+let lvl = null; // { id, kind, t0 (S.T), moves, done, failed }
+let playingNow = false;
+const secsOf = l => Math.max(0, Math.round((S.T - l.t0) * 10) / 10);
+function setPlaying(on) {
+  if (on === playingNow) return;
+  playingNow = on;
+  safe(on ? P.gameplayStart : P.gameplayStop);
+}
+function endLevelQuit() {
+  if (lvl && !lvl.done && !lvl.failed) P.event('quit_level', { id: lvl.id, kind: lvl.kind, secs: secsOf(lvl) });
+  lvl = null;
+}
+bus.on('levelStart', d => {
+  endLevelQuit();
+  lvl = { id: d.id, kind: d.kind, t0: S.T, moves: 0, done: false, failed: false };
+  P.event('level_start', { id: d.id, kind: d.kind });
+});
+bus.on('press', d => { if (lvl && d && d.ok) lvl.moves++; });
+bus.on('win', d => {
+  if (!lvl || lvl.done) return;
+  lvl.done = true;
+  const r = (d && d.result) || {};
+  P.event('level_complete', { id: lvl.id, kind: lvl.kind, stars: r.stars | 0, secs: secsOf(lvl), moves: lvl.moves });
+  setPlaying(false);
+  if ((r.stars | 0) >= 3) safe(P.happyTime);
+});
+bus.on('screen', d => {
+  const sc = d.name;
+  if (lvl && !lvl.done) {
+    if (sc === 'lose' && !lvl.failed) { lvl.failed = true; P.event('level_fail', { id: lvl.id, kind: lvl.kind, secs: secsOf(lvl) }); }
+    else if (sc === 'play') lvl.failed = false; // undo / booster rescued a stuck board
+  }
+  if (!SESSION_SCREENS.has(sc) && !KEEP_SESSION.has(sc)) { endLevelQuit(); }
+  setPlaying(sc === 'play' && !!lvl && !lvl.done && !lvl.failed);
+});
+
 // ------------------------------------------------------------------ platform hooks
 function onHostPause() {
+  safe(P.event, 'session_end', { secs: Math.round((performance.now() - sessionT0) / 1000) });
+  setPlaying(false);
   stopLoop();
   dropGesture();
   safe(audio.suspend);
@@ -458,6 +501,7 @@ function onHostResume() {
   last = performance.now();
   startLoop();
   if (P.audioOn) safe(audio.resume);
+  setPlaying(S.screen === 'play' && !!lvl && !lvl.done && !lvl.failed);
 }
 if (YT) {
   try { YT.system.onPause(() => { earlyPaused = true; onHostPause(); }); } catch (e) { report(e); }
@@ -471,8 +515,10 @@ P.onAudio(on => { if (on && !hostPaused()) safe(audio.resume); else safe(audio.s
 async function boot() {
   fitWindow();
   drawLoading();
+  try { await Promise.race([loadArt(FIRST), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
   P.firstFrame();
   startLoop();
+  loadArt().catch(() => {}); // the rest of the illustrations, in the background
   await P.init({ store: STORE, version: SAVE_V, defaults: meta.defaults(), migrate: meta.migrate });
   meta.initMeta();
   P.best(meta.score());

@@ -142,7 +142,8 @@ export function computeLayout(W, H) {
       L.boosters = R(sx + m, L.tray.y + C.bkH + gap, bw, C.rowH);
       L.board = R(sx + m, top, bw, bh);
       // the kitten band reserves up to 0.6 unit more (bigger kitten) while the reference board stays ≥ the gate
-      L.board.kitRes = clamp(bh / GATE - REF_H, 0, 0.6); L.board.kitPx = 100 * u; L.board.kitMax = 1;
+      // polish round 3 (RENDER ask): the phone kitten may grow to 128u (was 100u) in the spare band height
+      L.board.kitRes = clamp(bh / GATE - REF_H, 0, 0.6); L.board.kitPx = 128 * u; L.board.kitMax = 1.4;
     } else if (C.mode === 'col') {
       L.boostDir = 'col';
       L.basket = R(sx + m, L.tray.y, bw, trayH);
@@ -157,18 +158,17 @@ export function computeLayout(W, H) {
   } else {
     // DECISION (fix 1, phone m4 / desktop M1): the HUD moves into the right column so the board gets the full
     //   safe height; leftover column height grows the boosters (≥ 46), then the rack (bigger spools), then the
-    //   basket. On desktop-sized screens (H ≥ 640) the board area is held to 75 % of the safe height so an
-    //   8×10 frame is ≈ 65 % of it (brief: 55–65 %), centred, instead of touching top and bottom.
+    //   basket. On desktop-sized screens (H ≥ 640) see the polish round 3 note below.
     const colW = Math.min(0.38 * safe.w, 400 * u);
     let cx = sr - colW;
     const cw = colW - m;
-    // DECISION (polish, desktop/TV critics): on desktop-sized screens (H ≥ 640) the board area is 80 % of the safe
-    //   height (8×10 frame ≈ 67 %, kitten band grown by 0.6 unit), its width is cut to the reference board, and
-    //   board + column are centred together in the safe rect, so the composition no longer leans left over an
-    //   empty window.
-    let top = sy + m * 0.5, bh = sb - m - top, bx = sx + m, bwid = cx - m - bx;
-    if (H >= 640) {
-      const k = Math.min(bh, Math.max(0.8 * safe.h, 560)); top += (bh - k) / 2; bh = k;
+    const big = H >= 640;
+    // polish round 3 (RENDER ask): desktop/TV keep a real top margin (the board used to touch the screen top)
+    let top = sy + (big ? Math.max(m, 0.028 * safe.h) : m * 0.5), bh = sb - (big ? Math.max(m, 0.028 * safe.h) : m) - top, bx = sx + m, bwid = cx - m - bx;
+    if (big) {
+      // DECISION (polish round 3, desktop/TV): the board now uses the whole safe height (scale by height, not
+      //   80 %), its width is cut to the reference board at that unit, and board + column are centred as one
+      //   group. The column's HUD lines up with the board top and its tray with the board bottom.
       const unit = Math.min(bwid / REF_W, bh / (REF_H + 0.6));
       const refW = Math.min(bwid, REF_W * unit + m), gapC = Math.max(2 * m, 26 * u);
       const total = refW + gapC + colW;
@@ -176,17 +176,21 @@ export function computeLayout(W, H) {
       cx = Math.min(sr - colW, bx + refW + gapC);
     }
     const callH = Math.max(40 * u, 30);
-    L.hud = R(cx, sy, cw, hudH);
+    const colTop = big ? top : sy, colBot = big ? top + bh : sb - m;
+    L.hud = R(cx, colTop, cw, hudH);
     let rackH = 120 * u, basketH = 70 * u, boostH = 56 * u;
-    let free = sb - m - (sy + hudH) - rackH - callH - basketH - boostH;
+    let free = colBot - (colTop + hudH) - rackH - callH - basketH - boostH;
     const grow = (v, to) => { const d = Math.max(0, Math.min(free, to - v)); free -= d; return v + d; };
     boostH = grow(boostH, Math.max(46, Math.min(64 * u, (cw - gap * 3) / 4)));
     rackH = grow(rackH, 170 * u);
     basketH = grow(basketH, 84 * u);
-    L.rack = R(cx, sy + hudH, cw, rackH);
-    L.callout = R(cx, L.rack.y + rackH, cw, callH);
+    // the rack keeps a small breath under the HUD; on big screens the callout sits in the middle of whatever is
+    //   still free, so the column reads HUD / rack / message / tray instead of a gap above the tray.
+    const air = big ? clamp(free * 0.25, 0, 24 * u) : 0; free -= air;
+    L.rack = R(cx, colTop + hudH + air, cw, rackH);
+    L.callout = R(cx, L.rack.y + rackH + (big ? Math.max(0, free) / 2 : 0), cw, callH);
     // whatever is still free sits between callout and tray (tray stays docked at the bottom, near the thumb)
-    L.tray = R(cx, sb - m - basketH - boostH, cw, basketH + boostH);
+    L.tray = R(cx, colBot - basketH - boostH, cw, basketH + boostH);
     L.basket = R(cx, L.tray.y, cw, basketH);
     L.boosters = R(cx, L.tray.y + basketH, cw, boostH);
     L.board = R(bx, top, bwid, bh);
@@ -200,19 +204,32 @@ export function fitBoard(level, rect) {
   const cols = level.cols || 4, rows = level.rows || 4;
   const gw = cols - 1 + 1.2, gh = rows - 1 + 1.2;
   const kres = rect.kitRes || 0;
-  let unit = Math.min(rect.w / gw, rect.h / (gh + 1.4 + kres));
+  // DECISION (polish round 3, RENDER ask): boss boards (they carry a shape) reserve a taller kitten band so render's
+  //   1.4× boss (capped at maxH = feet − (frame bottom − 0.3 unit)) really draws at 1.4×. The extra band (0.7 unit)
+  //   may cost board size only while the unit stays ≥ the §7.6 gate; below it the boss just stays smaller.
+  const boss = !!level.shape;
+  const fitU = band => Math.min(rect.w / gw, rect.h / (gh + band + kres));
+  let unit = fitU(1.4);
+  if (boss) unit = Math.min(unit, Math.max(fitU(2.1), Math.min(unit, GATE)));
   unit = Math.max(1, unit);
   // polish band: spare height under a width-limited board grows the kitten (up to rect.kitMax units / rect.kitPx px)
   const ks0 = 1.6 * unit, kitPx = rect.kitPx || 0;
   const room = Math.max(0, rect.h - (gh + 1.4) * unit);
-  const ext = kitPx > ks0 ? Math.max(0, Math.min(room, Math.max(kres, rect.kitMax != null ? rect.kitMax : 1) * unit, (kitPx - ks0) / 0.95)) : 0;
-  const w = gw * unit, h = gh * unit, tot = h + 1.4 * unit + ext;
+  let ext = kitPx > ks0 ? Math.max(0, Math.min(room, Math.max(kres, rect.kitMax != null ? rect.kitMax : 1) * unit, (kitPx - ks0) / 0.95)) : 0;
+  let lift = 0; // boss only: extra drop of the kitten's feet below the normal ledge
+  if (boss) {
+    const need = e => Math.max(0, 1.4 * (ks0 + 0.95 * e) - 0.3 * unit - (1.25 * unit + 0.85 * e));
+    for (let i = 0; i < 8 && ext > 0 && room - ext < need(ext); i++) ext *= 0.7; // shrink the grown kitten until 1.4× fits
+    if (room - ext < need(ext)) ext = 0;
+    lift = Math.min(need(ext), Math.max(0, room - ext));
+  }
+  const w = gw * unit, h = gh * unit, tot = h + 1.4 * unit + ext + lift;
   const x = rect.x + (rect.w - w) / 2;
   const y = rect.y + (rect.h - tot) / 2;
   const sw = Math.max(6.5, Math.min(0.27 * unit, Math.max(22, 0.25 * unit)));
   return {
     ox: x + 0.6 * unit, oy: y + 0.6 * unit, unit, sw, x, y, w, h, cols, rows,
-    kitten: { x: x + w / 2, y: y + h + 1.25 * unit + ext * 0.85, s: ks0 + ext * 0.95 },
+    kitten: { x: x + w / 2, y: y + h + 1.25 * unit + ext * 0.85 + lift, s: ks0 + ext * 0.95 },
   };
 }
 

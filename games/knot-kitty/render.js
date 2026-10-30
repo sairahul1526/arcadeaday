@@ -21,6 +21,7 @@
 
 import { DUR, RAINBOW, bus } from './consts.js';
 import { rackSlots, basketSlots } from './layout.js';
+import { img, kittenArt, BOSSES } from './art.js';
 
 // ------------------------------------------------------------------ palette (§7.2)
 export const INK = '#2B2440', CREAM = '#FFF4E4', CREAM_SH = '#E9D3B5';
@@ -36,11 +37,11 @@ export const FONT_T = '"Lilita One", system-ui, sans-serif', FONT_B = 'Nunito, s
 //   Never play / pause / record / chevron / bars shapes (they read as media controls).
 export const YARN = [
   { base: '#E8463A', name: 'Tomato', glyph: 'heart' },
-  { base: '#1FB0A0', name: 'Teal', glyph: 'diamond' },
+  { base: '#169C92', name: 'Teal', glyph: 'diamond' },
   { base: '#F5B82E', name: 'Mustard', glyph: 'star' },
-  { base: '#3D86EE', name: 'Sky', glyph: 'drop' },
-  { base: '#8C55D3', name: 'Plum', glyph: 'moon' },
-  { base: '#86C440', name: 'Lime', glyph: 'leaf' },
+  { base: '#4790F2', name: 'Sky', glyph: 'drop' },
+  { base: '#A145C9', name: 'Plum', glyph: 'moon' },
+  { base: '#93CD3E', name: 'Lime', glyph: 'leaf' },
   { base: '#F5B82E', name: 'Rainbow', glyph: 'sparkle' },
 ];
 const RAIN = [0, 2, 5, 1, 3, 4].map(i => YARN[i].base); // stripe order reads as a rainbow
@@ -367,7 +368,12 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
     for (const p of gi.gaps) { g.moveTo(p[0] + R, p[1]); g.arc(p[0], p[1], R, 0, TAU); }
     g.clip();
     g.strokeStyle = feltPattern && !opt.noPattern ? feltPattern : FELT;
-    g.lineWidth = sw + 6.5;
+    // gap scales with the strand (a fixed 6.5 px vanished on phones at dpr 3), plus a dark under-shadow inside the
+    // cut so the lower strand visibly dives under the upper one
+    g.lineWidth = sw + Math.max(6.5, sw * 0.6);
+    g.stroke(gi.path);
+    g.translate(sw * 0.1, sw * 0.16);
+    g.strokeStyle = 'rgba(43,36,64,0.34)'; g.lineWidth = sw + Math.max(2, sw * 0.18);
     g.stroke(gi.path);
     g.restore();
   }
@@ -564,8 +570,12 @@ function boardBox(B, cols, rows) {
   return { ox, oy, ow, oh, fx: ox + fr, fy: oy + fr, fw: ow - 2 * fr, fh: oh - 2 * fr, fr, u, kit, ledgeH: Math.max(5, u * 0.2) };
 }
 
-function drawBoardStatic(g, B, cols, rows, shape) {
+// Boss silhouettes: a per-shape felt tint (the outline the solve "reveals") — strong enough to read at a glance.
+const SIL = { cathead: '#F0C39F', kitten: '#F0C39F', pumpkin: '#F5B977', heart: '#F2AEB4', moon: '#C3CCEE', star: '#F3D27A' };
+function drawBoardStatic(g, B, cols, rows, shape, knot, topY) {
   const bb = boardBox(B, cols, rows), { fx, fy, fw, fh, fr, u, ox, oy, ow, oh } = bb;
+  // DECISION: only boss levels carry a shape (L10/20/…/60), so a shape (or knot:'boss') means the gilded frame.
+  const boss = !!shape || knot === 'boss';
   const rad = fr * 1.5;
   // soft drop shadow (stacked offset fills, no blur)
   for (let i = 3; i >= 1; i--) {
@@ -573,6 +583,8 @@ function drawBoardStatic(g, B, cols, rows, shape) {
     rr(g, ox + i * 2.2, oy + i * 3.2, ow, oh, rad + i * 2);
     g.fill();
   }
+  if (boss) drawGildedFrame(g, bb, rad);
+  else {
   // walnut frame with grain
   const wg = g.createLinearGradient(ox, oy, ox + ow * 0.3, oy + oh);
   wg.addColorStop(0, WALNUT_L); wg.addColorStop(0.45, WALNUT); wg.addColorStop(1, WALNUT_D);
@@ -596,6 +608,15 @@ function drawBoardStatic(g, B, cols, rows, shape) {
   // bevel highlight
   g.strokeStyle = 'rgba(255,226,180,0.4)'; g.lineWidth = Math.max(1, fr * 0.12);
   rr(g, ox + fr * 0.18, oy + fr * 0.18, ow - fr * 0.36, oh - fr * 0.36, rad * 0.85); g.stroke();
+  if (knot === 'mini') { // mini-boss: four brass studs on the walnut — a notch up from a normal board, short of gold
+    const sr = Math.max(2, fr * 0.26);
+    for (const [px, py] of [[ox + fr * 0.5, oy + fr * 0.5], [ox + ow - fr * 0.5, oy + fr * 0.5], [ox + fr * 0.5, oy + oh - fr * 0.5], [ox + ow - fr * 0.5, oy + oh - fr * 0.5]]) {
+      g.fillStyle = BRASS; g.beginPath(); g.arc(px, py, sr, 0, TAU); g.fill();
+      g.strokeStyle = INK; g.lineWidth = Math.max(1, sr * 0.3); g.stroke();
+      g.fillStyle = 'rgba(255,248,210,0.8)'; g.beginPath(); g.arc(px - sr * 0.3, py - sr * 0.3, sr * 0.32, 0, TAU); g.fill();
+    }
+  }
+  }
   // felt
   const fg = g.createRadialGradient(fx + fw * 0.35, fy + fh * 0.25, 0, fx + fw * 0.5, fy + fh * 0.5, Math.max(fw, fh) * 0.8);
   fg.addColorStop(0, '#F3E4CF'); fg.addColorStop(0.6, FELT); fg.addColorStop(1, '#DCC5A6');
@@ -612,11 +633,21 @@ function drawBoardStatic(g, B, cols, rows, shape) {
   // boss silhouette patch
   const sp = shape ? shapePath(shape, B, cols, rows) : null;
   if (sp) {
-    g.fillStyle = '#F1E2CB'; g.fill(sp);
-    g.setLineDash([u * 0.16, u * 0.12]);
-    g.strokeStyle = mix('#C9A57E', INK, 0.1); g.lineWidth = Math.max(1.2, u * 0.05);
-    g.stroke(sp);
+    // solid silhouette: tinted fill, lighter inner rim, soft under-shadow, crisp outline + inner stitch
+    const tint = SIL[shape] || '#EBC9A0';
+    g.save(); g.translate(0, u * 0.06); g.strokeStyle = 'rgba(70,35,15,0.18)'; g.lineWidth = Math.max(2, u * 0.12); g.stroke(sp); g.restore();
+    const sg = g.createLinearGradient(0, B.oy - u * 0.4, 0, B.oy + (rows - 1) * u + u * 0.4);
+    sg.addColorStop(0, mix(tint, '#FFFFFF', 0.28)); sg.addColorStop(1, tint);
+    g.fillStyle = sg; g.fill(sp);
+    g.save(); g.clip(sp);
+    g.strokeStyle = 'rgba(255,250,236,0.55)'; g.lineWidth = Math.max(4, u * 0.36); g.stroke(sp);
+    g.strokeStyle = mix(tint, INK, 0.3); g.lineWidth = Math.max(2, u * 0.16);
+    g.setLineDash([u * 0.13, u * 0.1]);
+    g.stroke(sp); // inner stitch: only the inside half of this centred stroke survives the clip
     g.setLineDash([]);
+    g.restore();
+    g.strokeStyle = mix(tint, INK, 0.5); g.lineWidth = Math.max(2, u * 0.075); g.lineJoin = 'round';
+    g.stroke(sp);
   }
   // felt dots every 0.5 unit
   g.fillStyle = FELT_DOT;
@@ -636,6 +667,7 @@ function drawBoardStatic(g, B, cols, rows, shape) {
   g.setLineDash([]);
   g.strokeStyle = 'rgba(43,36,64,0.5)'; g.lineWidth = 1;
   rr(g, fx, fy, fw, fh, fr * 0.6); g.stroke();
+  if (boss) drawBossRibbon(g, bb, topY);
   // kitten ledge: a little wooden shelf on two brackets hanging under the frame
   const lw = Math.min(ow * 0.7, Math.max(u * 3, bb.kit.s * 2.3)), lx = bb.kit.x - lw / 2, lh = bb.ledgeH;
   const ly = bb.kit.y - lh * 0.25, top = oy + oh - fr * 0.4;
@@ -656,6 +688,83 @@ function drawBoardStatic(g, B, cols, rows, shape) {
   g.strokeStyle = INK; g.stroke();
   g.fillStyle = 'rgba(255,226,180,0.4)';
   rr(g, lx + lh * 0.4, ly + lh * 0.16, lw - lh * 0.8, lh * 0.18, lh * 0.09); g.fill();
+}
+
+// Boss frame: gilded moulding (gold gradient + sheen + bead row) with jewelled corner rosettes. Baked once with the board.
+function drawGildedFrame(g, bb, rad) {
+  const { ox, oy, ow, oh, fr, u } = bb;
+  const gg = g.createLinearGradient(ox, oy, ox + ow * 0.35, oy + oh);
+  gg.addColorStop(0, '#FFE9A3'); gg.addColorStop(0.3, GOLD); gg.addColorStop(0.62, BRASS); gg.addColorStop(1, GOLD_D);
+  g.fillStyle = gg;
+  rr(g, ox, oy, ow, oh, rad); g.fill();
+  g.save();
+  rr(g, ox, oy, ow, oh, rad); g.clip();
+  g.strokeStyle = 'rgba(255,252,225,0.35)'; g.lineWidth = Math.max(2, fr * 0.5);
+  for (let i = 0; i < 7; i++) { const x0 = ox + (i / 6) * (ow + oh) - oh; g.beginPath(); g.moveTo(x0, oy + oh); g.lineTo(x0 + oh * 0.6, oy); g.stroke(); }
+  g.restore();
+  g.strokeStyle = INK; g.lineWidth = Math.max(1.5, u * 0.05);
+  rr(g, ox, oy, ow, oh, rad); g.stroke();
+  // inner groove + bead row along the moulding centre line
+  g.strokeStyle = 'rgba(120,70,10,0.55)'; g.lineWidth = Math.max(1, fr * 0.1);
+  rr(g, ox + fr * 0.82, oy + fr * 0.82, ow - fr * 1.64, oh - fr * 1.64, rad * 0.6); g.stroke();
+  g.strokeStyle = 'rgba(255,246,200,0.7)'; g.lineWidth = Math.max(1, fr * 0.1);
+  rr(g, ox + fr * 0.16, oy + fr * 0.16, ow - fr * 0.32, oh - fr * 0.32, rad * 0.88); g.stroke();
+  const br = Math.max(1.2, fr * 0.13), step = Math.max(br * 3.2, u * 0.32), m = fr * 0.48;
+  const bead = (x, y) => { g.fillStyle = '#FFF2C0'; g.beginPath(); g.arc(x, y, br, 0, TAU); g.fill(); g.fillStyle = 'rgba(120,70,10,0.5)'; g.beginPath(); g.arc(x + br * 0.3, y + br * 0.35, br * 0.5, 0, TAU); g.fill(); };
+  for (let x = ox + fr * 1.6; x < ox + ow - fr * 1.6; x += step) { bead(x, oy + m); bead(x, oy + oh - m); }
+  for (let y = oy + fr * 1.6; y < oy + oh - fr * 1.6; y += step) { bead(ox + m, y); bead(ox + ow - m, y); }
+  // corner rosettes with a ruby
+  const R = Math.max(4, fr * 0.95);
+  for (const [px, py] of [[ox + fr * 0.5, oy + fr * 0.5], [ox + ow - fr * 0.5, oy + fr * 0.5], [ox + fr * 0.5, oy + oh - fr * 0.5], [ox + ow - fr * 0.5, oy + oh - fr * 0.5]]) {
+    g.fillStyle = 'rgba(60,30,5,0.3)'; g.beginPath(); g.arc(px + R * 0.12, py + R * 0.18, R, 0, TAU); g.fill();
+    g.beginPath();
+    for (let i = 0; i < 16; i++) { const a = i * TAU / 16, r = i % 2 ? R * 0.72 : R; g.lineTo(px + Math.cos(a) * r, py + Math.sin(a) * r); }
+    g.closePath();
+    const rg = g.createRadialGradient(px - R * 0.3, py - R * 0.3, 0, px, py, R);
+    rg.addColorStop(0, '#FFF0B0'); rg.addColorStop(1, BRASS);
+    g.fillStyle = rg; g.fill();
+    g.strokeStyle = INK; g.lineWidth = Math.max(1, R * 0.1); g.stroke();
+    g.fillStyle = '#D8344A'; g.beginPath(); g.arc(px, py, R * 0.42, 0, TAU); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.arc(px - R * 0.14, py - R * 0.16, R * 0.13, 0, TAU); g.fill();
+  }
+}
+// Boss ribbon: a red banner with forked tails across the frame's top edge, gold crown medallion in the middle (no text).
+// Kept within the bake pad (≤ 0.45u above the frame) and off the felt so it never sits under the top row of pegs.
+function drawBossRibbon(g, bb, topY) {
+  const { ox, oy, ow, u, fr } = bb;
+  const h = Math.max(10, u * 0.46), cx = ox + ow / 2, cy = topY != null ? Math.max(oy + fr * 0.15, topY + h * 0.88) : oy + fr * 0.15 /* desktop boards can touch the screen top */, w = Math.min(ow * 0.62, Math.max(u * 3.2, ow * 0.42));
+  const lw = Math.max(1.4, u * 0.05);
+  g.lineJoin = 'round'; g.lineWidth = lw; g.strokeStyle = INK;
+  // tails (behind), darker red, forked
+  for (const sd of [-1, 1]) {
+    const x0 = cx + sd * (w / 2 - h * 0.3), x1 = cx + sd * (w / 2 + h * 0.9);
+    g.fillStyle = 'rgba(60,20,20,0.25)';
+    g.beginPath(); g.moveTo(x0, cy - h * 0.2 + 3); g.lineTo(x1, cy - h * 0.2 + 3); g.lineTo(x1 - sd * h * 0.4, cy + h * 0.25 + 3); g.lineTo(x1, cy + h * 0.7 + 3); g.lineTo(x0, cy + h * 0.7 + 3); g.closePath(); g.fill();
+    g.fillStyle = '#A82A2A';
+    g.beginPath(); g.moveTo(x0, cy - h * 0.2); g.lineTo(x1, cy - h * 0.2); g.lineTo(x1 - sd * h * 0.4, cy + h * 0.25); g.lineTo(x1, cy + h * 0.7); g.lineTo(x0, cy + h * 0.7); g.closePath(); g.fill(); g.stroke();
+  }
+  // main band
+  g.fillStyle = 'rgba(60,20,20,0.3)'; rr(g, cx - w / 2 + 2, cy - h / 2 + 3, w, h, h * 0.2); g.fill();
+  const rg = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+  rg.addColorStop(0, '#F0625A'); rg.addColorStop(0.55, '#D8433A'); rg.addColorStop(1, '#B8302C');
+  g.fillStyle = rg; rr(g, cx - w / 2, cy - h / 2, w, h, h * 0.2); g.fill(); g.stroke();
+  g.setLineDash([h * 0.16, h * 0.12]); g.strokeStyle = 'rgba(255,230,200,0.75)'; g.lineWidth = Math.max(1, h * 0.06);
+  rr(g, cx - w / 2 + h * 0.14, cy - h / 2 + h * 0.14, w - h * 0.28, h - h * 0.28, h * 0.12); g.stroke(); g.setLineDash([]);
+  // crown medallion
+  const R = h * 0.78, my = cy - h * 0.06;
+  g.fillStyle = 'rgba(60,30,5,0.3)'; g.beginPath(); g.arc(cx + 1.5, my + 2.5, R, 0, TAU); g.fill();
+  const mg = g.createRadialGradient(cx - R * 0.35, my - R * 0.35, 0, cx, my, R);
+  mg.addColorStop(0, '#FFF0B0'); mg.addColorStop(0.6, GOLD); mg.addColorStop(1, BRASS);
+  g.fillStyle = mg; g.beginPath(); g.arc(cx, my, R, 0, TAU); g.fill();
+  g.strokeStyle = INK; g.lineWidth = lw; g.stroke();
+  g.strokeStyle = 'rgba(150,90,10,0.6)'; g.lineWidth = Math.max(1, R * 0.06); g.beginPath(); g.arc(cx, my, R * 0.8, 0, TAU); g.stroke();
+  const c = R * 0.55; // crown
+  g.beginPath();
+  g.moveTo(cx - c, my + c * 0.55); g.lineTo(cx - c, my - c * 0.25); g.lineTo(cx - c * 0.5, my + c * 0.1); g.lineTo(cx, my - c * 0.6);
+  g.lineTo(cx + c * 0.5, my + c * 0.1); g.lineTo(cx + c, my - c * 0.25); g.lineTo(cx + c, my + c * 0.55); g.closePath();
+  g.fillStyle = '#D8433A'; g.fill(); g.strokeStyle = INK; g.lineWidth = Math.max(1, R * 0.08); g.stroke();
+  g.fillStyle = '#FFF6C8';
+  for (const [px, py] of [[cx - c, my - c * 0.25], [cx, my - c * 0.6], [cx + c, my - c * 0.25]]) { g.beginPath(); g.arc(px, py, Math.max(1, c * 0.14), 0, TAU); g.fill(); }
 }
 
 // ------------------------------------------------------------------ twist props
@@ -1209,12 +1318,90 @@ function drawLoop(g, L, c, k, half) {
   void k;
 }
 const kitMem = new WeakMap();
+// ---- illustrated kitten sprites (art.js). Per image (once): the opaque bounding box (sprites carry transparent
+// padding; we anchor feet on the ledge and scale the visible body to the asked height) and a pre-tinted golden copy.
+// DECISION: the golden tint is baked once into an offscreen canvas ('color' blend → gold hue on the sprite's own
+//   shading, alpha restored with destination-in, 45 % of the original laid back on top so the breed still reads);
+//   per frame it is a single drawImage plus a cheap radial glow. No canvas filters anywhere.
+const sprMem = new WeakMap();
+function spriteOf(im) {
+  let e = sprMem.get(im);
+  if (e) return e;
+  const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+  e = { bb: { x: 0, y: 0, w, h }, gold: null };
+  try {
+    const c = mkCanvas(w, h), cg = c.getContext('2d', { willReadFrequently: true });
+    cg.drawImage(im, 0, 0);
+    const d = cg.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 > x0 && y1 > y0) e.bb = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  } catch (err) { /* tainted or no 2D context: draw the full image */ }
+  sprMem.set(im, e);
+  return e;
+}
+function goldOf(im, e) {
+  if (e.gold) return e.gold;
+  const { x, y, w, h } = e.bb;
+  const c = mkCanvas(w, h), cg = c.getContext('2d');
+  cg.drawImage(im, x, y, w, h, 0, 0, w, h);
+  cg.globalCompositeOperation = 'color';
+  const gr = cg.createLinearGradient(0, 0, 0, h);
+  gr.addColorStop(0, '#FFE07A'); gr.addColorStop(1, '#E9A21F');
+  cg.fillStyle = gr; cg.fillRect(0, 0, w, h);
+  cg.globalCompositeOperation = 'destination-in';
+  cg.drawImage(im, x, y, w, h, 0, 0, w, h);
+  cg.globalCompositeOperation = 'source-atop';
+  cg.globalAlpha = 0.45;
+  cg.drawImage(im, x, y, w, h, 0, 0, w, h);
+  cg.globalAlpha = 0.18; cg.fillStyle = '#FFF3B0'; cg.fillRect(0, 0, w, h * 0.5);
+  e.gold = c;
+  return c;
+}
+// Yarn loops in the sprite's 100-unit frame (feet at 0, top at −100): wider than the code cat's (chubby painted body).
+const LOOP_SPR = [
+  { cx: -2, cy: -15, rx: 36, ry: 9, rot: 0.06 },
+  { cx: -2, cy: -36, rx: 33, ry: 10, rot: -0.2 },
+  { cx: 14, cy: -42, rx: 17, ry: 15, rot: 0.6 },
+  { cx: -2, cy: -72, rx: 40, ry: 12, rot: -0.42 },
+];
+/** Level id of the kitten: o.id, else the inverse of ui.js's breed/coat mapping (breed = (id−1)%6, coat = ⌊(id−1)/6⌋). */
+const kitIdOf = o => (o.id > 0 ? o.id | 0 : (o.coat | 0) * 6 + (o.breed | 0) + 1);
+/** The decoded sprite for this kitten (happy for stages 3–4), falling back to the other mood, or null. */
+export function kittenSprite(id, happy) {
+  if (!(id >= 1 && id <= 60)) return null;
+  return img(kittenArt(id, happy)) || img(kittenArt(id, !happy));
+}
+const isBossKit = id => !!BOSSES[id];
+export const isBossKitten = isBossKit;
+/** Sprite id for a session: the level id for story levels; dailies/bonus get a stable non-boss breed from their key. */
+export function kitArtId(sess) {
+  if (!sess) return 1;
+  if (sess.kind === 'level' && sess.id >= 1) return sess.id | 0;
+  const k = String(sess.kind) + ':' + String(sess.dateKey || sess.id);
+  let h = 7;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0;
+  const n = ((h % 12) + 12) % 12;
+  return n === 9 ? 22 : n + 1; // id 10 is a boss; 22 shares its breed slot (KITTENS[9])
+}
+
 /**
- * drawKitten(g, x, y, s, { stage, loops, flinch, freeT, breed, coat, golden, t, loopColors })
+ * drawKitten(g, x, y, s, { stage, loops, flinch, freeT, id, breed, coat, golden, t, loopColors, maxH, bossScale, art })
  * (x,y) = feet centre, s = height. stage 0..4 (§7.4). freeT = t when freed (−1 = not yet).
+ * id = level id (1..60) → illustrated sprite (art.js); without id it is derived from breed/coat. Bosses draw
+ * 1.4× s (bossScale: false to skip), never taller than maxH. art: false forces the code-drawn cat.
  */
 export function drawKitten(g, x, y, s, o) {
   const t = o.t || 0;
+  if (o.art !== false) {
+    const id = kitIdOf(o);
+    const st0 = o.freeT >= 0 && t >= o.freeT ? 4 : (o.stage || 0);
+    const im = kittenSprite(id, st0 >= 3);
+    if (im) { drawKittenArt(g, x, y, s, o, id, im); return; }
+    if (isBossKit(id) && o.bossScale !== false) s = Math.max(s, Math.min(s * 1.4, o.maxH || Infinity)); // art still loading
+  }
   const coat = coatOf(o.breed || 0, o.coat || 0, o.golden);
   const stage = o.freeT >= 0 && t >= o.freeT ? 4 : (o.stage || 0);
   const loops = stage >= 4 ? 0 : o.loops != null ? o.loops : 4 - stage;
@@ -1276,6 +1463,110 @@ export function drawKitten(g, x, y, s, o) {
     if (a > 2.2) { const p = ((a - 2.2) % 2.6) / 2.6; if (p < 0.8) drawHeart(g, x + s * 0.32, y - s * 0.95 - p * s * 0.35, s * 0.08, Math.sin(p / 0.8 * Math.PI)); }
   }
 }
+function drawKittenArt(g, x, y, s0, o, id, im) {
+  const t = o.t || 0;
+  const boss = isBossKit(id);
+  const s = Math.max(s0, Math.min(s0 * (boss && o.bossScale !== false ? 1.4 : 1), o.maxH || Infinity));
+  const stage = o.freeT >= 0 && t >= o.freeT ? 4 : (o.stage || 0);
+  const loops = stage >= 4 ? 0 : o.loops != null ? o.loops : 4 - stage;
+  const cols = o.loopColors && o.loopColors.length ? o.loopColors : [0, 1, 2, 3];
+  const key = o.memKey || drawKitten;
+  let mem = kitMem.get(key);
+  if (!mem) { mem = { loops, drops: [], t }; kitMem.set(key, mem); }
+  if (t < mem.t - 0.5) { mem.loops = loops; mem.drops = []; }
+  if (loops < mem.loops) for (let i = loops; i < mem.loops; i++) mem.drops.push({ i, t0: t, c: cols[i % cols.length] });
+  mem.loops = loops; mem.t = t;
+  mem.drops = mem.drops.filter(d => t - d.t0 < 0.9);
+  const k = s / 100;
+  let dy = 0, rot = 0, sx = 1, sy = 1;
+  const flinch = o.flinch || 0;
+  if (stage === 0) rot = Math.sin(t * 1.3) * 0.035;
+  else if (stage === 1) { rot = Math.sin(t * 1.6) * 0.03; sy = 1 + Math.sin(t * 2.4) * 0.012; }
+  else if (stage === 2) { rot = Math.sin(t * 3) * 0.03; dy = -Math.abs(Math.sin(t * 2.5)) * 1.5; }
+  else if (stage === 3) { dy = -Math.abs(Math.sin(t * 5)) * 6; rot = Math.sin(t * 10) * 0.05; }
+  else {
+    const a = o.freeT >= 0 ? t - o.freeT : 99;
+    if (a < 0.15) { sy = 1 - a * 1.2; sx = 1 + a; }
+    else if (a < 0.75) { const p = (a - 0.15) / 0.6; dy = -4 * p * (1 - p) * 80; rot = ease(p) * TAU; }
+    else if (a < 0.95) { const p = (a - 0.75) / 0.2; sy = 1 - Math.sin(p * Math.PI) * 0.22; sx = 1 + Math.sin(p * Math.PI) * 0.18; }
+    else if (a < 1.35) rot = Math.sin((a - 0.95) * 50) * 0.12 * (1 - (a - 0.95) / 0.4);
+    else { dy = -Math.max(0, Math.sin(t * 2.2)) * 2; sy = 1 + Math.sin(t * 2.2) * 0.015; }
+  }
+  if (flinch > 0) { sy *= 1 - flinch * 0.12; sx *= 1 + flinch * 0.1; rot += Math.sin(t * 60) * 0.05 * flinch; }
+  const e = spriteOf(im), bb = e.bb;
+  const dh = s, dw = bb.w * s / bb.h;
+  // ground shadow (stays on the ledge while the sprite jumps)
+  g.fillStyle = 'rgba(30,14,20,0.26)';
+  g.beginPath(); g.ellipse(x + 2, y + 1, dw * 0.36, Math.max(2, s * 0.05), 0, 0, TAU); g.fill();
+  if (o.golden) { // warm halo behind a golden kitten
+    const cy = y + dy * k - s * 0.5, R = s * 0.75;
+    const gr = g.createRadialGradient(x, cy, s * 0.08, x, cy, R);
+    gr.addColorStop(0, 'rgba(255,224,120,0.6)'); gr.addColorStop(0.6, 'rgba(255,200,80,0.22)'); gr.addColorStop(1, 'rgba(255,200,80,0)');
+    g.fillStyle = gr; g.fillRect(x - R, cy - R, R * 2, R * 2);
+  }
+  g.save();
+  g.translate(x, y + dy * k);
+  if (rot) { g.translate(0, -s * 0.45); g.rotate(rot); g.translate(0, s * 0.45); }
+  g.scale(sx, sy);
+  // back halves of the loops (behind the body) → sprite → front halves: the yarn wraps the kitten
+  if (loops > 0) {
+    g.save(); g.scale(k, k);
+    for (let i = 0; i < Math.min(loops, 4); i++) drawLoopHalf(g, LOOP_SPR[i], cols[i % cols.length], false);
+    g.restore();
+  }
+  if (o.golden) g.drawImage(goldOf(im, e), -dw / 2, -dh, dw, dh);
+  else g.drawImage(im, bb.x, bb.y, bb.w, bb.h, -dw / 2, -dh, dw, dh);
+  if (loops > 0) {
+    g.save(); g.scale(k, k);
+    for (let i = 0; i < Math.min(loops, 4); i++) drawLoopHalf(g, LOOP_SPR[i], cols[i % cols.length], true);
+    g.restore();
+  }
+  if (o.golden) {
+    g.fillStyle = '#FFF6C8';
+    for (let i = 0; i < 5; i++) {
+      const a = (t * 0.7 + i * 0.2) % 1, px = Math.cos(i * 2.1) * dw * 0.42, py = -s * 0.55 + Math.sin(i * 1.7) * s * 0.38;
+      const r = s * 0.04 * Math.sin(a * Math.PI);
+      if (r <= 0.2) continue;
+      g.beginPath(); g.moveTo(px, py - r * 2); g.lineTo(px + r * 0.5, py - r * 0.5); g.lineTo(px + r * 2, py); g.lineTo(px + r * 0.5, py + r * 0.5); g.lineTo(px, py + r * 2); g.lineTo(px - r * 0.5, py + r * 0.5); g.lineTo(px - r * 2, py); g.lineTo(px - r * 0.5, py - r * 0.5); g.closePath(); g.fill();
+    }
+  }
+  g.restore();
+  // dropping loops: fall, bounce on the ledge, fade
+  for (const d of mem.drops) {
+    const a = (t - d.t0) / 0.9, L = LOOP_SPR[d.i] || LOOP_SPR[0];
+    g.save(); g.translate(x, y); g.scale(k, k);
+    const fall = a < 0.5 ? (a / 0.5) ** 2 : 1, bounce = a >= 0.5 ? Math.sin(((a - 0.5) / 0.5) * Math.PI) * 0.25 * (1 - a) : 0;
+    g.globalAlpha = 1 - Math.max(0, (a - 0.6) / 0.4);
+    g.translate((d.i % 2 ? 1 : -1) * a * 30, (-L.cy) * fall - bounce * 40);
+    drawLoop(g, { ...L, rot: L.rot + a * 1.5 }, d.c, k, false);
+    g.restore();
+  }
+  // freed: purr hearts burst + gentle hearts after
+  if (stage >= 4 && o.freeT >= 0) {
+    const a = t - o.freeT;
+    for (let i = 0; i < 12; i++) {
+      const h0 = 0.75 + i * 0.07, p = (a - h0) / 1.3;
+      if (p <= 0 || p >= 1) continue;
+      const ang = -Math.PI / 2 + (hash(i, 5) - 0.5) * 2.4;
+      const dist = s * (0.4 + 0.9 * easeOut(p));
+      drawHeart(g, x + Math.cos(ang) * dist, y - s * 0.6 + Math.sin(ang) * dist - p * s * 0.3, s * 0.11 * (1 - p * 0.3), 1 - p * p);
+    }
+    if (a > 2.2) { const p = ((a - 2.2) % 2.6) / 2.6; if (p < 0.8) drawHeart(g, x + dw * 0.4, y - s * 0.95 - p * s * 0.35, s * 0.08, Math.sin(p / 0.8 * Math.PI)); }
+  }
+}
+// One half of a loop: front = lower half (0..π, drawn over the sprite), back = upper half (behind it).
+function drawLoopHalf(g, L, c, front) {
+  const col = c === RAINBOW ? '#F5B82E' : YARN[c] ? YARN[c].base : MYST;
+  g.save(); g.translate(L.cx, L.cy); g.rotate(L.rot);
+  g.lineCap = 'round';
+  const a0 = front ? 0.04 : Math.PI - 0.04, a1 = front ? Math.PI + 0.04 : TAU + 0.04;
+  g.beginPath(); g.ellipse(0, 0, L.rx, L.ry, 0, a0, a1);
+  g.strokeStyle = INK; g.lineWidth = 8; g.stroke();
+  g.strokeStyle = front ? col : mix(col, INK, 0.25); g.lineWidth = 5.4; g.stroke();
+  g.strokeStyle = mix(col, INK, 0.35); g.lineWidth = 1.6; g.setLineDash([2, 3.2]); g.stroke(); g.setLineDash([]);
+  if (front) { g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1.4; g.beginPath(); g.ellipse(0, -1.2, L.rx * 0.96, L.ry * 0.86, 0, 0.5, 1.5); g.stroke(); }
+  g.restore();
+}
 export function drawHeart(g, x, y, r, a = 1) {
   if (a <= 0) return;
   g.save(); g.translate(x, y); g.globalAlpha *= a;
@@ -1300,12 +1591,13 @@ function knit(g, path, base, dark) {
 const OUTFIT = {
   scarf: {
     under(g, c) {
-      const p = new Path2D(); p.ellipse(0, -38, 25, 8, 0, 0, TAU);
+      // band sits at the neck (y -30): any higher and the head, drawn after `under`, hides it
+      const p = new Path2D(); p.ellipse(0, -30, 25, 8, 0, 0, TAU);
       knit(g, p, '#E8463A', '#B8322A'); g.strokeStyle = c.line; g.lineWidth = c.lw; g.stroke(p);
-      const t = new Path2D(); t.moveTo(10, -36); t.lineTo(18, -10); t.lineTo(9, -9); t.lineTo(4, -33); t.closePath();
+      const t = new Path2D(); t.moveTo(10, -28); t.lineTo(18, -4); t.lineTo(9, -3); t.lineTo(4, -25); t.closePath();
       knit(g, t, '#E8463A', '#B8322A'); g.stroke(t);
-      g.strokeStyle = CREAM; g.lineWidth = 2.5; g.beginPath(); g.moveTo(-22, -40); g.lineTo(22, -40); g.moveTo(16.5, -16); g.lineTo(8, -15); g.stroke();
-      g.strokeStyle = '#E8463A'; g.lineWidth = 2; g.beginPath(); for (let i = 0; i < 4; i++) { g.moveTo(10 + i * 2.6, -9); g.lineTo(10 + i * 2.8, -4); } g.stroke();
+      g.strokeStyle = CREAM; g.lineWidth = 2.5; g.beginPath(); g.moveTo(-22, -32); g.lineTo(22, -32); g.moveTo(16.5, -10); g.lineTo(8, -9); g.stroke();
+      g.strokeStyle = '#E8463A'; g.lineWidth = 2; g.beginPath(); for (let i = 0; i < 4; i++) { g.moveTo(10 + i * 2.6, -3); g.lineTo(10 + i * 2.8, 2); } g.stroke();
     },
   },
   pumpkin: {
@@ -1773,7 +2065,7 @@ export function drawPlay(g, S) {
   const bw = Math.ceil(box.ow + pad * 2), bh = Math.ceil(box.kit.y + box.ledgeH * 2 - box.oy + pad * 2);
   const bkey = [bx, by, bw, bh, dpr, u.toFixed(3), puz.cols, puz.rows, sess.level && sess.level.shape, sess.id].join('|');
   if (bake.bkey !== bkey || !bake.board) {
-    bake.board = devSprite(bx, by, bx + bw, by + bh, dpr, bg => drawBoardStatic(bg, B, puz.cols, puz.rows, sess.level && sess.level.shape), bake.board);
+    bake.board = devSprite(bx, by, bx + bw, by + bh, dpr, bg => drawBoardStatic(bg, B, puz.cols, puz.rows, sess.level && sess.level.shape, sess.level && sess.level.knot, 0), bake.board);
     bake.bkey = bkey; bake.key = ''; bake.lkey = '';
     try {
       feltPattern = bake.board.cv.getContext('2d').createPattern(bake.board.cv, 'no-repeat');
@@ -1879,6 +2171,8 @@ export function drawPlay(g, S) {
   drawKitten(g, box.kit.x, box.kit.y, box.kit.s, {
     stage: kit.stage, loops: kit.loops, flinch, freeT: kit.freeT, golden: kit.golden, t: T,
     breed: id > 0 ? (id - 1) % 6 : 0, coat: id > 0 ? Math.floor((id - 1) / 6) : 0, loopColors: lc.slice(0, 4), memKey: sess,
+    // illustrated sprite: id picks the breed / boss art; maxH keeps a 1.4× boss from covering the bottom strands
+    id: kitArtId(sess), maxH: Math.max(box.kit.s, box.kit.y - (box.oy + box.oh - 0.3 * box.u)),
   });
 
   // ---- blocker rings
@@ -2349,7 +2643,7 @@ export function drawMiniBoard(g, rect, level, t = 0, opt = {}) {
     const W = bb.ow + unit, H = bb.kit.y + bb.ledgeH * 2 + unit * 0.5 - ly;
     const cv = mkCanvas(W * dpr, H * dpr), cg = cv.getContext('2d');
     cg.setTransform(dpr, 0, 0, dpr, -lx * dpr, -ly * dpr);
-    drawBoardStatic(cg, B, cols, rows, level.shape);
+    drawBoardStatic(cg, B, cols, rows, level.shape, level.knot);
     const prevPat = feltPattern; feltPattern = null;
     for (const s of live.sort((a, b) => a.d - b.d)) {
       const pts = s.pts.map(p => [ox + p[0] * unit, oy + p[1] * unit]);
@@ -2367,6 +2661,6 @@ export function drawMiniBoard(g, rect, level, t = 0, opt = {}) {
     miniCache.set(mid, ent);
   }
   g.drawImage(ent.cv, x0 + ent.dx, y0 + ent.dy, ent.w, ent.h);
-  if (opt.kitten !== false) drawKitten(g, bb.kit.x, bb.kit.y, bb.kit.s, { stage: opt.stage || 0, loops: opt.loops, freeT: opt.freeT != null ? opt.freeT : -1, t, breed: opt.breed || 0, coat: opt.coat || 0, loopColors: ent.colors, memKey: ent });
+  if (opt.kitten !== false) drawKitten(g, bb.kit.x, bb.kit.y, bb.kit.s, { stage: opt.stage || 0, loops: opt.loops, freeT: opt.freeT != null ? opt.freeT : -1, t, id: opt.id, breed: opt.breed || 0, coat: opt.coat || 0, loopColors: ent.colors, memKey: ent, maxH: bb.kit.y - (bb.oy + bb.oh - 0.3 * bb.u) });
   return { B, box: bb };
 }

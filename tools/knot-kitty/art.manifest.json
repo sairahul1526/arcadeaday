@@ -1,0 +1,594 @@
+{
+  "kit-tabby-sad": {
+    "prompt": "Hero character: a chubby orange tabby kitten sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 320,
+    "tasks": [
+      "19058912b3f39f60fe0501ad4bb9cd2c",
+      "ac5aee53392210ac4aa1ace0b22d26b3"
+    ],
+    "bytes": 13486,
+    "at": "2026-10-30T07:36:48.765Z"
+  },
+  "kit-tuxedo-happy": {
+    "prompt": "A chubby a black-and-white tuxedo kitten with white chest, white socks and a white muzzle, green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "5dca8e37b6aabceff786391cdb2c9abf",
+      "83c4fd8f7004da99bdfece906a7cd762"
+    ],
+    "bytes": 9872,
+    "at": "2026-10-30T07:38:40.456Z"
+  },
+  "kit-tabby-happy": {
+    "prompt": "The same orange tabby kitten (identical design and colours as the reference), overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "cf7efa1e19a1029374bb1e126a9c683e",
+      "7fb6a9a3ba02499f635863fd7dad95ec"
+    ],
+    "bytes": 10754,
+    "at": "2026-10-30T07:38:43.783Z"
+  },
+  "kit-calico-sad": {
+    "prompt": "A chubby a calico kitten with patches of orange, black and white, amber eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "03cb7390c5a30dadfc5f8b50f435c636",
+      "799bd36b6c5d234bff995a010f211b32"
+    ],
+    "bytes": 9924,
+    "at": "2026-10-30T07:38:50.385Z"
+  },
+  "kit-siamese-sad": {
+    "prompt": "A chubby a Siamese kitten with cream body, dark chocolate ears, face mask, paws and tail, bright blue eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "82c199fbe23208ff8dac34aadd873a02",
+      "a16f67813bc2db67b0d5716625170af1"
+    ],
+    "bytes": 8368,
+    "at": "2026-10-30T07:39:25.991Z"
+  },
+  "kit-siamese-happy": {
+    "prompt": "A chubby a Siamese kitten with cream body, dark chocolate ears, face mask, paws and tail, bright blue eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "673079b9d3b5764a5d7cc88336437704",
+      "05ec5ea4f917d0387bb416f49e30511e"
+    ],
+    "bytes": 9916,
+    "at": "2026-10-30T07:39:40.724Z"
+  },
+  "kit-black-happy": {
+    "prompt": "A chubby a sleek black kitten with big golden-yellow eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "a06a22ab666d8bc5e8531a8e1c168a56",
+      "79043de1e0d4e958b2047e84a6dc2a46"
+    ],
+    "bytes": 8342,
+    "at": "2026-10-30T07:40:14.485Z"
+  },
+  "kit-black-sad": {
+    "prompt": "A chubby a sleek black kitten with big golden-yellow eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "3b941bb5526507534b95bfce3fa161ca",
+      "1a0ddb3831c8d2b9eaa6aad66c2ce338"
+    ],
+    "bytes": 7404,
+    "at": "2026-10-30T07:40:42.293Z"
+  },
+  "kit-tuxedo-sad": {
+    "prompt": "A chubby a black-and-white tuxedo kitten with white chest, white socks and a white muzzle, green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "19344b6f8eb3fb59453e24871ee29643",
+      "50dbd3cfa1d504b008ca7f74d2717203"
+    ],
+    "bytes": 8416,
+    "at": "2026-10-30T07:40:46.255Z"
+  },
+  "kit-grey-sad": {
+    "prompt": "A chubby a round blue-grey British Shorthair kitten with copper eyes and chubby cheeks, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "f61d993cba86f9327930889d97fae8f4",
+      "65a8d87eea6cea7f48f1c5ffb34108ff"
+    ],
+    "bytes": 8306,
+    "at": "2026-10-30T07:41:38.049Z"
+  },
+  "kit-persian-sad": {
+    "prompt": "A chubby a fluffy white long-haired Persian kitten with a flat cute face and blue eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "876873b2fbd86e60d7a136d929e141e7",
+      "f678bc3c4a36320256636752679a522a"
+    ],
+    "bytes": 9336,
+    "at": "2026-10-30T07:41:42.074Z"
+  },
+  "kit-persian-happy": {
+    "prompt": "A chubby a fluffy white long-haired Persian kitten with a flat cute face and blue eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "88cf732a3cd40f1248002e97416a9043",
+      "5e8ecce19e998db8a8e65e0dec33f9e6"
+    ],
+    "bytes": 9818,
+    "at": "2026-10-30T07:42:15.108Z"
+  },
+  "kit-browntabby-sad": {
+    "prompt": "A chubby a brown mackerel tabby kitten with bold dark stripes and green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "7d5194378c93a10aa2c7e6b925bdd7ab",
+      "d4aebca80511591c673dd2c993f60913"
+    ],
+    "bytes": 9604,
+    "at": "2026-10-30T07:43:04.642Z"
+  },
+  "kit-grey-happy": {
+    "prompt": "A chubby a round blue-grey British Shorthair kitten with copper eyes and chubby cheeks, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "fc884d1809987436bc850eaa0c1601b8",
+      "fb856d108fda803654067adc763763b4"
+    ],
+    "bytes": 8744,
+    "at": "2026-10-30T07:44:13.186Z"
+  },
+  "kit-browntabby-happy": {
+    "prompt": "A chubby a brown mackerel tabby kitten with bold dark stripes and green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "38610fde6a38107e5a582b3180f07edf",
+      "93b4b7f3f21e62b5c957a93213600ff0"
+    ],
+    "bytes": 11036,
+    "at": "2026-10-30T07:44:18.929Z"
+  },
+  "kit-calico-happy": {
+    "prompt": "A chubby a calico kitten with patches of orange, black and white, amber eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "106ee6352124c13ab72d511ac098aa3e",
+      "e951f3c54fd30277e43fd3476ce2230d"
+    ],
+    "bytes": 9930,
+    "at": "2026-10-30T07:44:50.544Z"
+  },
+  "kit-bengal-happy": {
+    "prompt": "A chubby a spotted golden Bengal kitten with leopard-like rosettes and green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "9cfd529b9059b1ffab37cb80a8ddaa61",
+      "3fd86a9ab1d536bcf86c1886c8fdd429"
+    ],
+    "bytes": 11820,
+    "at": "2026-10-30T07:45:46.364Z"
+  },
+  "kit-bengal-sad": {
+    "prompt": "A chubby a spotted golden Bengal kitten with leopard-like rosettes and green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "f1febdcf97f7e497f0937f7a48bbb617",
+      "9fdeae1ab7e1ddc6d4541acdf7cc937d"
+    ],
+    "bytes": 10762,
+    "at": "2026-10-30T07:45:55.321Z"
+  },
+  "kit-cream-happy": {
+    "prompt": "A chubby a cream-coloured kitten with white socks and a white tail tip, hazel eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "a8400983f625718cf3ef2cfcf88b2db5",
+      "10fcb1bd193c010af8ffa7c8dffce870"
+    ],
+    "bytes": 10132,
+    "at": "2026-10-30T07:46:47.593Z"
+  },
+  "kit-cream-sad": {
+    "prompt": "A chubby a cream-coloured kitten with white socks and a white tail tip, hazel eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "bc102f88c458d504ee86ff9f739e64d3",
+      "0587fabc0e2cf53163559300555405cc"
+    ],
+    "bytes": 10258,
+    "at": "2026-10-30T07:48:21.355Z"
+  },
+  "kit-tortie-sad": {
+    "prompt": "A chubby a tortoiseshell kitten with mottled black and ginger fur and amber eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "98ccc7b79c3367682b250192deb5c92a",
+      "3fec25a47944dbaa7eb59613965d0a54"
+    ],
+    "bytes": 9570,
+    "at": "2026-10-30T07:48:22.376Z"
+  },
+  "kit-ginger-white-sad": {
+    "prompt": "A chubby a ginger-and-white bicolour kitten with a white face blaze, white belly and one ginger ear spot, green eyes, sitting upright facing the viewer, worried pleading big eyes, ears slightly drooped, front paws together, tail curled at the side, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "3071013907b386b968076a507a048240",
+      "b70c863fef8134128834317ba82cd7f4"
+    ],
+    "bytes": 9260,
+    "at": "2026-10-30T07:48:23.533Z"
+  },
+  "kit-tortie-happy": {
+    "prompt": "A chubby a tortoiseshell kitten with mottled black and ginger fur and amber eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "0fc9c23b1cce1ddef9abcb0bff408b8a",
+      "cf5cfa4a103e8e8fd9f0aa7200d0e487"
+    ],
+    "bytes": 10234,
+    "at": "2026-10-30T07:48:54.877Z"
+  },
+  "boss-b10-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Duchess Marmalade: a grand fluffy orange Persian cat with a pearl necklace and a tiny golden tiara, regal, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "56cee95deaeb858cf0d5f9f67e79954d",
+      "7c009bcf3a0c935dc8de0abd6c7e41fd"
+    ],
+    "bytes": 32526,
+    "at": "2026-10-30T07:50:22.087Z"
+  },
+  "boss-b10-happy": {
+    "prompt": "Boss character: Duchess Marmalade: a grand fluffy orange Persian cat with a pearl necklace and a tiny golden tiara, regal, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "fdc8e5a4bb0b470af4f5733004098950",
+      "3642cca65c45429deba9decdfdba10c3"
+    ],
+    "bytes": 34966,
+    "at": "2026-10-30T07:50:22.687Z"
+  },
+  "boss-b20-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Count Whiskerton: a grand black cat wearing a purple velvet cape with a high collar and a tiny pumpkin brooch, playful Halloween style, not scary, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "11627571b51b5a87b27b27b24a332fb4",
+      "efed991988ca4c7094a9683e05aa5707"
+    ],
+    "bytes": 25646,
+    "at": "2026-10-30T07:50:41.303Z"
+  },
+  "boss-b30-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Lady Snowpaw: a grand white Norwegian forest cat with a knitted red earmuff headband and a long striped scarf, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "eaea0cdfcf04de05247db5c7fc609288",
+      "75f79c867b11bf13595d51ada93eda5a"
+    ],
+    "bytes": 27546,
+    "at": "2026-10-30T07:51:36.357Z"
+  },
+  "kit-ginger-white-happy": {
+    "prompt": "A chubby a ginger-and-white bicolour kitten with a white face blaze, white belly and one ginger ear spot, green eyes, overjoyed, jumping up with both front paws raised, eyes closed in happy curves, wide open smiling mouth, tail up, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "664cdaa52616ba4387be8c55d9333c6c",
+      "731ea1788969370d1011893405de2a53"
+    ],
+    "bytes": 10122,
+    "at": "2026-10-30T07:52:31.207Z"
+  },
+  "boss-b20-happy": {
+    "prompt": "Boss character: Count Whiskerton: a grand black cat wearing a purple velvet cape with a high collar and a tiny pumpkin brooch, playful Halloween style, not scary, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "dec062fe9c3bd2dacf3b2f8ac4ebf29f",
+      "8e68ef5e426c582d6b6605b78231d84f"
+    ],
+    "bytes": 25460,
+    "at": "2026-10-30T07:53:09.057Z"
+  },
+  "boss-b40-happy": {
+    "prompt": "Boss character: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "89b0671fe267e4bec05f4538f18ac180",
+      "2047ec091d9c2954f6e7c4a911562ade"
+    ],
+    "bytes": 29620,
+    "at": "2026-10-30T07:53:25.078Z"
+  },
+  "boss-b40-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Baron Von Purr: a grand grey cat with a curly moustache-like whisker tuft, a gold monocle and a little barista apron, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "3a88af3a3ec0bbc11a7f38cf7121dd60",
+      "c0f98cad315b5a45e75974aa64bd5cb3"
+    ],
+    "bytes": 25284,
+    "at": "2026-10-30T07:53:37.105Z"
+  },
+  "boss-b50-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Princess Moonbeam: a grand lilac-grey long-haired cat with a crescent-moon tiara and a starry shawl, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "f9ad0053dbe51da6c1e9e4f60288c71a",
+      "cf0b3813640c9d11da28e8f40cf04e20"
+    ],
+    "bytes": 35202,
+    "at": "2026-10-30T07:53:49.418Z"
+  },
+  "boss-b30-happy": {
+    "prompt": "Boss character: Lady Snowpaw: a grand white Norwegian forest cat with a knitted red earmuff headband and a long striped scarf, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "90ba6ef6c3472a07aab296c2e4fa4177",
+      "c21aed301a7de746b163e3cb5496eb86"
+    ],
+    "bytes": 32556,
+    "at": "2026-10-30T07:54:56.025Z"
+  },
+  "bg-den": {
+    "prompt": "Game background scene, no characters, no text: a cosy autumn living-room den: a crackling fireplace on the left, an armchair with a knitted blanket, a window with falling orange leaves, a rug, warm lamp light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "05b1c61164bf8bb5ba10daa764ced605"
+    ],
+    "bytes": 133212,
+    "at": "2026-10-30T07:55:18.709Z"
+  },
+  "boss-b50-happy": {
+    "prompt": "Boss character: Princess Moonbeam: a grand lilac-grey long-haired cat with a crescent-moon tiara and a starry shawl, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "cbc777a8360f02ea6e26288d7c086529",
+      "1991c1108d3a57a58e6fa76e76bef16c"
+    ],
+    "bytes": 32708,
+    "at": "2026-10-30T07:55:20.150Z"
+  },
+  "boss-b60-happy": {
+    "prompt": "Boss character: Queen Yarnabelle: a majestic calico cat with a crown made of coloured yarn balls and a royal red cape with gold trim, delighted and proud, one paw raised in a triumphant wave, eyes sparkling, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "477855c4f920bcd057be90fcf3506567",
+      "8b57e98e280e705cc5ee44db6c23bb8d"
+    ],
+    "bytes": 32506,
+    "at": "2026-10-30T07:55:23.706Z"
+  },
+  "boss-b60-sad": {
+    "prompt": "Boss character, bigger and more ornate than a kitten: Queen Yarnabelle: a majestic calico cat with a crown made of coloured yarn balls and a royal red cape with gold trim, sitting, looking flustered and indignant, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "ae53d33b6efc1b9c17787d5d009659c8",
+      "87e8b88586c5c91eb11e480059af1395"
+    ],
+    "bytes": 33138,
+    "at": "2026-10-30T07:55:24.947Z"
+  },
+  "bg-pumpkin": {
+    "prompt": "Empty game background scene with NO animals, NO cats, NO creatures, NO people and no text (an empty environment only): a friendly Halloween night porch: carved smiling jack-o-lanterns, a purple dusk sky with a big round moon, fairy lights, autumn leaves, cute not scary. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "ea729064bb22320c813824897a744f8d"
+    ],
+    "bytes": 79984,
+    "at": "2026-10-30T08:03:32.776Z"
+  },
+  "bg-cafe": {
+    "prompt": "Game background scene, no characters, no text: a charming cat cafe: wooden counter with cakes under glass domes, hanging plants, shelves of mugs, chalkboard-shaped shapes without writing, sunny warm light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "2a9512ca0714aee7c9bcc8123f0a24ee"
+    ],
+    "bytes": 108088,
+    "at": "2026-10-30T07:55:39.203Z"
+  },
+  "bg-roof": {
+    "prompt": "Game background scene, no characters, no text: a starry rooftop at night: chimney pots and tiled roofs, a huge starry sky with a crescent moon and shooting star, distant glowing town windows. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "15c89b5c68035915cd96a6a5b04a9d54"
+    ],
+    "bytes": 77586,
+    "at": "2026-10-30T07:55:47.111Z"
+  },
+  "win-yarnhug": {
+    "prompt": "Celebration illustration: a happy orange tabby kitten hugging a giant ball of red yarn, sparkles around, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 384,
+    "tasks": [
+      "9df18c73553e9e1c7cec04ff297fc812",
+      "db92c0011c68e422d976b91bf1b49c9b"
+    ],
+    "bytes": 19464,
+    "at": "2026-10-30T07:56:09.956Z"
+  },
+  "bg-cabin": {
+    "prompt": "Game background scene, no characters, no text: a snowy log-cabin interior: frosted windows showing snowfall, a wood stove, hanging mittens, a knitted stocking, soft blue and warm amber light. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "55e97655827e0ca3be6dd8939bfce169"
+    ],
+    "bytes": 111454,
+    "at": "2026-10-30T07:56:19.965Z"
+  },
+  "win-pile": {
+    "prompt": "Celebration illustration: three happy kittens (tabby, tuxedo and calico) piled together cheering with confetti, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 384,
+    "tasks": [
+      "32d16fd5fae544e47a502d8f43bef43d",
+      "3dc78eb87d222402665265148c958f88"
+    ],
+    "bytes": 37240,
+    "at": "2026-10-30T07:56:28.874Z"
+  },
+  "bg-attic": {
+    "prompt": "Game background scene, no characters, no text: a moonlit attic: slanted wooden beams, a round window with moonlight, old trunks, a dress form, dangling string lights, cool blue and lilac palette. Soft painterly depth, slightly blurred and lower-contrast in the large central area so a puzzle board can sit on top, details concentrated around the edges and bottom.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1280,
+    "tasks": [
+      "3ab6f7153620b7de35efd4ea8563eb44"
+    ],
+    "bytes": 81836,
+    "at": "2026-10-30T07:56:30.944Z"
+  },
+  "win-ribbon": {
+    "prompt": "Celebration illustration: a kitten dancing on hind legs twirling a long teal ribbon in a swirl, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 384,
+    "tasks": [
+      "3d58aa76edebc217da48b6aac08bae3a",
+      "b14c3b071cc2b0b19ecf266920181e82"
+    ],
+    "bytes": 31346,
+    "at": "2026-10-30T07:57:01.647Z"
+  },
+  "win-nap": {
+    "prompt": "Celebration illustration: a content kitten curled up asleep inside a wicker yarn basket, tiny hearts floating, plain white background, centered, full body. Same art style, line weight and proportions as the reference kitten.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 384,
+    "tasks": [
+      "0765e91338c7798bea27439cffdbad44",
+      "996569427f07c2e77248097905356e46"
+    ],
+    "bytes": 23638,
+    "at": "2026-10-30T07:57:05.012Z"
+  }
+}

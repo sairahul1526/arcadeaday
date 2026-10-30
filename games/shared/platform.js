@@ -16,6 +16,20 @@ const QA = /[?&]qa=1\b/.test(location.search);
 const SAVE_GAP = 1000; // ms between real writes
 const MAX_SAVE = 500 * 1024; // Playables limit on saveData size (bytes, roughly chars)
 
+// Analytics endpoint (same-origin path, e.g. '/api/ev'). Empty = P.event is a no-op. Web only.
+const ANALYTICS_URL = '';
+// Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|poki or window.__PORTAL set by the portal build.
+const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'poki'];
+const portalName = (() => {
+  if (Y) return '';
+  let n = '';
+  try { n = (new URLSearchParams(location.search).get('portal') || window.__PORTAL || '') + ''; } catch {}
+  n = n.toLowerCase();
+  return PORTALS.includes(n) ? n : '';
+})();
+const sdkCall = fn => { try { const r = fn(); if (r && r.catch) r.catch(() => {}); } catch {} };
+let portalInited = false, gameplayOn = false;
+
 const pauseCbs = [], resumeCbs = [], audioCbs = [];
 let opts = null; // init() options
 let saveTimer = 0, lastWrite = 0, dirty = false, paused = false;
@@ -34,6 +48,8 @@ const call = (list, ...a) => list.slice().forEach(cb => { try { cb(...a); } catc
 const P = {
   /** 'yt' inside YouTube Playables, otherwise 'web'. */
   env: Y ? 'yt' : 'web',
+  /** '' on the web and YouTube; 'crazygames' | 'gamedistribution' | 'gamepix' | 'coolmath' | 'poki' when running inside a portal build. */
+  portal: portalName,
   /** true when the page was opened with ?qa=1 (QA hooks may be exposed). */
   qa: QA,
   /** The save object. Mutate it, then call P.save(). null until init() resolves. */
@@ -41,8 +57,8 @@ const P = {
   /** Host audio flag. yt: system.isAudioEnabled(). web: always true (the game has its own mute). */
   audioOn: true,
   /** Web-only extras. All false on YouTube. */
-  canShare: !Y,
-  canLink: !Y,
+  canShare: !Y && !portalName, // portals forbid share prompts and outbound links
+  canLink: !Y && !portalName,
   showMute: !Y,
   /** Player language, e.g. 'en' or 'en-US'. */
   lang: (typeof navigator !== 'undefined' && navigator.language) || 'en',
@@ -92,6 +108,7 @@ const P = {
       // Keep the hub's "your best" readable even for saves made before best() existed.
       if (d.best > 0 && !ls.get(opts.store + 'best')) ls.set(opts.store + 'best', String(d.best));
     }
+    initPortal();
     if (QA) window.__P = P;
     return d;
   },
@@ -146,6 +163,7 @@ const P = {
     if (firstDone) return;
     firstDone = true;
     if (Y) try { Y.game.firstFrameReady(); } catch (e) { P.error(e); }
+    portalLoading();
   },
   /** Call once the game is interactable. Always comes after firstFrame() (called for you if needed). */
   ready() {
@@ -153,7 +171,31 @@ const P = {
     P.firstFrame();
     readyDone = true;
     if (Y) try { Y.game.gameReady(); } catch (e) { P.error(e); }
+    P.loadingDone();
   },
+
+  /** Analytics. No-op unless ANALYTICS_URL is set and env is 'web'. Never throws, never blocks. */
+  event(name, data) {
+    if (P.env !== 'web' || !ANALYTICS_URL) return;
+    try {
+      const body = JSON.stringify({ e: name, d: data || {}, t: Date.now(), p: portalName });
+      if (navigator.sendBeacon) navigator.sendBeacon(ANALYTICS_URL, body);
+    } catch {}
+  },
+
+  /** Portal lifecycle hooks. All no-ops on web and YouTube; never gate gameplay on them. */
+  loadingDone() { portalLoaded(); },
+  /** A level/round is now being played (call again after every pause/resume or retry). */
+  gameplayStart() { if (gameplayOn) return; gameplayOn = true; if (portalName === 'crazygames') cg(g => g.gameplayStart()); },
+  /** Gameplay stopped (menu, pause, win/lose card). */
+  gameplayStop() { if (!gameplayOn) return; gameplayOn = false; if (portalName === 'crazygames') cg(g => g.gameplayStop()); },
+  /** A celebratory moment (e.g. a 3-star win). */
+  happyTime() {
+    if (portalName === 'crazygames') cg(g => g.happytime());
+    else if (portalName === 'gamepix') sdkCall(() => window.GamePix.happyMoment());
+  },
+  /** A natural break between levels. Does nothing: the game makes no ad calls. Reserved for a portal that requires it. */
+  breakpoint() {},
 
   /** Report an error without throwing. Uses console.warn so it never counts as a console error. */
   error(e) {
@@ -177,6 +219,37 @@ const P = {
     return true;
   },
 };
+
+// ---- portal adapter (thin; every call guarded, absent SDKs are ignored)
+// CrazyGames SDK v3: game.* calls are only valid once init() has resolved, so every call waits on it (order kept).
+let cgReady = Promise.resolve();
+const cg = fn => {
+  const sdk = window.CrazyGames && window.CrazyGames.SDK;
+  if (sdk) cgReady.then(() => { if (sdk.game) sdkCall(() => fn(sdk.game)); });
+};
+function initPortal() {
+  if (!portalName || portalInited) return;
+  portalInited = true;
+  if (portalName === 'crazygames') {
+    const sdk = window.CrazyGames && window.CrazyGames.SDK;
+    if (sdk && sdk.init) try { cgReady = Promise.resolve(sdk.init()).catch(() => {}); } catch {}
+  } else if (portalName === 'gamedistribution') {
+    // GD pause/resume arrive through GD_OPTIONS.onEvent, which the portal build (tools/build-portal.mjs) queues in
+    // window.__gdEvents and forwards to window.__gdOnEvent. The SDK may hold its own reference to onEvent, so it is
+    // not replaced here; events that arrived before init are replayed.
+    const on = ev => { if (ev && ev.name === 'SDK_GAME_PAUSE') setPaused(true); else if (ev && ev.name === 'SDK_GAME_START') setPaused(false); };
+    window.__gdOnEvent = ev => { try { on(ev); } catch {} };
+    (window.__gdEvents || []).forEach(window.__gdOnEvent);
+  }
+}
+function portalLoading() {
+  if (portalName === 'crazygames') cg(g => g.loadingStart());
+  else if (portalName === 'gamepix') sdkCall(() => window.GamePix.loading(0));
+}
+function portalLoaded() {
+  if (portalName === 'crazygames') cg(g => g.loadingStop());
+  else if (portalName === 'gamepix') sdkCall(() => window.GamePix.loaded());
+}
 
 function setPaused(p) {
   if (p === paused) return;

@@ -44,13 +44,15 @@ import * as M from './meta.js';
 import * as LV from './levels.js';
 import { canPull } from './rules.js';
 import * as AU from './audio.js';
+import { img, WINS, BOSSES } from './art.js';
 
 // ---------- style ----------
 const INK = '#2B2440', CREAM = '#FFF4E4', STITCH = '#E9D3B5', SHADE = '#D9BF9C', TOMATO = '#E8463A', TOMATO_D = '#B8322A';
 const TEAL = '#1FB0A0', TEAL_D = '#167C71', GOLD = '#FFC93C', GOLD_D = '#B9811A', AMBER = '#FFB23F', GREY = '#B9B2AE';
 const FT = '"Lilita One", "Arial Rounded MT Bold", system-ui, sans-serif';
 const FB = 'Nunito, system-ui, sans-serif';
-const YCOL = ['#E8463A', '#1FB0A0', '#F5B82E', '#3D86EE', '#8C55D3', '#86C440', '#E8463A'];
+// yarn colours follow render.js YARN (single source); the literal list is only a fallback if YARN is missing
+const YCOL = Array.isArray(R.YARN) && R.YARN.length >= 7 ? R.YARN.map(y => y.base) : ['#E8463A', '#169C92', '#F5B82E', '#4790F2', '#A145C9', '#93CD3E', '#E8463A'];
 const BK = ['undo', 'hint', 'slot', 'snip'];
 const ICOL = { pause: TEAL, retry: TEAL, undo: TEAL, hint: GOLD, slot: CREAM, snip: TOMATO, gear: TEAL, cart: TEAL, paw: TOMATO,
   calendar: CREAM, share: TEAL, close: TOMATO, home: TOMATO, lock: CREAM };
@@ -610,10 +612,9 @@ function dirL3() {
   };
 }
 function dirL4() {
-  return {
-    start(S) { forceSay('Watch the NEXT spool', 3, 3); attnNext(S, 0.3); },
-    on() {}, tick() {},
-  };
+  // polish round 3: the "Watch the NEXT spool" callout used to land with the Undo fly-in, the basket tag and the ★
+  //   flag in the same second. L4's one new idea (the ★ flag) is now the teach overlay (TEACH_PLAN[4]).
+  return { start() {}, on() {}, tick() {} };
 }
 function dirTeach(key) {
   let off = false, pulls = 0;
@@ -648,7 +649,121 @@ function dirTeach(key) {
       if (off || pulls >= (key === 'paw' || key === 'jumbo' || key === 'ice' ? 2 : 1) || S.sess.result) return;
       if (!U.hand && U.idle >= 3) setHand(target(S), 'idle');
     },
+    done: () => off || pulls >= 1,
   };
+}
+// polish round 3: a Daily Knot (or bonus tangle) can show a mechanic the player has never met (dailies mix all of
+//   them). Each unseen one present on the board gets the same first-sight teach as its level, one at a time.
+const MECH = {
+  knot: pz => (pz.group || []).some(x => x >= 0), lock: pz => !!pz.hasLock, mystery: pz => (pz.strands || []).some(q => q && q.m),
+  paw: pz => !!pz.hasPaw, rainbow: pz => (pz.rainbowMask || 0) > 0, jumbo: pz => (pz.spools || []).some(q => q && q.n > 3),
+  ice: pz => (pz.ice || 0) > 0,
+};
+function dirMechanics(s) {
+  const pz = (s && s.puz) || {};
+  const keys = Object.keys(MECH).filter(k => safe(() => MECH[k](pz), false) && !safe(() => M.tutSeen(k), true));
+  if (!keys.length) return null;
+  let i = 0, cur = null, gap = 0;
+  const next = S => { cur = dirTeach(keys[i++]); cur.start(S); };
+  return {
+    start(S) { next(S); },
+    on(type, d, S) { if (cur) cur.on(type, d, S); },
+    tick(dt, S) {
+      if (!cur) return;
+      cur.tick(dt, S);
+      if (i < keys.length && cur.done()) { gap += dt; if (gap > 1.2 && !U.callout) { gap = 0; next(S); } }
+    },
+  };
+}
+
+// ---------- teach-by-play overlay (polish round 3) ----------
+// DECISION (designer/grandparent: "L3/L4 rule overload"): the first time a new idea is on the board, gold rings
+//   pulse on it with at most ONE short label; the first tap anywhere dismisses it (the tap still plays). While it
+//   is up no callout, first-sight tag or booster fly-in competes with it. Once shown, the tags it replaces are
+//   marked seen. If the player pulls before it could show, it is dropped unmarked and the tags still cover it.
+const TEACH_PLAN = {
+  3: { key: 'teach3', rings: ['basket', 'next'], arrow: true, label: { text: 'Spare yarn waits here', at: 'basket' }, marks: ['f_basket', 'f_next'] },
+  4: { key: 'teach4', rings: ['par', 'next'], label: { text: 'Keep yarn left of ★ for 3★', at: 'par' }, marks: ['x_par'] },
+};
+function teachFor(s) {
+  if (!s || s.kind !== 'level' || SHOWREEL) return null;
+  const p = TEACH_PLAN[s.id];
+  return p && !safe(() => M.tutSeen(p.key), true) ? p : null;
+}
+function teachTick(S) {
+  const s = S.sess, p = U.teachPend;
+  if (p && !U.teach) {
+    if (s.result || s.stuck || U.t > (U.tutStart || 0) + 8) { U.teachPend = null; return; }
+    const busy = U.t < (U.tutStart || 0) + 0.6 || U.callout || U.pop || U.fly.length || U.ghost || U.banner || (s.flights && s.flights.length);
+    if (busy) return;
+    const L = layoutOf(S);
+    const rings = p.rings.filter(r => (r === 'par' ? parShown(s) >= 0 : r === 'next' ? (s.nextQ || []).length > 0 : r === 'basket' ? !L.hideBasket && (s.basket || []).length > 0 : true));
+    U.teachPend = null;
+    if (!rings.length) return;
+    U.teach = { ...p, rings, label: p.label && rings.includes(p.label.at) ? p.label : null, t0: U.t, dur: 9, out: 0 };
+    safe(() => M.markTut(p.key));
+    for (const k of p.marks || []) firstDone(k);
+    clearHand('idle');
+  }
+  const t = U.teach;
+  if (t && !t.out && (U.t - t.t0 > t.dur || s.result || s.stuck)) t.out = U.t;
+  if (t && t.out && U.t - t.out > 0.3) U.teach = null;
+}
+function teachDismiss() { if (U.teach && !U.teach.out && U.t - U.teach.t0 > 0.15) U.teach.out = U.t; }
+function drawTeach(g, S, L) {
+  const t = U.teach, s = S.sess;
+  if (!t || !s || U.card) return;
+  const u = L.u, age = U.t - t.t0;
+  const a = clamp(Math.min(age / 0.25, t.out ? 1 - (U.t - t.out) / 0.3 : 1), 0, 1);
+  if (a <= 0) return;
+  const pulse = 0.5 + 0.5 * Math.sin(age * 5);
+  const ring = (fn) => {
+    g.save(); g.globalAlpha = a;
+    fn(); g.lineWidth = Math.max(3, 5 * u) * (1 + 0.25 * pulse); g.strokeStyle = GOLD; g.stroke();
+    g.lineWidth = Math.max(1.2, 1.6 * u); g.strokeStyle = INK; g.stroke();
+    g.restore();
+  };
+  const sl = safe(() => basketSlots(L, (s.basket || []).length), []);
+  const rs = safe(() => rackSlots(L), null);
+  for (const r of t.rings) {
+    if (r === 'basket' && sl.length) {
+      const rad = sl[0].r, x0 = sl[0].x - rad * 1.35, x1 = sl[sl.length - 1].x + rad * 1.35, g2 = rad * 0.12 * pulse;
+      ring(() => rr(g, x0 - g2, sl[0].y - rad * 1.3 - g2, x1 - x0 + 2 * g2, rad * 2.6 + 2 * g2, rad * 0.6));
+    }
+    if (r === 'next' && rs && rs.next && rs.next[0]) {
+      const n = rs.next[0], h = n.h, grow = h * 0.06 * pulse, top = n.y - h * 0.56, bot = n.y + h * 0.66 + grow, hw = h * 0.6 + grow;
+      ring(() => rr(g, n.x - hw, top - grow, hw * 2, bot - top + grow, Math.min(hw, h * 0.3)));
+    }
+    if (r === 'par' && sl.length) {
+      const par = parShown(s), rad = sl[0].r;
+      if (par < 0) continue;
+      const xm = par === 0 ? sl[0].x - rad * 1.3 : (sl[par - 1].x + sl[par].x) / 2, w = rad * 0.55 + rad * 0.1 * pulse;
+      ring(() => rr(g, xm - w, sl[0].y - rad * 2.0, 2 * w, rad * 3.2, w));
+    }
+  }
+  if (t.arrow && rs && rs.next && rs.next[0] && rs.active && rs.active.length) {
+    // the NEXT spool slides into the rack when one fills: a dashed arc from it to the nearest active spool
+    const n = rs.next[0], to = rs.active[rs.active.length - 1];
+    // it leaves from the side of the NEXT ring (never over the render's "NEXT" label above the spool)
+    const sd = n.x > to.x ? -1 : 1;
+    const x0 = n.x + sd * n.h * 0.66, y0 = n.y - n.h * 0.15, x1 = to.x - sd * to.h * 0.62, y1 = to.y - to.h * 0.3;
+    const cx = (x0 + x1) / 2, cy = Math.min(y0, y1) - Math.abs(x0 - x1) * 0.45;
+    g.save(); g.globalAlpha = a; g.lineCap = 'round';
+    g.setLineDash([7 * u, 6 * u]); g.lineDashOffset = -age * 30 * u;
+    g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1);
+    g.lineWidth = Math.max(4, 6 * u); g.strokeStyle = INK; g.stroke();
+    g.lineWidth = Math.max(2.5, 3.6 * u); g.strokeStyle = GOLD; g.stroke();
+    g.setLineDash([]);
+    const ang = Math.atan2(y1 - cy, x1 - cx), hs = Math.max(8, 11 * u);
+    g.beginPath(); g.moveTo(x1 + Math.cos(ang) * hs * 0.6, y1 + Math.sin(ang) * hs * 0.6);
+    g.lineTo(x1 + Math.cos(ang + 2.5) * hs, y1 + Math.sin(ang + 2.5) * hs); g.lineTo(x1 + Math.cos(ang - 2.5) * hs, y1 + Math.sin(ang - 2.5) * hs); g.closePath();
+    g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1.5, 2 * u); g.strokeStyle = INK; g.stroke();
+    g.restore();
+  }
+  if (t.label) {
+    const an = firstAnchor(S, L, t.label.at);
+    if (an) drawTag(g, S, t.label.text, an, u, a);
+  }
 }
 
 // ---------- bus wiring ----------
@@ -661,7 +776,8 @@ function onBus(type, d) {
   }
   if (type === 'stuck') { U.loseAt = U.t + DUR.stuckCard; U.loseDone = false; clearHand(); U.ghost = null; }
   if (type === 'kittenFree') { clearHand(); clearSay(); }
-  if (type === 'pull' || type === 'press') U.idle = 0;
+  if (type === 'pull' || type === 'press') { U.idle = 0; teachDismiss(); }
+  if (type === 'pull') U.teachPend = null;
   if (!S.sess || S.screen !== 'play') return;
   if (U.tut && U.tutOn) safe(() => U.tut.on(type, d, S));
   if (type === 'pull') clearHand('idle');
@@ -773,6 +889,8 @@ export function update(dt, S) {
     const idleOk = sess.kind === 'bonus' || (sess.kind === 'level' && sess.id >= 4);
     if (idleOk && !U.hand && U.idle >= IDLE_HINT && !sess.stuck && !sess.result) setHand(pickMove(S), 'idle');
     if (U.hand && (sess.result || sess.stuck)) U.hand = null;
+    teachTick(S);
+    if (U.intro && (U.teach || U.teachPend)) U.intro.at = Math.max(U.intro.at, U.t + 1.2);
     if (U.intro && U.t >= U.intro.at) runIntro(S);
   }
   // callouts
@@ -820,7 +938,7 @@ function onScreen(prev, next, S) {
     U.winDone = U.loseDone = false;
   }
   if (next !== 'play') { clearCallouts(); U.hand = null; U.ghost = null; }
-  if (next === 'shop') { U.shop.tab = 'outfits'; U.shop.sel = (safe(() => M.outfits(), []).find(o => o.worn) || { id: 'tabby' }).id; U.shop.bsel = BK.find(k => safe(() => M.boosterUnlocked(k), false)) || 'undo'; }
+  if (next === 'shop') { U.shop.confirm = null; U.shop.msg = null; U.shop.tab = 'outfits'; U.shop.sel = (safe(() => M.outfits(), []).find(o => o.worn) || { id: 'tabby' }).id; U.shop.bsel = BK.find(k => safe(() => M.boosterUnlocked(k), false)) || 'undo'; }
   U.reset = 0;
   U.press = null; U.drag = null;
 }
@@ -828,10 +946,11 @@ function onSession(S) {
   U.sessRef = S.sess;
   clearCallouts();
   U.hand = null; U.ghost = null; U.attn = []; U.idle = 0; U.tutOn = false; U.intro = null; U.fly = [];
-  U.winAt = U.loseAt = 0; U.winDone = U.loseDone = false; U.rArm = null; U.blk = null; U.first = null; U.banner = null;
+  U.winAt = U.loseAt = 0; U.winDone = U.loseDone = false; U.rArm = null; U.bArm = null; U.blk = null; U.first = null; U.banner = null;
   if (U.card && (U.card.type === 'win' || U.card.type === 'lose')) U.card = null;
   const s = S.sess;
-  U.tut = s && s.kind === 'level' ? safe(() => tutorialFor(s.id), null) : null;
+  U.tut = s && s.kind === 'level' ? safe(() => tutorialFor(s.id), null) : s && (s.kind === 'daily' || s.kind === 'bonus') ? safe(() => dirMechanics(s), null) : null;
+  U.teach = null; U.teachPend = safe(() => teachFor(s), null);
 }
 function scheduleIntro(S) {
   const pend = BK.filter(k => safe(() => M.boosterUnlocked(k), false) && !safe(() => M.tutSeen('b_' + k), true));
@@ -941,6 +1060,16 @@ function tapBooster(k) {
       if (U.card) toast('Not enough yarn balls');
       return false;
     }
+    // polish round 3 (spend confirmation): in a level a 0-stock booster costs yarn balls, so the first tap only
+    //   arms the buy (gold ring + "Tap again: Hint for 40", 3 s), the second spends. Lose-card buttons are already
+    //   an explicit priced choice and buy at once.
+    if (!U.card && !(U.bArm && U.bArm.k === k && U.t < U.bArm.until)) {
+      U.bArm = { k, until: U.t + 3 };
+      forceSay(`Tap again: ${BNAME[k]} for ${BOOSTERS[k].price} yarn`, 3, 2.8);
+      return false;
+    }
+    U.bArm = null;
+    clearSay(`Tap again: ${BNAME[k]} for ${BOOSTERS[k].price} yarn`); // the ask is answered; don't linger over the result
     if (!safe(() => M.buyBooster(k), false)) return false;
     bus.emit('buy', { item: k });
   }
@@ -998,7 +1127,7 @@ function drawLogo(g, cx, cy, maxW, maxH) {
   const w1 = tw(g, 'Knot', s1), w2 = tw(g, 'Kitty', s1 * 1.12);
   s1 = Math.min(s1, s1 * (maxW * 0.9) / Math.max(w1, w2));
   const s2 = s1 * 1.12, y1 = cy - s1 * 0.46, y2 = cy + s2 * 0.5;
-  const W1 = tw(g, 'Knot', s1), x1 = cx - W1 / 2;
+  const W1 = tw(g, 'Knot', s1) + s1 * 0.105, x1 = cx - W1 / 2;
   const kn = tw(g, 'Kn', s1), ow = tw(g, 'o', s1);
   const ox = x1 + kn + ow / 2, oy = y1 + s1 * 0.1;
   g.save();
@@ -1015,16 +1144,27 @@ function drawLogo(g, cx, cy, maxW, maxH) {
   };
   yarn();
   g.beginPath(); g.arc(x1 + W1 + s1 * 0.36, y1 - s1 * 0.2, s1 * 0.15, 0, 7); g.fillStyle = TOMATO; g.fill(); g.lineWidth = s1 * 0.04; g.strokeStyle = INK; g.stroke();
+  // polish round 3 (RENDER: the logo read "Knct"): letters are drawn one by one with a little tracking, all ink
+  //   outlines first and all fills after, and a slimmer outline, so one letter's outline never eats into the next
+  //   letter or closes the o's counter (Lilita's n-o pair is tight).
   const word = (s, x, y, size) => {
-    txt(g, s, x + size * 0.03, y + size * 0.06, size, { col: 'rgba(43,36,64,0.45)' });
-    txt(g, s, x, y, size, { col: CREAM, stroke: INK, sk: 0.16 });
+    const tr = size * 0.035, ws = [...s].map(ch => tw(g, ch, size)), tot = ws.reduce((a, b) => a + b, 0) + tr * (s.length - 1);
+    const xs = []; let xx = x - tot / 2;
+    for (const w of ws) { xs.push(xx + w / 2); xx += w + tr; }
+    [...s].forEach((ch, i) => txt(g, ch, xs[i] + size * 0.03, y + size * 0.06, size, { col: 'rgba(43,36,64,0.45)' }));
+    setFont(g, size, FT, ''); g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.miterLimit = 2; g.lineWidth = size * 0.13; g.strokeStyle = INK;
+    [...s].forEach((ch, i) => g.strokeText(ch, xs[i], y));
+    g.fillStyle = CREAM;
+    [...s].forEach((ch, i) => g.fillText(ch, xs[i], y));
+    return tot;
   };
   word('Knot', cx, y1, s1);
   // polish: the yarn stays BEHIND the word (it shows through the o's hole). Drawn in front of the o's right half it
   //   cut the ring and "Knot" read "Knct".
   void ox; void ow;
   // ear notch on the K of Kitty
-  const W2 = tw(g, 'Kitty', s2), kx = cx - W2 / 2 + s2 * 0.13, top = y2 - s2 * 0.36;
+  const W2 = tw(g, 'Kitty', s2) + s2 * 0.14, kx = cx - W2 / 2 + s2 * 0.13, top = y2 - s2 * 0.36;
   g.beginPath(); g.moveTo(kx - s2 * 0.1, top + s2 * 0.04); g.lineTo(kx - s2 * 0.02, top - s2 * 0.24); g.lineTo(kx + s2 * 0.12, top + s2 * 0.04); g.closePath();
   g.fillStyle = CREAM; g.fill(); g.lineJoin = 'round'; g.lineWidth = s2 * 0.08; g.strokeStyle = INK; g.stroke();
   g.beginPath(); g.moveTo(kx - s2 * 0.045, top + s2 * 0.01); g.lineTo(kx - s2 * 0.015, top - s2 * 0.12); g.lineTo(kx + s2 * 0.05, top + s2 * 0.01); g.closePath(); g.fillStyle = '#F4A7A0'; g.fill();
@@ -1339,6 +1479,7 @@ function drawPlayUI(g, S) {
     drawGhost(g, S, L);
     drawBlk(g, S);
     drawFirst(g, S, L);
+    drawTeach(g, S, L);
     drawFly(g, S, L);
     drawHand(g, S);
   }
@@ -1350,6 +1491,16 @@ function drawHUD(g, S, live) {
   if (!sess) return;
   const dd = Math.min(46 * u, h.h - 6), cy = h.y + h.h / 2;
   const showBtns = S.screen === 'play' || S.screen === 'pause';
+  // polish round 3 (desktop critics: "header floats, pause sits on the curtain rod"): in landscape the HUD row is
+  //   one cream plaque (pause | title | retry) so it reads as a single group over any scene art.
+  const plaque = L.orient === 'landscape';
+  if (plaque) {
+    g.save();
+    g.shadowColor = 'rgba(43,36,64,0.25)'; g.shadowBlur = 8 * u; g.shadowOffsetY = 3 * u;
+    rr(g, h.x, h.y + 1, h.w, h.h - 2, (h.h - 2) / 2); g.fillStyle = 'rgba(255,249,236,0.94)'; g.fill();
+    g.restore();
+    rr(g, h.x, h.y + 1, h.w, h.h - 2, (h.h - 2) / 2); g.lineWidth = Math.max(1.5, 2.2 * u); g.strokeStyle = INK; g.stroke();
+  }
   if (showBtns) {
     iconBtn(g, { id: 'hud-pause', label: 'Pause', x: h.x + L.m, y: cy - dd / 2, w: dd, h: dd, icon: 'pause', act: () => api.pause(), d: u });
     iconBtn(g, { id: 'hud-retry', label: 'Retry level', x: h.x + h.w - L.m - dd, y: cy - dd / 2, w: dd, h: dd, icon: 'retry', act: () => askRestart(S, 'hud-retry'), d: u,
@@ -1360,8 +1511,13 @@ function drawHUD(g, S, live) {
   const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day' : 'Endless tangles';
   const maxW = h.w - 2 * (L.m + dd + 8);
   const ts = Math.min(22 * u, h.h * 0.44);
-  txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
-  txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.min(13 * u, h.h * 0.26), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
+  if (plaque) {
+    txt(g, title, h.x + h.w / 2, h.y + h.h * 0.4, ts, { col: INK, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.min(13 * u, h.h * 0.26), { f: FB, w: '800', col: TEAL_D, maxW });
+  } else {
+    txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.min(13 * u, h.h * 0.26), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
+  }
 }
 function drawBoosters(g, S) {
   const L = layoutOf(S), sess = S.sess;
@@ -1377,7 +1533,7 @@ function drawBoosters(g, S) {
     const pulse = k === 'undo' && (sess.doomed || U.t < U.undoPulse);
     const flying = U.fly.some(f => f.k === k && U.t < f.t0 + f.dur);
     iconBtn(g, { id: 'b-' + k, label: BNAME[k], x: r.x, y: r.y, w: r.w, h: r.h, hit: r.hit, icon: k, d: L.u,
-      badge: flying ? null : n > 0 ? { n } : { price: BOOSTERS[k].price }, ring: sess.boosterArm === k || hintOn ? GOLD : pulse ? TOMATO : null,
+      badge: flying ? null : n > 0 ? { n } : { price: BOOSTERS[k].price }, ring: sess.boosterArm === k || hintOn || (U.bArm && U.bArm.k === k && U.t < U.bArm.until) ? GOLD : pulse ? TOMATO : null,
       act: () => tapBooster(k) });
   }
 }
@@ -1534,8 +1690,10 @@ function drawFirst(g, S, L) {
   const s = S.sess;
   if (!s || U.card || SHOWREEL) return;
   drawBanner(g, S, L);
-  if (s.result || s.stuck || (s.kind === 'level' && s.id < 2)) return;
+  if (s.result || s.stuck || (s.kind === 'level' && s.id < 2) || U.teach || U.teachPend) return;
   if (U.first && U.first.dur && U.t - U.first.t0 > U.first.dur) firstDone(U.first.key);
+  // One idea at a time: a spoken callout or a booster gift flight owns the screen; the tag waits (it is re-armed after).
+  if ((U.callout && !U.pop) || U.intro || U.fly.length) { if (U.first) U.first.t0 = U.t; return; }
   if (!U.first) {
     if (U.t < (U.tutStart || 0) + 2.2 || (U.banner && U.t < U.banner.t0 + 2.4)) return;
     const f = FIRST.find(q => !safe(() => M.tutSeen(q.key), true) && safe(() => q.ok(s, L), false));
@@ -1746,9 +1904,36 @@ function drawSettings(g, S) {
 }
 
 // ---------- shop ----------
+// DECISION (polish round 3, critics: "toast overlaps the yarn counter and the Shop header", "no confirmation",
+//   "can't see the outfit I bought"): every spend opens a confirm card INSIDE the shop panel (big preview, price,
+//   balance after, Cancel / Buy); a successful buy turns the same card into a "worn!" showcase of the kitty in the
+//   outfit. Short feedback ("Need 30 more yarn balls") is written into the footer itself, so nothing ever floats
+//   over the header, the counter or the cards. While the card is up the shop under it registers no buttons.
+function shopMsg(text) { U.shop.msg = { text, t0: U.t }; }
+const shopMsgOn = () => U.shop.msg && U.t - U.shop.msg.t0 < 1.8 ? U.shop.msg.text : '';
+function shopAsk(kind, id) { U.shop.confirm = { kind, id, t0: U.t, done: 0 }; bus.emit('click', {}); }
+function shopBuy() {
+  const c = U.shop.confirm;
+  if (!c || c.done) return;
+  const bal = safe(() => M.balance(), 0);
+  if (c.kind === 'outfit') {
+    const o = safe(() => M.outfits(), []).find(q => q.id === c.id);
+    if (!o) { U.shop.confirm = null; return; }
+    if (bal < o.price) { U.shop.confirm = null; U.shakes['shop-main'] = U.t; shopMsg(`Need ${o.price - bal} more`); return; }
+    if (safe(() => M.buyOutfit(o.id), false)) { bus.emit('buy', { item: o.id }); c.done = U.t; sfx('gift'); }
+    else U.shop.confirm = null;
+  } else {
+    const k = c.id, price = BOOSTERS[k].price;
+    if (bal < price) { U.shop.confirm = null; U.shakes['l-' + k] = U.t; shopMsg('Not enough yarn balls'); return; }
+    if (safe(() => M.buyBooster(k), false)) { bus.emit('buy', { item: k }); c.done = U.t; }
+    else { U.shop.confirm = null; shopMsg(`Can't buy ${BNAME[k]} right now`); }
+  }
+}
 function drawShop(g, S) {
   const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0);
   const pw = Math.min(W - 16 * d, 560 * d), ph = Math.min(H - 16 * d, 760 * d), px = (W - pw) / 2, py = (H - ph) / 2;
+  const wasReg = U.reg;
+  if (U.shop.confirm) U.reg = false;
   panel(g, px, py, pw, ph, d);
   U.dlg = { x: px, y: py, w: pw, h: ph };
   const pad = 16 * d, ix = px + pad, iw = pw - 2 * pad;
@@ -1765,13 +1950,14 @@ function drawShop(g, S) {
   const ty = hy + 26 * d, th = 40 * d, tw2 = (iw - 8 * d) / 2;
   for (const [i, tab, label] of [[0, 'outfits', 'Outfits'], [1, 'boosters', 'Boosters']]) {
     const on = U.shop.tab === tab, x = ix + i * (tw2 + 8 * d);
-    reg({ id: 'tab-' + tab, label, x, y: ty, w: tw2, h: th, act: () => { U.shop.tab = tab; } });
+    reg({ id: 'tab-' + tab, label, x, y: ty, w: tw2, h: th, act: () => { U.shop.tab = tab; U.shop.msg = null; } });
     rr(g, x, ty, tw2, th, th / 2); g.fillStyle = on ? TEAL : '#F6E6CF'; g.fill(); g.lineWidth = 2.5 * d; g.strokeStyle = INK; g.stroke();
     txt(g, label, x + tw2 / 2, ty + th / 2 + d, 18 * d, { col: on ? '#fff' : INK, stroke: on ? INK : null, sk: 0.2, maxW: tw2 - 16 * d });
   }
   const by = ty + th + 12 * d, bh = py + ph - pad - 58 * d - by;
   const footY = py + ph - pad - 54 * d, fw = Math.min(iw, 280 * d);
-  U.dlg.toastY = footY - 6 * d; U.dlg.toastMin = ty + th + 4 * d; // shop toasts sit above the footer, under the tabs
+  U.dlg.toastY = footY - 6 * d; U.dlg.toastMin = ty + th + 4 * d;
+  const msg = shopMsgOn();
   if (U.shop.tab === 'outfits') {
     const list = safe(() => M.outfits(), []);
     const cols = clamp(Math.floor(iw / (150 * d)), 2, 4), rowsN = Math.ceil(list.length / cols);
@@ -1780,27 +1966,31 @@ function drawShop(g, S) {
     list.forEach((o, i) => {
       const c = i % cols, r = Math.floor(i / cols), x = ix + c * (cw + gap), y = y0 + r * (ch + gap);
       const sel = U.shop.sel === o.id;
-      reg({ id: 'o-' + o.id, label: o.name, x, y, w: cw, h: ch, act: () => { U.shop.sel = o.id; } });
-      rr(g, x, y, cw, ch, 12 * d); g.fillStyle = sel ? '#FFF9EC' : '#F6E6CF'; g.fill();
-      g.lineWidth = sel ? 4 * d : 2 * d; g.strokeStyle = sel ? GOLD_D : INK; g.stroke();
+      reg({ id: 'o-' + o.id, label: o.name, x, y, w: cw, h: ch, act: () => { U.shop.sel = o.id; U.shop.msg = null; } });
+      rr(g, x, y, cw, ch, 12 * d); g.fillStyle = o.worn ? '#E3F5EF' : sel ? '#FFF9EC' : '#F6E6CF'; g.fill();
+      g.lineWidth = sel ? 4 * d : 2 * d; g.strokeStyle = sel ? GOLD_D : o.worn ? TEAL_D : INK; g.stroke();
       const ks = Math.min(ch * 0.52, cw * 0.62);
       // polish: always the idle pose — the raised 'cheer' paws hid the scarf/outfit being shown
       aKitty(g, x + cw / 2, y + 6 * d + ks, ks, 'idle', U.t, o.id);
       const nameY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.33, tagY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.74;
       txt(g, o.name, x + cw / 2, nameY, Math.min(14 * d, (ch - ks) * 0.26), { f: FB, w: '800', maxW: cw - 10 * d });
       const ts = Math.min(14 * d, (ch - ks) * 0.26);
-      if (o.worn) txt(g, 'WORN', x + cw / 2, tagY, ts, { col: TEAL_D, maxW: cw - 10 * d });
+      if (o.worn) txt(g, 'WEARING', x + cw / 2, tagY, ts, { col: TEAL_D, maxW: cw - 10 * d });
       else if (o.owned) txt(g, 'OWNED', x + cw / 2, tagY, ts, { col: INK, maxW: cw - 10 * d });
       else { const pw2 = tw(g, String(o.price), ts) + ts * 1.4; aIcon(g, 'ball', x + cw / 2 - pw2 / 2 + ts * 0.5, tagY, ts * 1.1); txt(g, String(o.price), x + cw / 2 + ts * 0.7, tagY, ts, { maxW: cw - ts * 3 }); }
     });
     const o = list.find(q => q.id === U.shop.sel) || list[0];
     if (o) {
-      const label = o.worn ? 'WORN' : o.owned ? 'WEAR' : `BUY ${o.price}`;
-      pill(g, { id: 'shop-main', label, kind: 'primary', x: px + pw / 2 - fw / 2, y: footY, w: fw, h: 52 * d, disabled: o.worn, act: () => {
-        if (o.owned) { safe(() => M.wear(o.id)); bus.emit('buy', { item: o.id }); return; }
-        if (safe(() => M.balance(), 0) < o.price) { U.shakes['shop-main'] = U.t; toast(`Need ${o.price - safe(() => M.balance(), 0)} more yarn balls`); return; }
-        if (safe(() => M.buyOutfit(o.id), false)) { bus.emit('buy', { item: o.id }); toast(`${o.name}: worn!`); }
+      const label = msg || (o.worn ? 'WEARING' : o.owned ? 'WEAR' : `BUY ${o.price}`);
+      // a worn outfit's footer is a calm teal "WEARING" (it used to be a washed-out disabled pink pill)
+      pill(g, { id: 'shop-main', label, kind: o.worn && !msg ? 'secondary' : 'primary', x: px + pw / 2 - fw / 2, y: footY, w: fw, h: 52 * d, act: () => {
+        if (o.worn) return;
+        if (o.owned) { safe(() => M.wear(o.id)); bus.emit('buy', { item: o.id }); shopMsg(`Wearing ${o.name}!`); return; }
+        const b0 = safe(() => M.balance(), 0);
+        if (b0 < o.price) { U.shakes['shop-main'] = U.t; shopMsg(`Need ${o.price - b0} more`); return; }
+        shopAsk('outfit', o.id);
       } });
+      if (o.worn) { const b2 = findBtn('shop-main'); if (b2) b2.primary = false; }
     }
   } else {
     const gap = 8 * d, rh = Math.min((bh - gap * 3) / 4, 96 * d);
@@ -1823,18 +2013,78 @@ function drawShop(g, S) {
         pill(g, { id: 'l-' + k, label: 'Buy', kind: U.shop.bsel === k ? 'primary' : 'secondary', x: ix + iw - 10 * d - bw, y: y + rh / 2 - bh2 / 2, w: bw, h: bh2, d,
           badge: { price: BOOSTERS[k].price }, act: () => {
             U.shop.bsel = k;
-            if (safe(() => M.buyBooster(k), false)) { bus.emit('buy', { item: k }); toast(`+1 ${BNAME[k]}`); }
-            else { U.shakes['l-' + k] = U.t; toast('Not enough yarn balls'); }
+            if (safe(() => M.balance(), 0) < BOOSTERS[k].price) { U.shakes['l-' + k] = U.t; shopMsg('Not enough yarn balls'); return; }
+            shopAsk('booster', k);
           } });
       }
     });
-    txt(g, 'Boosters help in any level', px + pw / 2, footY + 26 * d, 14 * d, { f: FB, w: '800', col: '#5A5066', maxW: iw });
+    txt(g, msg || 'Boosters help in any level', px + pw / 2, footY + 26 * d, (msg ? 16 : 14) * d, { f: FB, w: '800', col: msg ? TOMATO_D : '#5A5066', maxW: iw });
   }
+  U.reg = wasReg;
+  if (U.shop.confirm) drawShopConfirm(g, S, px, py, pw, ph, d);
+}
+function drawShopConfirm(g, S, px, py, pw, ph, d) {
+  const c = U.shop.confirm, done = !!c.done;
+  const o = c.kind === 'outfit' ? safe(() => M.outfits(), []).find(q => q.id === c.id) : null;
+  if (c.kind === 'outfit' && !o) { U.shop.confirm = null; return; }
+  const name = o ? o.name : BNAME[c.id], price = o ? o.price : BOOSTERS[c.id].price;
+  const bal = safe(() => M.balance(), 0);
+  // veil over the shop panel only (the header chip under it stays readable through it)
+  rr(g, px, py, pw, ph, 18 * d); g.fillStyle = 'rgba(43,36,64,0.45)'; g.fill();
+  const cw = Math.min(pw - 24 * d, 380 * d), chh = Math.min(ph - 24 * d, 470 * d), cx = px + pw / 2 - cw / 2, cy = py + ph / 2 - chh / 2;
+  const t = U.t - (done ? c.done : c.t0), sc = t < 0.22 ? eBack(t / 0.22) * 0.12 + 0.88 : 1;
+  g.save(); g.translate(px + pw / 2, py + ph / 2); g.scale(sc, sc); g.translate(-(px + pw / 2), -(py + ph / 2));
+  panel(g, cx, cy, cw, chh, d);
+  const pad = 18 * d, iw = cw - 2 * pad, mx = cx + cw / 2;
+  const btnH = 52 * d, btnY = cy + chh - pad - btnH;
+  const title = done ? (o ? `${name}: worn!` : `+1 ${name}!`) : `Buy ${name}?`;
+  txt(g, title, mx, cy + pad + 18 * d, 26 * d, { maxW: iw });
+  // preview: the kitty WEARING it, big, idle pose (paws down so a scarf/collar shows); a booster shows its icon
+  const pTop = cy + pad + 44 * d, pBot = btnY - (done ? 40 : 64) * d, pH = Math.max(40 * d, pBot - pTop);
+  g.save();
+  const gl = g.createRadialGradient(mx, pTop + pH * 0.55, 0, mx, pTop + pH * 0.55, pH * 0.6);
+  gl.addColorStop(0, done ? 'rgba(255,201,60,0.55)' : 'rgba(255,201,60,0.25)'); gl.addColorStop(1, 'rgba(255,201,60,0)');
+  g.fillStyle = gl; g.fillRect(cx, pTop, cw, pH);
+  g.restore();
+  if (o) {
+    const ks = Math.min(pH * 0.86, iw * 0.62), hop = done ? Math.abs(Math.sin(t * 5)) * ks * 0.05 * Math.max(0, 1 - t / 1.4) : 0;
+    aKitty(g, mx, pTop + pH * 0.5 + ks * 0.46 - hop, ks, 'idle', U.t, o.id);
+  } else {
+    const r = Math.min(pH * 0.36, 56 * d);
+    g.beginPath(); g.arc(mx, pTop + pH / 2, r, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 3 * d; g.strokeStyle = INK; g.stroke();
+    aIcon(g, c.id, mx, pTop + pH / 2, r * 1.1);
+  }
+  if (done && t < 1.2) { // a little burst of sparkles round the preview
+    for (let i = 0; i < 8; i++) {
+      const an = i / 8 * TAU2 + 0.3, q = e3(Math.min(1, t / 0.7)), rr2 = pH * (0.25 + 0.3 * q);
+      g.save(); g.globalAlpha = Math.max(0, 1 - t / 1.2);
+      aStar(g, mx + Math.cos(an) * rr2 * 1.2, pTop + pH * 0.5 + Math.sin(an) * rr2, 7 * d, true, 0); g.restore();
+    }
+  }
+  if (!done) {
+    const ly = btnY - 40 * d, s1 = 17 * d, lbl = `${price}`, after = `You have ${bal}  ·  ${bal - price} after`;
+    const w1 = tw(g, lbl, s1 * 1.2) + s1 * 1.6;
+    aIcon(g, 'ball', mx - w1 / 2 + s1 * 0.6, ly - 6 * d, s1 * 1.2);
+    txt(g, lbl, mx + s1 * 0.75, ly - 6 * d, s1 * 1.2, { maxW: iw });
+    txt(g, after, mx, ly + 18 * d, 14 * d, { f: FB, w: '800', col: '#5A5066', maxW: iw });
+    const bw = (iw - 10 * d) / 2;
+    pill(g, { id: 'sc-cancel', label: 'Cancel', kind: 'cream', x: cx + pad, y: btnY, w: bw, h: btnH, d, act: () => { U.shop.confirm = null; } });
+    pill(g, { id: 'sc-buy', label: 'Buy', kind: 'primary', x: cx + pad + bw + 10 * d, y: btnY, w: bw, h: btnH, d, act: shopBuy });
+  } else {
+    const n = o ? 0 : safe(() => M.booster(c.id), 0);
+    txt(g, o ? 'Your kitty is wearing it now' : `You have ${n} now`, mx, btnY - 20 * d, 15 * d, { f: FB, w: '800', col: TEAL_D, maxW: iw });
+    const bw = Math.min(iw, 220 * d);
+    pill(g, { id: 'sc-ok', label: 'Nice!', kind: 'primary', x: mx - bw / 2, y: btnY, w: bw, h: btnH, d, act: () => { U.shop.confirm = null; } });
+  }
+  g.restore();
 }
 
 // ---------- kitten corner ----------
 function silhouette(breed, coat, s, dpr) {
-  const key = breed + '|' + coat + '|' + Math.round(s * dpr);
+  // polish round 3: keyed on whether the illustrated sprite is decoded, so a silhouette cached while art was loading
+  //   is redrawn from the sprite once it arrives (bosses at portrait scale, never the 1.4× board scale)
+  const id = coat * 6 + breed + 1, spr = R.kittenSprite && R.kittenSprite(id, true) ? 1 : 0;
+  const key = breed + '|' + coat + '|' + Math.round(s * dpr) + '|' + spr;
   let c = U.sil.get(key);
   if (c) return c;
   if (typeof document === 'undefined') return null;
@@ -1843,7 +2093,7 @@ function silhouette(breed, coat, s, dpr) {
   c.width = c.height = Math.max(2, n);
   const x = c.getContext('2d');
   x.scale(dpr, dpr);
-  aKitten(x, s * 0.75, s * 1.38, s, { stage: 4, loops: 0, flinch: 0, freeT: -1, breed, coat, golden: false, t: 0, loopColors: [] });
+  aKitten(x, s * 0.75, s * 1.38, s, { id, stage: 4, loops: 0, flinch: 0, freeT: -1, breed, coat, golden: false, bossScale: false, t: 0, loopColors: [] });
   x.setTransform(1, 0, 0, 1, 0, 0);
   x.globalCompositeOperation = 'source-in';
   x.fillStyle = '#8F8580'; x.fillRect(0, 0, c.width, c.height);
@@ -1851,11 +2101,21 @@ function silhouette(breed, coat, s, dpr) {
   U.sil.set(key, c);
   return c;
 }
+/** Small gold crown (boss portraits), centred at (x, y), w wide. */
+function crown(g, x, y, w) {
+  const h = w * 0.62;
+  g.beginPath(); g.moveTo(x - w / 2, y + h / 2); g.lineTo(x - w / 2, y - h * 0.2); g.lineTo(x - w / 4, y + h * 0.08); g.lineTo(x, y - h / 2);
+  g.lineTo(x + w / 4, y + h * 0.08); g.lineTo(x + w / 2, y - h * 0.2); g.lineTo(x + w / 2, y + h / 2); g.closePath();
+  g.fillStyle = GOLD; g.fill(); g.lineJoin = 'round'; g.lineWidth = Math.max(1, w * 0.09); g.strokeStyle = INK; g.stroke();
+}
 function portrait(g, id, cx, cy, s, st, dpr) {
-  rr(g, cx - s / 2, cy - s / 2, s, s, s * 0.2); g.fillStyle = st ? '#FFF9EC' : '#EADCC8'; g.fill();
-  g.lineWidth = st === 2 ? Math.max(2, s * 0.07) : Math.max(1, s * 0.03); g.strokeStyle = st === 2 ? GOLD : INK; g.stroke();
-  const ks = s * 0.74;
-  if (st) aKitten(g, cx, cy + s * 0.42, ks, { stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(id), coat: coatOf(id), golden: st === 2, t: 0, loopColors: [] });
+  // polish round 3: illustrated sprites (art.js via render.drawKitten id) with the code cat as fallback; bosses
+  //   get a warm card, a thick gold frame and a crown so the six grand cats stand out in the grid
+  const boss = !!BOSSES[id];
+  rr(g, cx - s / 2, cy - s / 2, s, s, s * 0.2); g.fillStyle = st ? (boss ? '#FFF0CF' : '#FFF9EC') : (boss ? '#E9D3AE' : '#EADCC8'); g.fill();
+  g.lineWidth = st === 2 || boss ? Math.max(2, s * 0.07) : Math.max(1, s * 0.03); g.strokeStyle = st === 2 ? GOLD : boss ? GOLD_D : INK; g.stroke();
+  const ks = s * (boss ? 0.8 : 0.74);
+  if (st) aKitten(g, cx, cy + s * 0.42, ks, { id, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(id), coat: coatOf(id), golden: st === 2, bossScale: false, t: 0, loopColors: [], memKey: portrait });
   else {
     const c = silhouette(breedOf(id), coatOf(id), ks, dpr);
     if (c) g.drawImage(c, cx - ks * 0.75, cy + s * 0.42 - ks * 1.38, ks * 1.5, ks * 1.5);
@@ -1863,6 +2123,7 @@ function portrait(g, id, cx, cy, s, st, dpr) {
     g.beginPath(); g.arc(cx, cy + s * 0.18, pr, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(1, s * 0.025); g.strokeStyle = INK; g.stroke();
     txt(g, '?', cx, cy + s * 0.19, pr * 1.4, { col: INK });
   }
+  if (boss) crown(g, cx - s * 0.33, cy - s * 0.35, s * 0.24);
 }
 function drawKittens(g, S) {
   const d = U.du, W = S.W, H = S.H - (layoutOf(S).inset || 0), land = isLand(S);
@@ -1881,7 +2142,10 @@ function drawKittens(g, S) {
   const cell = Math.min(iw / cols, gh / rowsN);
   const gw = cell * cols, gh2 = cell * rowsN, gx = ix + (iw - gw) / 2, gy2 = gy + (gh - gh2) / 2;
   const dpr = S.dpr || 1;
-  const key = [Math.round(gw), Math.round(gh2), dpr, cols, ks.join('')].join('|');
+  // the cached grid is redrawn as illustrated sprites finish decoding (count of ready sprites is part of the key)
+  let sprN = 0;
+  if (R.kittenSprite) for (let i = 1; i <= LEVELS; i++) if (R.kittenSprite(i, true)) sprN++;
+  const key = [Math.round(gw), Math.round(gh2), dpr, cols, ks.join(''), sprN].join('|');
   if (U.kc.key !== key && typeof document !== 'undefined') {
     const c = U.kc.cv || document.createElement('canvas');
     c.width = Math.max(1, Math.ceil(gw * dpr)); c.height = Math.max(1, Math.ceil(gh2 * dpr));
@@ -2048,7 +2312,9 @@ function drawAllBeaten(g, S) {
 function cardRect(S, type) {
   const L = layoutOf(S), m = L.m, sf = L.safe || { x: 0, y: 0, w: S.W, h: S.H };
   if (L.orient === 'landscape') {
-    if (type === 'lose') return { x: L.rack.x, y: L.callout.y, w: L.rack.w, h: L.basket.y - L.callout.y - m * 0.5 };
+    // the lose card takes ALL the column space between the rack and the basket (polish round 3 centres the callout
+    //   in that space on big screens, so anchoring at callout.y would squeeze the card into the lower half)
+    if (type === 'lose') { const y0 = Math.min(L.callout.y, L.rack.y + L.rack.h); return { x: L.rack.x, y: y0, w: L.rack.w, h: L.basket.y - y0 - m * 0.5 }; }
     return { x: L.rack.x, y: L.rack.y, w: L.rack.w, h: sf.y + sf.h - m - L.rack.y };
   }
   const x = sf.x + m, w = sf.w - 2 * m;
@@ -2074,21 +2340,54 @@ function cardAnim(g, c, rect) {
   const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
   g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
 }
+/** Draws an illustration (art.js) with its visible body h tall, feet centred at (x, y); bbox cached per image. */
+const artBox = new WeakMap();
+function drawArtFit(g, im, x, y, h) {
+  let bb = artBox.get(im);
+  if (!bb) {
+    const w = im.naturalWidth || im.width, hh = im.naturalHeight || im.height;
+    bb = { x: 0, y: 0, w, h: hh };
+    try {
+      const c = document.createElement('canvas'); c.width = w; c.height = hh;
+      const cg = c.getContext('2d', { willReadFrequently: true }); cg.drawImage(im, 0, 0);
+      const px = cg.getImageData(0, 0, w, hh).data;
+      let x0 = w, y0 = hh, x1 = -1, y1 = -1;
+      for (let j = 0; j < hh; j++) for (let i = 0; i < w; i++) if (px[(j * w + i) * 4 + 3] > 40) { if (i < x0) x0 = i; if (i > x1) x1 = i; if (j < y0) y0 = j; if (j > y1) y1 = j; }
+      if (x1 > x0 && y1 > y0) bb = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    } catch (err) { /* no 2D context: draw the whole image */ }
+    artBox.set(im, bb);
+  }
+  const k = h / bb.h, dw = bb.w * k, bob = Math.sin(U.t * 2.4) * h * 0.012;
+  g.save(); g.globalAlpha *= 0.25; g.fillStyle = INK; g.beginPath(); g.ellipse(x, y + 1, dw * 0.34, Math.max(2, h * 0.045), 0, 0, TAU2); g.fill(); g.restore();
+  g.drawImage(im, bb.x, bb.y, bb.w, bb.h, x - dw / 2, y - h + bob, dw, h);
+}
 function drawWinCard(g, S, c) {
   const d = U.du, area = cardRect(S, 'win'), res = c.data || {}, sess = S.sess || {};
   const kind = sess.kind || 'level', st = clamp(res.stars || 0, 0, 3);
   // polish (kid): varied headlines, picked once per card; tough (mini/boss) knots get their own; plain-words stat line
   const tough = kind === 'level' && toughOf(sess);
+  // polish round 3: boss wins get their own card (the grand boss illustration + its name); headlines rotate per card
+  const bossId = kind === 'level' && BOSSES[sess.id] ? sess.id | 0 : 0;
   if (!c.title) {
     U.winN = (U.winN || 0) + 1;
-    const pool = kind === 'daily' ? ['Daily Knot untied!', 'Today\'s knot: done!'] : kind === 'bonus' ? (st >= 3 ? ['Purr-fect tangle!', 'Tangle tamed!'] : ['Tangle cleared!', 'Untangled!'])
-      : tough ? (tough === 'boss' ? ['Boss knot beaten!', 'Biggest knot: undone!'] : ['Tough knot untied!', 'You cracked it!'])
-        : st >= 3 ? ['Purr-fect rescue!', 'Meow-velous!', 'Paws-itively perfect!', 'Clean as a whisker!']
-          : st === 2 ? ['Kitten rescued!', 'Nicely untied!', 'Free kitty!', 'Great pulling!'] : ['Kitten rescued!', 'Phew, all free!', 'Untangled!'];
+    const pool = kind === 'daily' ? ['Daily Knot untied!', 'Today\'s knot: done!', 'Daily Knot cracked!']
+      : kind === 'bonus' ? (st >= 3 ? ['Purr-fect tangle!', 'Tangle tamed!', 'Spotless tangle!'] : ['Tangle cleared!', 'Untangled!', 'Tangle undone!'])
+        : bossId ? ['Boss beaten!', 'Grand rescue!', 'Royal rescue!', 'The big knot is undone!']
+          : tough ? ['Tough knot untied!', 'You cracked it!', 'Mighty pulling!']
+            : st >= 3 ? ['Purr-fect rescue!', 'Meow-velous!', 'Paws-itively perfect!', 'Clean as a whisker!', 'Flawless pulling!', 'Top cat!']
+              : st === 2 ? ['Kitten rescued!', 'Nicely untied!', 'Free kitty!', 'Great pulling!', 'Knot undone!', 'Yarn-tastic!']
+                : ['Kitten rescued!', 'Phew, all free!', 'Untangled!', 'You did it!'];
     c.title = pool[((sess.id | 0) * 7 + U.winN) % pool.length];
     c.hype = Math.min(3, (st >= 3 ? 2 : st === 2 ? 1 : 0) + (tough ? 1 : 0) + ((sess.bonusYarn | 0) > 0 ? 1 : 0));
   }
+  // celebration illustration (art.js WINS), varied per level: level id picks a start; the first loaded one from there
+  if (!c.winId) {
+    const n = WINS.length, b0 = ((sess.id | 0) + Math.floor((sess.id | 0) / 4) + (kind === 'level' ? 0 : U.winN)) % n;
+    for (let i = 0; i < n && !c.winId; i++) if (img(WINS[(b0 + i) % n])) c.winId = WINS[(b0 + i) % n];
+  }
+  const winIm = c.winId ? img(c.winId) : null;
   const title = c.title;
+  // NEW BEST only when this win truly beats an earlier best on this level (not a first win, not an equal replay)
   const showBest = kind === 'level' && !res.firstWin && (res.newStars | 0) > 0;
   const bonusN = (res.bonus | 0) || (sess.bonusYarn | 0);
   const peak = res.peak ?? 0, par = res.par ?? 0;
@@ -2099,18 +2398,7 @@ function drawWinCard(g, S, c) {
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
   const list = [
-    { h: 44, fn: (y, hh, e) => {
-      // fix 2: with the NEW BEST ribbon the title clears the ribbon's left edge (it used to touch the "!" at 390 px):
-      //   it keeps its size where it can and slides left; it shrinks only when the space left of the ribbon is short.
-      let cx = area.x + area.w / 2, maxW = iw0;
-      if (showBest) {
-        const lim = area.x + area.w - 84 * e, lft = area.x + pad;
-        maxW = Math.min(iw0, lim - lft);
-        const w = tw(g, title, fitSize(g, title, maxW, 34 * e, FT, '', 0.2), FT);
-        cx = Math.min(cx, lim - w / 2);
-      }
-      txt(g, title, cx, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW });
-    } },
+    { h: 44, fn: (y, hh, e) => txt(g, title, area.x + area.w / 2, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw0 }) },
     { h: 70, fn: (y, hh, e) => {
       const sr = Math.min(26 * e, iw0 / 8);
       if (c.hype > 0) { // celebration scales with stars / tough knot / combo: a turning sunburst behind the stars
@@ -2127,6 +2415,16 @@ function drawWinCard(g, S, c) {
         if (on && t > 0) { const s2 = eBack(t); g.save(); g.translate(x, yy); g.scale(s2, s2); aStar(g, 0, 0, (i === 1 ? 1.15 : 1) * sr, true, (i - 1) * 0.2); g.restore(); }
       }
     } },
+    ...(showBest ? [{ h: 30, fn: (y, hh, e) => { // centred gold pill under the stars (never against the panel edge)
+      const k = clamp((U.t - c.t0 - 1.2) / 0.25, 0, 1);
+      if (k <= 0) return;
+      const s = 14 * e, label = `NEW BEST: ${st}★`, w2 = Math.min(iw0, tw(g, label, s) + 26 * e), h2 = Math.min(hh - 4 * e, 24 * e);
+      const cx = area.x + area.w / 2, cy = y + hh / 2, sc = eBack(k);
+      g.save(); g.translate(cx, cy); g.scale(sc, sc);
+      rr(g, -w2 / 2, -h2 / 2, w2, h2, h2 / 2); g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1.5, 2 * e); g.strokeStyle = INK; g.stroke();
+      txt(g, label, 0, e, s, { col: INK, maxW: w2 - 14 * e });
+      g.restore();
+    } }] : []),
     { h: 24, fn: (y, hh, e) => {
       const line = statLine, s = 15 * e;
       const lw = tw(g, line, s, FB, '800'), ic = 18 * e, total = Math.min(iw0, lw + ic + 6 * e);
@@ -2145,14 +2443,29 @@ function drawWinCard(g, S, c) {
       aIcon(g, 'ball', x0 + 12 * e, y + hh / 2, 24 * e);
       txt(g, label, x0 + 30 * e, y + hh / 2 + e, s, { align: 'left', col: GOLD, stroke: INK, sk: 0.22 });
     } },
-    { h: 92, fn: (y, hh, e) => {
-      const cx = area.x + area.w / 2, s = Math.min(66 * e, hh - 24 * e);
+    bossId ? { h: 150, fn: (y, hh, e) => { // boss: the grand illustrated boss over a turning gold burst, with its grand name
+      const cx = area.x + area.w / 2, capH = 40 * e, s = Math.max(20 * e, hh - capH - 6 * e), feet = y + s + 2 * e;
+      const k = e3(clamp((U.t - c.t0 - 0.2) / 0.5, 0, 1)), R2 = Math.min(iw0 * 0.5, s * 0.72) * k, cy = feet - s * 0.5;
+      g.save(); g.globalAlpha = 0.3; g.fillStyle = GOLD; g.beginPath();
+      for (let i = 0; i < 14; i++) { const a = -U.t * 0.4 + i * TAU2 / 14; g.moveTo(cx, cy); g.arc(cx, cy, R2, a, a + Math.PI / 14); g.closePath(); }
+      g.fill(); g.restore();
+      const gl = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, R2));
+      gl.addColorStop(0, 'rgba(255,236,170,0.75)'); gl.addColorStop(1, 'rgba(255,236,170,0)');
+      g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, Math.max(1, R2), 0, TAU2); g.fill();
+      R.drawKitten(g, cx, feet, s * (0.85 + 0.15 * k), { id: bossId, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(bossId), coat: coatOf(bossId), golden: false, bossScale: false, t: U.t, loopColors: [], memKey: c });
+      const nm = kName(bossId - 1) || 'The boss kitten';
+      txt(g, `${res.golden ? 'Golden ' : ''}${nm} is free!`, cx, y + hh - capH * 0.66, 19 * e, { col: '#fff', stroke: INK, sk: 0.22, maxW: iw0 });
+      txt(g, kid ? 'Off to your Kitten Corner' : 'Boss knot beaten again', cx, y + hh - capH * 0.14, 13 * e, { f: FB, w: '800', col: '#5A5066', maxW: iw0 });
+    } } : { h: 104, fn: (y, hh, e) => { // rescued kitten (illustrated) + a celebration illustration; code-drawn fallbacks
+      const cx = area.x + area.w / 2, capH = kid ? 22 * e : 0, s = Math.min(78 * e, hh - capH - 6 * e), feet = y + s + 3 * e;
+      const art2 = (x, sz) => { if (winIm) drawArtFit(g, winIm, x, feet, sz); else aKitty(g, x, feet - 1 * e, sz * 0.85, 'celebrate', U.t, wear); };
       if (kid) {
-        portrait(g, kid, cx - s * 0.6, y + s / 2 + 2 * e, s, res.golden ? 2 : 1, S.dpr || 1);
-        aKitty(g, cx + s * 0.75, y + s + 2 * e, s * 0.95, 'celebrate', U.t, wear);
+        if (R.kittenSprite && R.kittenSprite(kid, true)) R.drawKitten(g, cx - s * 0.62, feet, s * 0.9, { id: kid, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(kid), coat: coatOf(kid), golden: !!res.golden, t: U.t, loopColors: [], memKey: c });
+        else portrait(g, kid, cx - s * 0.62, feet - s * 0.45, s * 0.86, res.golden ? 2 : 1, S.dpr || 1);
+        art2(cx + s * 0.66, s * 1.05);
         const nm = kName(kid - 1);
         txt(g, nm ? (res.golden ? `Golden ${nm} joins your Kitten Corner!` : `${nm} is safe in your Kitten Corner`) : (res.golden ? 'A golden kitten! Off to your Kitten Corner' : 'Safe and sound in your Kitten Corner'), cx, y + hh - 9 * e, 14 * e, { f: FB, w: '800', maxW: iw0 });
-      } else aKitty(g, cx, y + hh - 6 * e, s * 1.1, 'celebrate', U.t, wear);
+      } else art2(cx, s * 1.15);
     } },
     { h: 6 },
     { h: 58, fn: (y, hh, e) => {
@@ -2172,13 +2485,6 @@ function drawWinCard(g, S, c) {
   cardAnim(g, c, rect);
   panel(g, rect.x, rect.y, rect.w, rect.h, d * Math.max(0.7, lay.k));
   lay.run(rect.y + pad * lay.k);
-  if (showBest) { // inside the card's padding (never past its corner / the safe area)
-    const s = 13 * d * lay.k, w2 = tw(g, 'NEW BEST', s) + 14 * d * lay.k;
-    g.save(); g.translate(rect.x + rect.w - pad * lay.k - w2 / 2 - 2 * d, rect.y + pad * lay.k + s * 1.1); g.rotate(0.12);
-    rr(g, -w2 / 2, -s, w2, 2 * s, s); g.fillStyle = GOLD; g.fill(); g.lineWidth = 2 * d * lay.k; g.strokeStyle = INK; g.stroke();
-    txt(g, 'NEW BEST', 0, s * 0.08, s, { col: INK });
-    g.restore();
-  }
   g.restore();
 }
 /** Free (pullable) strands while stuck: each gets a ✕ at its tap point. Cached per rule state. */
@@ -2249,9 +2555,14 @@ function drawLoseCard(g, S, c) {
   const rh = lay.h + 2 * pad * lay.k;
   const rect = { x: area.x, y: area.y + Math.max(0, area.h - rh), w: area.w, h: rh }; // docked to the bottom of its area
   const L = layoutOf(S);
-  if (L.orient !== 'landscape' && marks.length && area.h - rh > 4) { // flip to the top when that hides fewer ✕ marks
-    const inR = (y0) => marks.filter(p => p.y > y0 - 14 && p.y < y0 + rh + 14).length;
-    if (inR(area.y) < inR(rect.y)) rect.y = area.y;
+  if (L.orient !== 'landscape' && marks.length && area.h - rh > 4) {
+    // polish round 3: slide the card up its area (bottom first) to the lowest spot that hides NO ✕ mark; when every
+    //   spot hides one, the spot hiding the fewest. The area never reaches the basket, so the basket always shows.
+    const mr = 20 * d, inR = (y0) => marks.filter(p => p.y > y0 - mr && p.y < y0 + rh + mr).length;
+    let bestY = rect.y, bestN = inR(rect.y);
+    for (let y0 = rect.y; bestN > 0 && y0 >= area.y - 0.5; y0 -= 6 * d) { const n = inR(y0); if (n < bestN) { bestN = n; bestY = y0; } }
+    if (bestN > 0 && inR(area.y) < bestN) bestY = area.y;
+    rect.y = bestY;
   }
   g.save();
   cardAnim(g, c, rect);
@@ -2377,7 +2688,7 @@ export function pointer(type, x, y, S) {
   const scr = S.screen, modal = !!U.card || scr !== 'play';
   const m = U.map;
   if (type === 'down') {
-    if (scr === 'play') { U.idle = 0; clearHand('idle'); if (U.ghost) U.ghost.loops = 0; }
+    if (scr === 'play') { U.idle = 0; clearHand('idle'); if (U.ghost) U.ghost.loops = 0; teachDismiss(); }
     const b = hitBtn(x, y);
     U.hover = null;
     if (b) { U.press = { id: b.id, x, y, over: true }; if (scr === 'map' && !U.card) m.down = { x, y, s0: m.scroll, t: now(), moved: false, btn: true }; return true; }
@@ -2442,7 +2753,7 @@ export function key(e, S) {
     if (U.card) return U.card.type === 'win' || U.card.type === 'lose' || U.after ? true : (nextCard(), true);
     if (scr === 'win' || scr === 'lose') return true;
     if (scr === 'pause') { api.resume(); return true; }
-    if (DIALOGS.includes(scr)) { if (U.reset) { U.reset = 0; return true; } api.go(U.ret); return true; }
+    if (DIALOGS.includes(scr)) { if (U.reset) { U.reset = 0; return true; } if (scr === 'shop' && U.shop.confirm) { U.shop.confirm = null; return true; } api.go(U.ret); return true; }
     if (scr === 'play') { api.pause(); return true; }
     if (scr === 'map') { api.go('title'); return true; } // fix 1 (desktop m5): Esc on the map goes back to the title
     return false;

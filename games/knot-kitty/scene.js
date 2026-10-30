@@ -22,6 +22,7 @@ import {
   drawMiniBoard, drawYarnRun, drawKitten,
 } from './render.js';
 import { getLevel } from './levels.js';
+import { img, bgArt } from './art.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -1545,9 +1546,98 @@ function devScale(g) {
     return { s: clamp(s, 0.25, 2.5), m, axis: Math.abs(m.b) < 1e-9 && Math.abs(m.c) < 1e-9 && Math.abs(m.a - m.d) < 1e-9 && m.a > 0 };
   } catch (e) { return { s: 1, m: null, axis: false }; }
 }
+// ------------------------------------------------------------------ illustrated backdrops (art.js bgArt)
+// DECISION: when a world's painted backdrop (3:4, detail at the edges/bottom, soft centre) has decoded, the bake draws
+//   it instead of the procedural room; the procedural scene stays as the fallback while it loads (or if it 404s).
+//   The cache key carries 'art', so the one-time re-bake happens on the first frame after the image decodes.
+//   Portrait: cover-fit, anchored a little below centre (keeps the edge/bottom detail the prompt asks for).
+//   Landscape: a 3:4 painting cannot cover 16:10 without losing most of its height, so a blurred, darker cover-fit
+//   fills the sides (ctx.filter at bake time only, never per frame) and the sharp painting sits contain-fit in the
+//   middle with feathered edges. A warm vignette + slight dim keeps the board and HUD on top readable.
+//   Live ambient tied to procedural geometry (window panes, mug steam, armchair cat) is skipped; a cheap per-world
+//   particle layer (leaves, fireflies, embers, motes, stars) keeps the room alive.
+const ART_VARIANTS = new Set(['', 'title', 'og', 'map']);
+function artFor(world, variant) { return ART_VARIANTS.has(variant || '') ? img(bgArt(world)) : null; }
+function bakeArt(g, G, im, world, variant, dpr) {
+  const { W, H } = G;
+  const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const cover = ay => { const sc = Math.max(W / iw, H / ih), dw = iw * sc, dh = ih * sc; g.drawImage(im, (W - dw) / 2, (H - dh) * ay, dw, dh); };
+  if (W / H <= 1.0 || variant === 'map') cover(variant === 'map' ? 0.7 : 0.55);
+  else {
+    const dh = H, dw = iw * (dh / ih), dx = (W - dw) / 2;
+    g.save();
+    try { g.filter = `blur(${Math.round(Math.max(6, W * 0.012))}px) saturate(0.9) brightness(0.8)`; } catch (e) { /* no ctx.filter */ }
+    cover(0.6); // ultra-wide safety net under the mirrored wings
+    try { g.filter = `blur(${Math.round(Math.max(2, W * 0.0025))}px) saturate(0.92) brightness(0.86)`; } catch (e) { /* no ctx.filter */ }
+    // wings: mirrored copies either side, so the painting continues seamlessly at its edges instead of a blurred box
+    for (const sd of [-1, 1]) {
+      g.save();
+      g.translate(sd < 0 ? dx : dx + dw, 0); g.scale(-1, 1);
+      g.drawImage(im, sd < 0 ? -dw : 0, 0, dw, dh);
+      g.restore();
+    }
+    g.restore();
+    g.filter = 'none';
+    // sharp centre: painting at full height, feathered left/right into the wings
+    const bw = Math.max(1, Math.ceil(dw * dpr)), bh = Math.max(1, Math.ceil(dh * dpr));
+    const c = mkCanvas(bw, bh), cg = c.getContext('2d');
+    cg.drawImage(im, 0, 0, bw, bh);
+    cg.globalCompositeOperation = 'destination-in';
+    const f = 0.06;
+    cg.fillStyle = lin(cg, 0, 0, bw, 0, [[0, 'rgba(0,0,0,0)'], [f, 'rgba(0,0,0,1)'], [1 - f, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]);
+    cg.fillRect(0, 0, bw, bh);
+    g.drawImage(c, dx, 0, dw, dh);
+  }
+  if (variant === 'map') return { panes: [], art: true };
+  g.fillStyle = world === 6 || world === 5 ? 'rgba(14,10,30,0.12)' : 'rgba(30,16,20,0.08)';
+  g.fillRect(0, 0, W, H);
+  vignette(g, W, H, world === 6 || world === 5 || world === 2 ? 0.5 : 0.38, world === 6 || world === 5 ? '10,8,28' : '25,12,30');
+  return { panes: [], art: true };
+}
+// Per-world ambient over a painted backdrop: ~12–18 particles, plain fills, no allocation per frame beyond paths.
+const AMB = {
+  1: { n: 10, col: ['#D9572F', '#E89A3E', '#F2B04A'], kind: 'leaf' },
+  2: { n: 16, col: ['#FFD27A', '#FFE9A8'], kind: 'fly' },
+  3: { n: 14, col: ['#FFB25A', '#FFD08A'], kind: 'ember' },
+  4: { n: 14, col: ['rgba(255,240,200,0.8)'], kind: 'mote' },
+  5: { n: 14, col: ['rgba(220,225,255,0.8)'], kind: 'mote' },
+  6: { n: 18, col: ['#FFF4D0'], kind: 'star' },
+};
+function artAmbient(g, G, world, t) {
+  const a = AMB[world]; if (!a) return;
+  const { W, H, k } = G;
+  for (let i = 0; i < a.n; i++) {
+    const h1 = hash(i, world * 7 + 1), h2 = hash(i, world * 7 + 2), h3 = hash(i, world * 7 + 3);
+    const col = a.col[i % a.col.length];
+    if (a.kind === 'leaf') {
+      const sp = 0.035 + h2 * 0.03, p = (t * sp + h1) % 1;
+      const x = (h3 * 1.2 - 0.1) * W + Math.sin(t * 0.9 + i) * 30 * k, y = -20 * k + p * (H + 40 * k);
+      g.globalAlpha = 0.75 * Math.min(1, Math.sin(p * Math.PI) * 3);
+      mapleLeaf(g, x, y, 0.75 * k, t * (0.6 + h2) + i, col, null);
+    } else if (a.kind === 'star') {
+      const x = h1 * W, y = h2 * h2 * H * 0.42, tw = 0.5 + 0.5 * Math.sin(t * (1.2 + h3 * 2) + i * 2.3);
+      g.globalAlpha = 0.25 + 0.65 * tw; g.fillStyle = col;
+      const r = (1 + tw * 1.6) * Math.max(0.8, k * 0.9);
+      g.beginPath(); g.moveTo(x, y - r * 2); g.lineTo(x + r * 0.45, y); g.lineTo(x, y + r * 2); g.lineTo(x - r * 0.45, y); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(x - r * 2, y); g.lineTo(x, y + r * 0.45); g.lineTo(x + r * 2, y); g.lineTo(x, y - r * 0.45); g.closePath(); g.fill();
+    } else {
+      // fireflies / embers / motes: slow drift, gentle pulse; embers rise from the bottom
+      const sp = a.kind === 'ember' ? 0.05 + h2 * 0.05 : 0.012 + h2 * 0.02, p = (t * sp + h1) % 1;
+      const x = h3 * W + Math.sin(t * (0.5 + h2) + i * 1.7) * 26 * k;
+      const y = a.kind === 'ember' ? H * (1.02 - p * 0.75) : H * (0.12 + ((h2 * 0.8 + p * 0.25) % 0.85));
+      const pulse = 0.5 + 0.5 * Math.sin(t * (1.5 + h1 * 2) + i);
+      g.globalAlpha = (a.kind === 'mote' ? 0.35 : 0.7) * pulse * Math.min(1, Math.sin(p * Math.PI) * 4);
+      g.fillStyle = col; circ(g, x, y, (a.kind === 'mote' ? 1.6 : 2.2) * Math.max(0.7, k) * (0.7 + pulse * 0.5)); g.fill();
+      if (a.kind === 'fly') { g.globalAlpha *= 0.3; circ(g, x, y, 7 * Math.max(0.7, k)); g.fill(); }
+    }
+  }
+  g.globalAlpha = 1;
+}
+
 function getBake(W, H, world, dpr, variant) {
   const s = Math.min(dpr, Math.sqrt(BAKE_MAX / Math.max(1, W * H)));
-  const key = [world, Math.round(W), Math.round(H), s.toFixed(4), variant || ''].join('|');
+  const art = artFor(world, variant);
+  const key = [world, Math.round(W), Math.round(H), s.toFixed(4), variant || '', art ? 'art' : ''].join('|');
   let e = cache.get(key);
   if (e) { cache.delete(key); cache.set(key, e); return e; } // LRU touch
   const G = geom(W, H);
@@ -1555,7 +1645,7 @@ function getBake(W, H, world, dpr, variant) {
   const cv = mkCanvas(bw, bh), cg = cv.getContext('2d');
   cg.setTransform(s, 0, 0, s, 0, 0);
   const Wd = WORLDS[world] || WORLDS[1];
-  const A = Wd.bake(cg, G, s, variant);
+  const A = art ? bakeArt(cg, G, art, world, variant, s) : Wd.bake(cg, G, s, variant);
   if (variant === 'title') titleExtras(cg, G, world);
   let tiles;
   if (bw <= BAKE_TILE && bh <= BAKE_TILE) tiles = [{ cv, x: 0, y: 0, w: bw, h: bh }];
@@ -1569,7 +1659,7 @@ function getBake(W, H, world, dpr, variant) {
     }
     cv.width = cv.height = 1; // free the big canvas now
   }
-  e = { tiles, bw, bh, s, A, G, Wd };
+  e = { tiles, bw, bh, s, A, G, Wd, world };
   cache.set(key, e);
   while (cache.size > 12) cache.delete(cache.keys().next().value);
   return e;
@@ -1596,6 +1686,7 @@ function drawWorld(g, W, H, world, t, variant) {
   if (!(W > 0 && H > 0)) return null;
   const e = getBake(W, H, world, devScale(g).s, variant);
   blitBake(g, e, W, H);
+  if (e.A.art) { if (variant !== 'map') { g.save(); artAmbient(g, e.G, e.world, t); g.restore(); } return e; }
   g.save(); clipPanes(g, e.A.panes); e.Wd.winLive(g, e.G, e.A, t); g.restore();
   g.save(); e.Wd.live(g, e.G, e.A, t); g.restore();
   return e;
@@ -1669,7 +1760,7 @@ export function drawOG(g, S) {
   // ---- the tangled kitten, front and centre, over the board's lower edge
   const kx = 836, ky = 622, ks = 236;
   g.fillStyle = 'rgba(20,10,24,0.35)'; g.beginPath(); g.ellipse(kx + 6, ky - 6, ks * 0.4, ks * 0.07, 0, 0, Math.PI * 2); g.fill();
-  drawKitten(g, kx, ky, ks, { stage: 1, loops: 4, freeT: -1, t: 0.4, breed: 2, coat: 0, loopColors: [4, 1, 3, 0], memKey: OG_MEM });
+  drawKitten(g, kx, ky, ks, { stage: 1, loops: 4, freeT: -1, t: 0.4, id: 3, breed: 2, coat: 0, loopColors: [4, 1, 3, 0], memKey: OG_MEM });
   // "Help!" bubble
   const hx = kx + 168, hy = ky - 214;
   g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 5;

@@ -410,6 +410,46 @@ The final message must include:
 - the primary keyword and the SEO title
 - any blocker and the exact fix the user needs to make
 
+## 11. v3 strategy: Anul's playbook (distribution first), from 2026-10-30
+The user switched strategy after reading Anul Agarwal's (@anulagarwal) articles. His AI-made Suika variant reached 50M+ players, hit #1 on Coolmath mobile and earned $25K+, mostly from non-exclusive portal licences ($1.5–2.5K each). **Ads are not the focus:** never design around ads, never build an ad system. A portal SDK goes in only where that portal requires it, at natural breaks, and never gates gameplay.
+
+Pillars, in priority order:
+1. **Distribution is the business.** Fewer, better games, each on as many portals as possible. A great game that lives only on arcadeaday.com is unfinished.
+2. **Scout proven hits and remix them.** Keep the proven core mechanic, change the theme, add one twist. Never a 1:1 clone of the current trending hit. Every concept names the store/portal hit, its rating or play-count evidence, the twist, and which portals would want it.
+3. **Quality and engagement.** Portals promote long sessions, replay and return visits. Design for the first 10 seconds, the first 5 minutes and day 2. Family-friendly, so Coolmath-type portals accept it. The GDD states the session-length target, the replay hook, the day-2 reason and the level count.
+4. **Data-driven iteration.** `P.event` fires level_start / level_complete / level_fail / quit_level / session_end. It stays a no-op until a Cloudflare endpoint exists (a user action). Fix where players quit; add levels and seasonal content to games that work.
+5. **Portal relationships.** `studio/portals.md` is the relationship log: submission URLs, requirements, contacts, what was sent, replies, genres asked for, licence status. Pitch licences, and ask portals which genres they want.
+
+**Cadence:** one new full game per week (never two per IST day), shipped only through the §4 gate. Every run is a studio day: preflight (read this, `studio/STATE.md`, `studio/portals.md`, games.json) → daily scout into `studio/scout/<date>/SCOUT.md` → advance the current game ≥ 1 stage → on ship days, §7–§10 plus portal packs → on other days, grow one live game (drop-off fix, levels or seasonal content, a portal pack for an older game worth distributing, or a portal email draft).
+
+**Portal targets and packs** (`dist/portals/<portal>/<slug>.zip` and `dist/portals/<slug>-SUBMIT.md`, with media in `dist/portals/<slug>/media/`):
+- Coolmath (licence pitch: `dist/portals/<slug>-pitch-coolmath.md`)
+- CrazyGames (Basic Launch, then Full Launch)
+- GameDistribution (open upload, syndicated widely)
+- GamePix (revenue share or licence pitch)
+- other licence buyers found while scouting
+- YouTube Playables (reach)
+- Poki only for a breakout hit, and only with the user's OK, because of its web exclusivity
+
+The user does every account, upload, submission and email. Runs prepare everything, so the user's part takes minutes.
+
+**Platform:** `P.portal` (from `?portal=` or `window.__PORTAL`) drives a thin adapter for each SDK's required lifecycle (init, loading done, gameplay start/stop, pause/mute, happy time). It is a no-op on web and yt.
+
+## Lessons: v3 scouting (2026-10-30)
+- vidIQ (`vidiq_youtube_search`, `vidiq_trending_videos`, `vidiq_outliers`, `vidiq_instagram_tiktok_outlier_search`) works without an auth prompt. Use it for YouTube and IG/TikTok scouting instead of browsing Instagram. Outlier multiples are inflated on tiny channels, so rank by views and views per hour.
+- There's no live Google Play top-free chart: AppBrain refuses connections and Appfigures returns 403. Use the iTunes RSS/lookup and Astro for iOS, and treat Play numbers as unverified snippets.
+- GameDistribution's catalog is client-rendered, so WebFetch gets no list. Scout it with a real browser or skip it.
+- Coolmath's top 10 is evergreen skill and logic games (Suika is #7). For licences, prefer logic puzzles with infinite or daily replay over trend clones.
+- Viral game clips are raw screen recordings that start mid-action and loop, with a challenge caption. Start record mode mid-pull.
+
+## Lessons: art and portal packs (2026-10-30)
+- **kie.ai consistency:** generate one hero sprite first, look at it, then pass its raw PNG as `refs` to every other item. 12 breeds, 6 bosses, wins and covers stayed on-model. A full set of 46 sprites cost about 400 credits and came to 1.3 MB of webp.
+- **Characters leak into backgrounds:** a style paragraph that describes eyes and noses makes nano-banana add a cat to "no characters" scenes. Background prompts must say "empty scene, NO animals, NO cats, NO people", and every background needs a look before it ships.
+- **Set `rawDir: studio/art-raw/<slug>/media`** in every media spec. The default derives the folder from outDir's parent, so `dist/portals/<slug>/media/raw` became `studio/art-raw/media/raw`, which the next game would overwrite.
+- **Portal covers:** make three concepts at 1K, pick one by thumbnail contrast (bright subject on a dark, saturated sky won), then re-make it at 16:9 (2K), 2:3 and 1:1 with the pick as the ref. `node tools/portal-media.mjs <slug> "<Title>"` renders the exact sizes, clean and titled.
+- **Serve `games/` as the web root** for local QA (`npx http-server games -p <port>`). Serving the repo root 404s `/site.css` and the "more games" thumbnails, and every agent reports those as console errors.
+- **Portal SDK timing:** CrazyGames v3 `game.*` calls are only valid after `await SDK.init()`. The GameDistribution SDK may keep its own reference to `GD_OPTIONS.onEvent`, so hook into the forwarder the portal build defines (`window.__gdOnEvent`); don't replace onEvent after load.
+
 ## Lessons: QA and tuning (Days 1–9)
 These still apply in v2. Give the relevant ones to every QA, bot and video agent.
 
