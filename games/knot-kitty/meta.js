@@ -27,12 +27,26 @@
 //   streak. Daily replays are allowed and pay 0 (GDD §3: "Replays allowed, reward once").
 // DECISION (fix1): a daily recorded while the daily is locked (cur ≤ 6, api only; the UI gates it) pays 0 and does
 //   not touch the streak. A paying daily or first bonus win also pays the chain/jumbo bonus like a level does.
-// DECISION (fix1): bonus tangles: only a win of index === d.bonus pays 10 + 5×stars (+chain/jumbo) and advances
-//   d.bonus; a replay of an earlier index pays 3 (as a level replay) and does not advance, so NEXT never skips one.
+// DECISION (fix1, v2 numbers): bonus tangles: only a win of index === d.bonus pays 2 + 4×stars (+chain/jumbo/combo)
+//   and advances d.bonus; a replay of an earlier index pays 1 (as a level replay) and does not advance.
 //   The index comes from recordWin's `bonusId` (or recordBonusWin's 2nd arg), else the last recordAttempt('bonus', i),
 //   else d.bonus (legacy callers).
 // DECISION (fix1): sanitize derives cur from the stars (cur = highest beaten + 1); the chain bonus is capped per
 //   spool (m ≤ CHAIN_M) and per win (≤ MAX_STRANDS), since a level has at most MAX_STRANDS strands to basket.
+// DECISION (polish): combo bonus yarn. play.js pays +1/+2/+3 for a spool completed at combo ×2/×3/×4+ (combo =
+//   spools completed back to back) and hands the attempt's total to recordWin as `combo`. It is credited once, inside
+//   recordWin, in the same balls += b / save() as the base payout; a lost or restarted attempt never reaches recordWin.
+//   Caps follow the base payout's replay rules: a first win or a win that adds stars (level), a paying daily and the
+//   next bonus tangle pay up to COMBO_CAP (8); a level replay that adds no stars pays at most COMBO_REPLAY (1), like
+//   its flat 3; a daily replay or a bonus-tangle replay pays 0 (those replays already ignore chain/jumbo extras).
+//   Bosses do not double it. comboCap(kind, id) is the most a win of that attempt can pay (play.js caps its pops with
+//   it); recordWin returns the credited amount as res.combo (inside res.balls).
+// DECISION (polish): economy v2 (designer critic: 651–668 yarn by L13, a 300 outfit at L10). Was first win 10 + 5×s,
+//   replay 5×new★ / 3, gifts 60, chests 150, daily 40 + 10×s + 10×streak. Now first win 2 + 4×s (boss ×2), replay
+//   4×new★ / 1, a plain replay's chain/jumbo extras capped at 1, gifts 15 (+ booster), chests 25 (+ boosters), daily
+//   15 + 4×s + 4×min(streak, 7). Start stays 50; shop prices unchanged. Projection (rules.js bots, no spending, no
+//   dailies): a typical ≈1.9★ player ('average' bot) has 120 by L6, 300 by L14, 1000 by L49; a 3★ combo planner by
+//   L5 / L12 / L39, earning 30% more by L50. Table in studio/2026-10-16/polish/meta.md.
 // DECISION (fix1): kittenName(i) (i = 0-based kitten index, the same as kittens()[i]; a recordWin kittenId is i + 1)
 //   gives each of the 60 kittens a fixed, unique name. Bosses (every 10th) get the grand names.
 
@@ -41,8 +55,12 @@ import { LEVELS, PER_WORLD, SAVE_V, BOOSTERS, OUTFITS, MAX_STRANDS, bus } from '
 import { dailyIndex, istDateKey } from './levels.js';
 
 const BK = ['undo', 'hint', 'slot', 'snip'];
-const GIFT_EVERY = 15, GIFT_BALLS = 60, CHEST_BALLS = 150, START_BALLS = 50;
-const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14, REPLAY_BALLS = 3, CHAIN_M = 12;
+// Economy v2 (polish): see the DECISION above. First win WIN_A + WIN_B×stars (boss ×2), a star-improving replay
+// WIN_B per new star, a plain replay REPLAY_BALLS (+ at most 1 chain/jumbo extra, + at most COMBO_REPLAY combo).
+const GIFT_EVERY = 15, GIFT_BALLS = 15, CHEST_BALLS = 25, START_BALLS = 50, WIN_A = 2, WIN_B = 4, REPLAY_EXTRA = 1;
+const DAILY_A = 15, DAILY_B = 4, DAILY_STREAK = 4;
+const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14, REPLAY_BALLS = 1, CHAIN_M = 12;
+export const COMBO_CAP = 8, COMBO_REPLAY = 1;
 const CHAIN_MAX = MAX_STRANDS || 28;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS;
 const KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -236,15 +254,18 @@ function grantGifts(gifts) {
  * Records a won attempt. kind 'level' (id 1..60); 'daily'/'bonus' delegate to recordDailyWin/recordBonusWin.
  * Returns { balls, firstWin, newStars, kittenId, golden, gifts, newBest }. Calls P.best(score()).
  */
-export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, capped = false, chain = 0, jumbo = 0, dateKey, bonusId } = {}) {
-  const res = { balls: 0, firstWin: false, newStars: 0, kittenId: 0, golden: false, gifts: [], newBest: false };
+export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, capped = false, chain = 0, jumbo = 0, combo = 0, dateKey, bonusId } = {}) {
+  const res = { balls: 0, firstWin: false, newStars: 0, kittenId: 0, golden: false, gifts: [], newBest: false, combo: 0 };
   const d = D();
   if (!d) return res;
   let s = int(st, 1, 3, 1);
   if (capped) s = Math.min(2, s);
+  const cb = int(combo, 0, COMBO_CAP, 0);
   if (kind === 'daily' || kind === 'bonus') {
     const extra = extraBonus(chain, jumbo);
-    res.balls = kind === 'daily' ? payDaily(s, dateKey, extra) : payBonus(s, bonusId, extra);
+    const o = { combo: 0 };
+    res.balls = kind === 'daily' ? payDaily(s, dateKey, extra, cb, o) : payBonus(s, bonusId, extra, cb, o);
+    res.combo = o.combo;
     res.newBest = P.best(score());
     return res;
   }
@@ -252,9 +273,12 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
   const i = id - 1, prev = d.stars[i];
   res.firstWin = prev === 0;
   res.newStars = Math.max(0, s - prev);
-  let b = res.firstWin ? 10 + 5 * s : res.newStars > 0 ? 5 * res.newStars : 3;
+  const full = res.firstWin || res.newStars > 0;
+  let b = res.firstWin ? WIN_A + WIN_B * s : res.newStars > 0 ? WIN_B * res.newStars : REPLAY_BALLS;
   if (res.firstWin && isBoss(id)) b *= 2;
-  b += extraBonus(chain, jumbo);
+  b += full ? extraBonus(chain, jumbo) : Math.min(REPLAY_EXTRA, extraBonus(chain, jumbo));
+  res.combo = Math.min(cb, full ? COMBO_CAP : COMBO_REPLAY);
+  b += res.combo;
   res.balls = b;
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   d.stars[i] = Math.max(prev, s);
@@ -284,6 +308,18 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
   for (const g of res.gifts) bus.emit('gift', g);
   res.newBest = P.best(score());
   return res;
+}
+
+/** Most combo-bonus yarn a win of this attempt can pay (see the polish DECISION). id: level id / date key / bonus index. */
+export function comboCap(kind = 'level', id = 0) {
+  const d = D();
+  if (!d) return 0;
+  if (kind === 'daily') {
+    const key = typeof id === 'string' && KEY_RE.test(id) ? id : istDateKey();
+    return d.cur > 6 && !claimed(d, key) ? COMBO_CAP : 0;
+  }
+  if (kind === 'bonus') return (Number.isInteger(id) ? id : d.bonus) === d.bonus ? COMBO_CAP : 0;
+  return validId(id) && d.stars[id - 1] >= 3 ? COMBO_REPLAY : COMBO_CAP;
 }
 
 let attempt = null; // { kind, id } of the last started attempt (module memory: tells a bonus replay from a new one)
@@ -350,11 +386,11 @@ export function daily(key = istDateKey()) {
 }
 
 /**
- * Rewards a daily once: 40 + 10×stars + 10×min(streak, 7). Returns the balls granted. Pays 0 on a replay, on any key
+ * Rewards a daily once: 15 + 4×stars + 4×min(streak, 7) (+chain/jumbo/combo). Returns the balls granted. Pays 0 on a replay, on any key
  * at or before the high-water daily.last (clock set backwards), and while the daily is locked.
  */
 export function recordDailyWin(st, key = istDateKey()) { return payDaily(st, key, 0); }
-function payDaily(st, key, extra) {
+function payDaily(st, key, extra, combo = 0, out = null) {
   const d = D();
   if (key === undefined || key === null) key = istDateKey();
   if (!d || typeof key !== 'string' || !KEY_RE.test(key)) return 0;
@@ -364,22 +400,23 @@ function payDaily(st, key, extra) {
   d.daily.streak = d.daily.last === addDays(key, -1) ? d.daily.streak + 1 : 1;
   d.daily.last = key;
   d.daily.won = [...new Set([...d.daily.won, key])].sort().slice(-DAILY_KEEP);
-  const b = 40 + 10 * s + 10 * Math.min(d.daily.streak, 7) + extra;
+  const b = DAILY_A + DAILY_B * s + DAILY_STREAK * Math.min(d.daily.streak, 7) + extra + combo;
+  if (out) out.combo = combo;
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   save();
   return b;
 }
 
 export const bonusNext = () => (D() ? D().bonus : 0);
-/** Bonus tangle i won: 10 + 5×stars and d.bonus++ only when i is the next one (d.bonus); a replay pays 3. */
+/** Bonus tangle i won: 2 + 4×stars (+extras) and d.bonus++ only when i is the next one (d.bonus); a replay pays 1. */
 export function recordBonusWin(st, i) { return payBonus(st, i, 0); }
-function payBonus(st, i, extra) {
+function payBonus(st, i, extra, combo = 0, out = null) {
   const d = D();
   if (!d) return 0;
   if (!Number.isInteger(i)) i = attempt && attempt.kind === 'bonus' && Number.isInteger(attempt.id) ? attempt.id : d.bonus;
   d.stats.wins++;
   let b = REPLAY_BALLS;
-  if (i === d.bonus) { b = 10 + 5 * int(st, 1, 3, 1) + extra; d.bonus = Math.min(1e7, d.bonus + 1); }
+  if (i === d.bonus) { b = WIN_A + WIN_B * int(st, 1, 3, 1) + extra + combo; if (out) out.combo = combo; d.bonus = Math.min(1e7, d.bonus + 1); }
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   save();
   return b;

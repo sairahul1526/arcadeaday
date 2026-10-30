@@ -28,6 +28,14 @@
 //   remembers the combo it reached; 'spoolDone' {i, combo} and 'chain' {n, combo} carry it at visual arrival.
 //   'chain' fires on every ball that lands on a spool (n = balls that spool has absorbed so far, ≥ 1; m = n kept for
 //   older listeners). combo ≥ 2 calls render.shake / render.hitStop when RENDER provides them.
+// DECISION (polish): combo bonus yarn (contract: bus 'bonus' {amt, combo}, sess.bonusYarn). A spool completed at
+//   combo 2 / 3 / ≥4 earns +1 / +2 / +3 (comboAmt), limited per attempt by meta.comboCap(kind, id) (8, or 1 on a 3★
+//   level replay, 0 on a claimed daily / replayed tangle). The amount is decided in the rules step (doPull) and kept in
+//   sess.bonusLog [{mv, amt}] (sess.bonusDue = its sum, trimmed by Undo like chainLog). 'bonus' {amt, combo, total, i,
+//   slot, c} fires with that spool's 'spoolDone' at visual arrival and adds amt to sess.bonusYarn (the HUD total; never
+//   above bonusDue, and Undo sets it to bonusDue). win() hands bonusDue to meta.recordWin as `combo`, which credits it
+//   once with the base payout; sess.result.bonus = the credited amount (< bonusDue only on a replay that adds no
+//   stars). A lost or restarted attempt never calls recordWin, so its bonus is never paid.
 // DECISION: canUseBooster(S, key) → {ok, reason} is the single check; applyBooster calls it first and returns false
 //   with no side effects (no charge, no state change, no events) when it says no.
 // DECISION: a press on a covered/locked/pawed strand shows the blocker rings right away (§3.6); the release then adds
@@ -60,6 +68,8 @@ const bit = i => (1 << i) >>> 0;
 const has = (mask, i) => ((mask >>> i) & 1) === 1;
 const ease = p => (p <= 0 ? 0 : p >= 1 ? 1 : p * p * (1.6 - 0.6 * p));
 const QUEUE_MAX = 3, QUEUE_GAP = 0.09;
+/** Bonus yarn for a spool completed at this combo (back-to-back spools): ×2 → 1, ×3 → 2, ×4+ → 3. */
+export const comboAmt = c => (c < 2 ? 0 : c === 2 ? 1 : c === 3 ? 2 : 3);
 
 // ------------------------------------------------------------------ session
 export function createSession(kind, id, S) {
@@ -93,8 +103,10 @@ export function createSession(kind, id, S) {
     result: null, shake: 0, bakeKey: '',
     basketShake: -1, iceLeft: puz.ice, slotUsed: false, lastTapT: S.T, stuckT: -1, doomCheck: null,
     chainLog: [], jumboLog: [], lose: false, winT: -1,
+    bonusLog: [], bonusDue: 0, bonusYarn: 0, bonusCap: 0,
     rng: R.rng((kind === 'level' ? id : 7919) * 2654435761),
   };
+  try { sess.bonusCap = typeof meta.comboCap === 'function' ? meta.comboCap(kind, id) | 0 : 0; } catch (e) { sess.bonusCap = 0; }
   for (let k = 0; k < ACTIVE; k++) sess.slots.push({ cur: null, leaving: null, leaveT: -9, enterT: -9, pend: [] });
   S.pending = new Set();
   snapVisuals(sess, S);
@@ -110,7 +122,7 @@ function spoolOf(sess, q) {
   let sv = sess.spoolVis.get(q);
   if (!sv) {
     const sp = sess.puz.spools[q];
-    sv = { c: sp.c, n: sp.n, shown: 0, spin: 0, bounce: 0, id: q, done: false, enterT: -9, thaw: null, combo: 0 };
+    sv = { c: sp.c, n: sp.n, shown: 0, spin: 0, bounce: 0, id: q, done: false, enterT: -9, thaw: null, combo: 0, bonus: 0 };
     sess.spoolVis.set(q, sv);
   }
   return sv;
@@ -428,6 +440,8 @@ function doPull(sess, S, id, snip) {
       const sv = spoolOf(sess, e.spool);
       sv.done = true;
       sv.combo = ++sess.combo;
+      sv.bonus = Math.max(0, Math.min(comboAmt(sv.combo), sess.bonusCap - sess.bonusDue));
+      if (sv.bonus) { sess.bonusDue += sv.bonus; sess.bonusLog.push({ mv: st.moves, amt: sv.bonus }); }
       completes++;
       lastComplete = sv;
       if (e.n > 3) sess.jumboLog.push(st.moves);
@@ -521,13 +535,13 @@ function win(sess, S) {
   const chain = sess.chainLog.map(x => x.m);
   const res = meta.recordWin({
     kind: sess.kind, id: sess.kind === 'level' ? sess.id : 0, stars, peak: st.peak, capped: sess.capped,
-    chain, jumbo: sess.jumboLog.length, dateKey: sess.dateKey || undefined,
+    chain, jumbo: sess.jumboLog.length, combo: sess.bonusDue, dateKey: sess.dateKey || undefined,
   }) || {};
   sess.kitten.golden = !!res.golden;
   sess.result = {
     stars, peak: st.peak, par: sess.par, balls: res.balls | 0, firstWin: !!res.firstWin, newBest: !!res.newBest,
     kittenId: res.kittenId | 0, gifts: res.gifts || [], golden: !!res.golden, newStars: res.newStars | 0,
-    kind: sess.kind, id: sess.id,
+    kind: sess.kind, id: sess.id, bonus: res.combo | 0,
   };
   sess.winT = S.T;
   sess.hint = null;
@@ -546,6 +560,9 @@ export function undo(S) {
   sess.st = prev;
   sess.chainLog = sess.chainLog.filter(x => x.mv <= prev.moves);
   sess.jumboLog = sess.jumboLog.filter(mv => mv <= prev.moves);
+  sess.bonusLog = sess.bonusLog.filter(x => x.mv <= prev.moves);
+  sess.bonusDue = sess.bonusLog.reduce((a, x) => a + x.amt, 0);
+  sess.bonusYarn = sess.bonusDue; // snapVisuals drops any pop still waiting, so the HUD total matches what a win pays
   sess.press = null; sess.hint = null; sess.combo = 0;
   clearQueue(sess, S);
   sess.stuck = false; sess.stuckT = -1; sess.lose = false; sess.doomed = false;
@@ -716,6 +733,14 @@ export function update(dt, S) {
       const p = slotPoint(S, k);
       burst(sess, 'conf', p.x, p.y, 16, [sv.c, -1], S);
       bus.emit('spoolDone', { i: sv.id, combo: sv.combo | 0, slot: k, c: sv.c, n: sv.n });
+      if (sv.bonus > 0) {
+        const amt = Math.min(sv.bonus, sess.bonusDue - sess.bonusYarn);
+        sv.bonus = 0;
+        if (amt > 0) {
+          sess.bonusYarn += amt;
+          bus.emit('bonus', { amt, combo: sv.combo | 0, total: sess.bonusYarn, i: sv.id, slot: k, c: sv.c });
+        }
+      }
       comboFx(S, sv.combo | 0);
       if (sv.n > 3) bus.emit('coins', { n: 5 });
       if (sv.thaw !== null) { sess.iceLeft = sv.thaw; bus.emit('thaw', { left: sv.thaw }); }

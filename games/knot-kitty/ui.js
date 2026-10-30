@@ -43,6 +43,7 @@ import * as SC from './scene.js';
 import * as M from './meta.js';
 import * as LV from './levels.js';
 import { canPull } from './rules.js';
+import * as AU from './audio.js';
 
 // ---------- style ----------
 const INK = '#2B2440', CREAM = '#FFF4E4', STITCH = '#E9D3B5', SHADE = '#D9BF9C', TOMATO = '#E8463A', TOMATO_D = '#B8322A';
@@ -71,6 +72,12 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const e3 = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const eBack = t => { t = clamp(t, 0, 1) - 1; return 1 + 2.70158 * t * t * t + 1.70158 * t * t; };
 const safe = (f, d) => { try { const v = f(); return v === undefined ? d : v; } catch (e) { return d; } };
+const TAU2 = Math.PI * 2;
+// record / og showreels keep their scripted look: no first-encounter tags or explainers there
+const SHOWREEL = typeof location !== 'undefined' && /[?&](record|og)(=|&|$)/.test(location.search || '');
+const sfx = (name, ...a) => { try { if (typeof AU.sfx === 'function') AU.sfx(name, ...a); } catch (e) {} };
+/** 'mini' | 'boss' | '' — levels may carry knot: 'mini'|'boss' (guarded). */
+const toughOf = sess => { const k = sess && sess.level && sess.level?.knot; return k === 'mini' || k === 'boss' ? k : ''; };
 const breedOf = id => (id - 1) % 6, coatOf = id => Math.floor((id - 1) / 6);
 // fix 1 (desktop m4): the haptics toggle needs a vibrate API AND a touch screen (desktop Chrome has navigator.vibrate)
 const hasVibrate = () => P.env === 'web' && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
@@ -648,13 +655,20 @@ function dirTeach(key) {
 function onBus(type, d) {
   const S = U.S;
   if (!S) return;
-  if (type === 'win') { U.winAt = U.t + DUR.kittenFree; clearHand(); U.ghost = null; }
+  if (type === 'win') {
+    U.winAt = U.t + DUR.kittenFree; clearHand(); U.ghost = null; U.first = null; U.banner = null;
+    if (toughOf(S.sess)) setTimeoutUI(() => { sfx('reveal'); sfx('gift'); }, DUR.kittenFree + 0.2); // tough-knot fanfare
+  }
   if (type === 'stuck') { U.loseAt = U.t + DUR.stuckCard; U.loseDone = false; clearHand(); U.ghost = null; }
   if (type === 'kittenFree') { clearHand(); clearSay(); }
   if (type === 'pull' || type === 'press') U.idle = 0;
   if (!S.sess || S.screen !== 'play') return;
   if (U.tut && U.tutOn) safe(() => U.tut.on(type, d, S));
   if (type === 'pull') clearHand('idle');
+  // first-encounter hints: each one is done the first time the thing it explains is used
+  if (type === 'basket' || (type === 'pull' && d && d.dest && d.dest.kind === 'basket')) firstDone('f_basket');
+  if (type === 'spoolEnter') firstDone('f_next');
+  if (type === 'pull') { firstDone('f_c4'); if (U.first && U.first.key === 'x_more' && U.t - U.first.t0 > 2) firstDone('x_more'); }
   switch (type) {
     case 'chain': { // contract 1: {n, combo} (old shape {m}); "+1" for one ball, "CHAIN ×n!" from two
       const n = chainN(d);
@@ -664,14 +678,31 @@ function onBus(type, d) {
     }
     case 'spoolDone': { const c = d ? d.combo | 0 : 0; if (c >= 2) popAt(`COMBO ×${c}!`, d.slot != null ? d.slot : -1, comboStyle(c)); break; }
     case 'coins': // yarn-ball reward rides under the current pop as a sub-line; alone only when nothing is popping
-      if (d && d.n > 0) { const p = popForSub(); if (p) p.sub = d.n; else popAt(`+${d.n}`, -1, { col: GOLD, size: 24, ball: true }); }
+      if (d && d.n > 0) { const p = popForSub(); if (p) p.sub = (p.sub || 0) + d.n; else popAt(`+${d.n}`, -1, { col: GOLD, size: 24, ball: true }); }
       break;
+    case 'bonus': { // contract (polish): play.js 'bonus' {amt, combo}; rides on the COMBO pop as "+amt 🧶"
+      const amt = d ? d.amt | 0 : 0, c = d ? d.combo | 0 : 0;
+      if (amt <= 0) break;
+      const p = popForSub();
+      if (p && /^COMBO/.test(p.text)) p.sub = (p.sub || 0) + amt;
+      else { popAt(c >= 2 ? `COMBO ×${c}!` : 'COMBO!', d.slot != null ? d.slot : -1, comboStyle(Math.max(2, c))); const q = popForSub(); if (q) q.sub = (q.sub || 0) + amt; }
+      break;
+    }
     case 'boosterRefused': if (d && d.reason) refuse(d.kind, d.reason); break;
     case 'full': if (rateOk('full', 3)) say('Basket full: pick yarn that fits a spool', { pri: 1, dur: 2 }); break;
     case 'basketWarn': if (rateOk('warn', 4)) say('Basket almost full!', { pri: 1, dur: 1.6 }); break;
     case 'blocked':
       if (!d) break;
       if (d.why === 'locked' && rateOk('lock', 4)) say('Locked: pull its key strand first', { pri: 1, dur: 2 });
+      // polish (grandparent): from L3 a covered tap rings the strands on top and, the first 3 times, says so in words
+      if (d.why === 'covered' && !(S.sess.kind === 'level' && S.sess.id < 3)) {
+        U.blk = { ids: (d.blockers || []).slice(0, 4), t0: U.t };
+        if (!safe(() => M.tutSeen('blk3'), true) && rateOk('blk', 1.2)) {
+          U.blkN = (U.blkN || 0) + 1;
+          say("That one's underneath — tap the one on top!", { pri: 2, dur: 2.4 });
+          if (U.blkN >= 3) safe(() => M.markTut('blk3'));
+        }
+      }
       if (d.why === 'paw' && rateOk('paw', 4)) {
         const pz = S.sess.puz || {}, need = (pz.pawN && pz.pawN[d.id]) || ((strandOf(S, d.id) || {}).paw) || 0;
         const left = Math.max(1, need - ((S.sess.st && S.sess.st.count) || 0));
@@ -690,7 +721,7 @@ function onBus(type, d) {
   }
 }
 const BUS = ['press', 'pull', 'blocked', 'full', 'basketWarn', 'chain', 'spoolDone', 'boosterRefused', 'coins', 'spoolEnter', 'basket', 'reveal', 'unlock',
-  'paw', 'thaw', 'kittenFree', 'win', 'stuck', 'doomed', 'undo', 'booster', 'hint'];
+  'paw', 'thaw', 'kittenFree', 'win', 'stuck', 'doomed', 'undo', 'booster', 'hint', 'bonus'];
 
 // ---------- init ----------
 export function init(a) {
@@ -729,9 +760,11 @@ export function update(dt, S) {
 
   // director starts once the level is on screen
   if (S.sess && playing && !U.tutOn) {
-    U.tutOn = true;
+    U.tutOn = true; U.tutStart = U.t;
     if (U.tut) safe(() => U.tut.start(S));
     scheduleIntro(S);
+    const tk = toughOf(S.sess);
+    if (tk && !SHOWREEL) { U.banner = { kind: tk, t0: U.t + 0.25 }; setTimeoutUI(() => { sfx('gift'); sfx('unlock'); }, 0.25); }
   }
   if (playing && S.sess) {
     U.idle += dt;
@@ -795,7 +828,7 @@ function onSession(S) {
   U.sessRef = S.sess;
   clearCallouts();
   U.hand = null; U.ghost = null; U.attn = []; U.idle = 0; U.tutOn = false; U.intro = null; U.fly = [];
-  U.winAt = U.loseAt = 0; U.winDone = U.loseDone = false;
+  U.winAt = U.loseAt = 0; U.winDone = U.loseDone = false; U.rArm = null; U.blk = null; U.first = null; U.banner = null;
   if (U.card && (U.card.type === 'win' || U.card.type === 'lose')) U.card = null;
   const s = S.sess;
   U.tut = s && s.kind === 'level' ? safe(() => tutorialFor(s.id), null) : null;
@@ -987,8 +1020,9 @@ function drawLogo(g, cx, cy, maxW, maxH) {
     txt(g, s, x, y, size, { col: CREAM, stroke: INK, sk: 0.16 });
   };
   word('Knot', cx, y1, s1);
-  // the yarn passes in front of the right half of the "o"
-  g.save(); g.beginPath(); g.rect(ox, oy - s1 * 0.4, ow * 0.7, s1 * 0.8); g.clip(); yarn(); g.restore();
+  // polish: the yarn stays BEHIND the word (it shows through the o's hole). Drawn in front of the o's right half it
+  //   cut the ring and "Knot" read "Knct".
+  void ox; void ow;
   // ear notch on the K of Kitty
   const W2 = tw(g, 'Kitty', s2), kx = cx - W2 / 2 + s2 * 0.13, top = y2 - s2 * 0.36;
   g.beginPath(); g.moveTo(kx - s2 * 0.1, top + s2 * 0.04); g.lineTo(kx - s2 * 0.02, top - s2 * 0.24); g.lineTo(kx + s2 * 0.12, top + s2 * 0.04); g.closePath();
@@ -1303,6 +1337,8 @@ function drawPlayUI(g, S) {
     drawPop(g, S, L);
     drawAttn(g, S);
     drawGhost(g, S, L);
+    drawBlk(g, S);
+    drawFirst(g, S, L);
     drawFly(g, S, L);
     drawHand(g, S);
   }
@@ -1316,7 +1352,8 @@ function drawHUD(g, S, live) {
   const showBtns = S.screen === 'play' || S.screen === 'pause';
   if (showBtns) {
     iconBtn(g, { id: 'hud-pause', label: 'Pause', x: h.x + L.m, y: cy - dd / 2, w: dd, h: dd, icon: 'pause', act: () => api.pause(), d: u });
-    iconBtn(g, { id: 'hud-retry', label: 'Retry level', x: h.x + h.w - L.m - dd, y: cy - dd / 2, w: dd, h: dd, icon: 'retry', act: () => api.retry(), d: u });
+    iconBtn(g, { id: 'hud-retry', label: 'Retry level', x: h.x + h.w - L.m - dd, y: cy - dd / 2, w: dd, h: dd, icon: 'retry', act: () => askRestart(S, 'hud-retry'), d: u,
+      ring: armed('hud-retry') ? TOMATO : null });
   }
   const lv = sess.level || {};
   const title = sess.kind === 'level' ? `Level ${sess.id}` : lv.name || (sess.kind === 'daily' ? 'Daily Knot' : 'Bonus Tangle');
@@ -1436,6 +1473,126 @@ function drawAttn(g) {
     g.restore();
   }
 }
+// ---------- first-encounter hints + one-time explainers (polish) ----------
+// DECISION (polish, grandparent/curator): one idea at a time, keyed off what is ON the board (not level numbers):
+//   f_basket (basket on screen) until a ball first lands in it; f_next (a NEXT spool) until a spool first rolls in;
+//   f_c4 (4+ colours) until the next pull; then two explainers that time out: x_more ("+N" chip) and x_par (the ★
+//   flag on the basket). Each is a small tag with a pointer; it never shows over a card, a pop or a tutorial hand.
+function firstDone(key) { safe(() => M.markTut(key)); if (U.first && U.first.key === key) U.first = null; }
+function colourCount(s) { const set = new Set(); for (const q of (s.puz && s.puz.strands) || []) if (q && q.c >= 0 && q.c < 6 && !q.m) set.add(q.c); return set.size; }
+function moreOf(s) {
+  const total = s.puz && s.puz.spools ? s.puz.spools.length : (s.level && s.level.queue ? s.level.queue.length : 0);
+  return s.moreN != null ? s.moreN : total - ((s.st && s.st.next) || 0) - Math.min(2, (s.nextQ || []).length);
+}
+function parShown(s) {
+  const par = s.level ? s.level.par : s.puz && s.puz.par, cap = (s.basket || []).length;
+  return par != null && par < cap && (s.kind !== 'level' || s.id >= 4) ? par : -1;
+}
+const FIRST = [
+  { key: 'f_basket', ok: (s, L) => !L.hideBasket && (s.basket || []).length > 0, text: 'Basket: extra yarn waits here', at: 'basket' },
+  { key: 'f_next', ok: s => (s.nextQ || []).length > 0, text: 'This spool comes next', at: 'next' },
+  { key: 'f_c4', ok: s => colourCount(s) >= 4, text: '4 colours now! Match each to its spool', at: 'rack' },
+  { key: 'x_more', ok: s => moreOf(s) > 0, text: s => `+${moreOf(s)} = more spools still to come`, at: 'more', dur: 6 },
+  { key: 'x_par', ok: s => parShown(s) >= 0, text: 'Keep yarn left of the ★ flag for 3★', at: 'par', dur: 7 },
+];
+function firstAnchor(S, L, at) {
+  const s = S.sess;
+  if (at === 'basket' || at === 'par') {
+    const sl = safe(() => basketSlots(L, (s.basket || []).length), []);
+    if (!sl.length) return null;
+    const r = sl[0].r;
+    if (at === 'basket') return { x: (sl[0].x + sl[sl.length - 1].x) / 2, y: sl[0].y - r * 1.5, dir: -1 };
+    const par = parShown(s);
+    const xm = par === 0 ? sl[0].x - r * 1.3 : (sl[par - 1].x + sl[par].x) / 2;
+    return { x: xm, y: sl[0].y - r * 2.3, dir: -1 };
+  }
+  const rs = safe(() => rackSlots(L), null);
+  if (!rs) return null;
+  if (at === 'next' && rs.next[0]) return { x: rs.next[0].x, y: rs.next[0].y + rs.next[0].h * 0.55, dir: 1 };
+  if (at === 'more' && rs.more) return { x: rs.more.x, y: rs.more.y + 14 * L.u, dir: 1 };
+  if (at === 'rack') { const a = rs.active[0], b = rs.active[1]; return { x: (a.x + b.x) / 2, y: a.y + a.h * 0.55, dir: 1 }; }
+  return null;
+}
+function drawTag(g, S, text, an, u, a) {
+  const size = clamp(14 * u, 12, 30), pad = size * 0.7, maxW = Math.min(S.W - 24, 320 * u);
+  const fs = fitSize(g, text, maxW - 2 * pad, size, FB, '900');
+  const w = tw(g, text, fs, FB, '900') + 2 * pad, h = fs * 2.1, tip = fs * 0.6;
+  const x = clamp(an.x - w / 2, 8, S.W - 8 - w), y = an.dir < 0 ? an.y - tip - h : an.y + tip;
+  const bob = Math.sin(U.t * 4) * 2 * an.dir * -1;
+  g.save(); g.globalAlpha = a; g.translate(0, bob);
+  g.fillStyle = 'rgba(43,36,64,0.25)'; rr(g, x + 2, y + 3, w, h, h / 2); g.fill();
+  g.beginPath(); rr(g, x, y, w, h, h / 2);
+  g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(2, 2.4 * u); g.strokeStyle = INK; g.stroke();
+  const tx = clamp(an.x, x + h / 2, x + w - h / 2), ty = an.dir < 0 ? y + h : y;
+  g.beginPath(); g.moveTo(tx - tip, ty); g.lineTo(tx, an.dir < 0 ? ty + tip : ty - tip); g.lineTo(tx + tip, ty);
+  g.fillStyle = CREAM; g.fill(); g.stroke();
+  g.fillRect(tx - tip + 2, an.dir < 0 ? ty - 3 : ty, 2 * tip - 4, 3);
+  txt(g, text, x + w / 2, y + h / 2 + 1, fs, { f: FB, w: '900', col: INK });
+  g.restore();
+}
+function drawFirst(g, S, L) {
+  const s = S.sess;
+  if (!s || U.card || SHOWREEL) return;
+  drawBanner(g, S, L);
+  if (s.result || s.stuck || (s.kind === 'level' && s.id < 2)) return;
+  if (U.first && U.first.dur && U.t - U.first.t0 > U.first.dur) firstDone(U.first.key);
+  if (!U.first) {
+    if (U.t < (U.tutStart || 0) + 2.2 || (U.banner && U.t < U.banner.t0 + 2.4)) return;
+    const f = FIRST.find(q => !safe(() => M.tutSeen(q.key), true) && safe(() => q.ok(s, L), false));
+    if (!f) return;
+    U.first = { key: f.key, t0: U.t, dur: f.dur || 0, f };
+  }
+  const f = U.first.f;
+  if (!safe(() => f.ok(s, L), false)) { U.first = null; return; }
+  if (U.pop || (U.hand && U.hand.src === 'tut')) return;
+  const an = firstAnchor(S, L, f.at);
+  if (!an) return;
+  const a = Math.min(1, (U.t - U.first.t0) / 0.25, U.first.dur ? (U.first.dur - (U.t - U.first.t0)) / 0.3 : 1);
+  drawTag(g, S, typeof f.text === 'function' ? f.text(s) : f.text, an, L.u, clamp(a, 0, 1));
+}
+/** TOUGH KNOT banner across the board at the start of a mini/boss knot level. */
+function drawBanner(g, S, L) {
+  const b = U.banner;
+  if (!b) return;
+  const t = U.t - b.t0;
+  if (t < 0) return;
+  if (t > 2.3) { U.banner = null; return; }
+  const u = L.u, bd = L.board, w = Math.min(bd.w * 0.94, 380 * u), h = Math.min(86 * u, bd.h * 0.3);
+  const cx = bd.x + bd.w / 2, cy = bd.y + bd.h * 0.42, sc = t < 0.3 ? eBack(t / 0.3) : 1, a = t > 1.9 ? 1 - (t - 1.9) / 0.4 : 1;
+  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.04); g.scale(sc, sc);
+  const n = h * 0.32;
+  g.beginPath(); g.moveTo(-w / 2 - n, -h * 0.3); g.lineTo(-w / 2, -h * 0.3); g.lineTo(-w / 2, h * 0.42); g.lineTo(-w / 2 - n, h * 0.42); g.lineTo(-w / 2 - n * 0.5, h * 0.06); g.closePath();
+  g.moveTo(w / 2 + n, -h * 0.3); g.lineTo(w / 2, -h * 0.3); g.lineTo(w / 2, h * 0.42); g.lineTo(w / 2 + n, h * 0.42); g.lineTo(w / 2 + n * 0.5, h * 0.06); g.closePath();
+  g.fillStyle = TOMATO_D; g.fill(); g.lineWidth = Math.max(2, 3 * u); g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
+  rr(g, -w / 2, -h / 2, w, h, h * 0.18); g.fillStyle = TOMATO; g.fill(); g.stroke();
+  g.setLineDash([6 * u, 5 * u]); g.lineWidth = Math.max(1, 1.6 * u); g.strokeStyle = 'rgba(255,244,228,0.7)';
+  rr(g, -w / 2 + 6 * u, -h / 2 + 6 * u, w - 12 * u, h - 12 * u, h * 0.12); g.stroke(); g.setLineDash([]);
+  txt(g, 'TOUGH KNOT!', 0, -h * 0.1, h * 0.46, { col: '#fff', stroke: INK, sk: 0.2, maxW: w - 24 * u });
+  txt(g, b.kind === 'boss' ? 'Boss level: take your time' : 'Take your time', 0, h * 0.3, h * 0.2, { f: FB, w: '900', col: CREAM, maxW: w - 24 * u });
+  g.restore();
+}
+/** Gold double ring on the strands that cover a tapped one ("tap the one on top"), 0.9 s. */
+function drawBlk(g, S) {
+  const b = U.blk, sess = S.sess;
+  if (!b || !sess || U.card) return;
+  const t = (U.t - b.t0) / 0.9;
+  if (t >= 1) { U.blk = null; return; }
+  const unit = (sess.B && sess.B.unit) || 40, r0 = clamp(unit * 0.55, 16, 46);
+  g.save();
+  for (const id of b.ids) {
+    const p = tapPoint(id);
+    if (!p) continue;
+    for (let k = 0; k < 2; k++) {
+      const q = clamp(t * 1.6 - k * 0.35, 0, 1);
+      if (q <= 0 || q >= 1) continue;
+      g.globalAlpha = (1 - q) * 0.95;
+      g.beginPath(); g.arc(p.x, p.y, r0 * (0.7 + 0.8 * e3(q)), 0, 7);
+      g.lineWidth = Math.max(3, unit * 0.12); g.strokeStyle = GOLD; g.stroke();
+      g.lineWidth = Math.max(1.2, unit * 0.035); g.strokeStyle = INK; g.stroke();
+    }
+  }
+  g.restore();
+}
 function drawGhost(g, S, L) {
   const gh = U.ghost, sess = S.sess;
   if (!gh || !sess || !sess.geo || !sess.geo[gh.id]) return;
@@ -1444,8 +1601,10 @@ function drawGhost(g, S, L) {
   const to = slots[gh.slot] || slots[0];
   if (!to) return;
   // basket pulse
-  const b = L.basket, pul = 0.5 + 0.5 * Math.sin(U.t * 8);
-  g.save(); rr(g, b.x + 2, b.y + 2, b.w - 4, b.h - 4, 14 * L.u); g.lineWidth = Math.max(2, 4 * L.u); g.strokeStyle = `rgba(255,178,63,${0.45 + 0.5 * pul})`; g.stroke(); g.restore();
+  // polish (band): pulse the drawn basket (slot extents), not the whole basket rect, which is full-width in the band
+  const s0 = slots[0], s1 = slots[slots.length - 1], sr = s0.r || 12, pul = 0.5 + 0.5 * Math.sin(U.t * 8);
+  const b = { x: s0.x - sr * 1.85, y: s0.y - sr * 1.55, w: s1.x - s0.x + sr * 3.7, h: sr * 3.35 };
+  g.save(); rr(g, b.x, b.y, b.w, b.h, sr * 1.1); g.lineWidth = Math.max(2, 4 * L.u); g.strokeStyle = `rgba(255,178,63,${0.45 + 0.5 * pul})`; g.stroke(); g.restore();
   if (t > 1.1) return;
   if (!geo.c0) { let sx = 0, sy = 0; const pts = geo.pts || [[to.x, to.y]]; for (const q of pts) { sx += q[0]; sy += q[1]; } geo.c0 = [sx / pts.length, sy / pts.length]; }
   const p = e3(t / 0.8), [cx, cy] = geo.c0, s = lerp(1, 0.2, p);
@@ -1517,7 +1676,8 @@ function drawPause(g, S) {
     { h: 58, fn: (y, hh, e) => pill(g, { id: 'p-resume', label: 'Resume', kind: 'primary', x: px + pad, y, w: iw, h: 54 * e, act: () => api.resume(), d: e }) },
     { h: 56, fn: (y, hh, e) => {
       const bw = (iw - 10 * e) / 2;
-      pill(g, { id: 'p-restart', label: 'Restart', kind: 'secondary', x: px + pad, y, w: bw, h: 48 * e, act: () => api.retry(), d: e });
+      const arm = armed('p-restart');
+      pill(g, { id: 'p-restart', label: arm ? 'Tap again' : 'Restart', kind: arm ? 'primary' : 'secondary', x: px + pad, y, w: bw, h: 48 * e, act: () => askRestart(S, 'p-restart'), d: e });
       pill(g, { id: 'p-map', label: 'Map', kind: 'secondary', x: px + pad + bw + 10 * e, y, w: bw, h: 48 * e, act: () => api.go('map'), d: e });
     } },
     { h: 8 },
@@ -1530,6 +1690,16 @@ function drawPause(g, S) {
   panel(g, px, py, pw, ph, d);
   lay.run(py + pad * lay.k);
 }
+// polish (grandparent): restarting mid-level throws away progress, so the first tap only arms it ("Tap again to
+//   restart", 3 s); with no pulls made yet it restarts straight away.
+function hasProgress(S) { const s = S && S.sess; return !!(s && !s.result && !s.stuck && ((s.hist && s.hist.length) || (s.st && s.st.moves > 0))); }
+function askRestart(S, from) {
+  if (!hasProgress(S) || (U.rArm && U.t < U.rArm.until && U.rArm.from === from)) { U.rArm = null; api.retry(); return; }
+  U.rArm = { from, until: U.t + 3 };
+  U.shakes[from] = U.t;
+  if (from === 'hud-retry') forceSay('Tap again to restart', 3, 2.6);
+}
+const armed = from => !!(U.rArm && U.rArm.from === from && U.t < U.rArm.until);
 function setSet(k, v) { safe(() => M.setSetting(k, v)); bus.emit('settings', { k, v }); }
 
 // ---------- generic dialog frame ----------
@@ -1601,6 +1771,7 @@ function drawShop(g, S) {
   }
   const by = ty + th + 12 * d, bh = py + ph - pad - 58 * d - by;
   const footY = py + ph - pad - 54 * d, fw = Math.min(iw, 280 * d);
+  U.dlg.toastY = footY - 6 * d; U.dlg.toastMin = ty + th + 4 * d; // shop toasts sit above the footer, under the tabs
   if (U.shop.tab === 'outfits') {
     const list = safe(() => M.outfits(), []);
     const cols = clamp(Math.floor(iw / (150 * d)), 2, 4), rowsN = Math.ceil(list.length / cols);
@@ -1613,7 +1784,8 @@ function drawShop(g, S) {
       rr(g, x, y, cw, ch, 12 * d); g.fillStyle = sel ? '#FFF9EC' : '#F6E6CF'; g.fill();
       g.lineWidth = sel ? 4 * d : 2 * d; g.strokeStyle = sel ? GOLD_D : INK; g.stroke();
       const ks = Math.min(ch * 0.52, cw * 0.62);
-      aKitty(g, x + cw / 2, y + 6 * d + ks, ks, o.worn ? 'cheer' : 'idle', U.t, o.id);
+      // polish: always the idle pose — the raised 'cheer' paws hid the scarf/outfit being shown
+      aKitty(g, x + cw / 2, y + 6 * d + ks, ks, 'idle', U.t, o.id);
       const nameY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.33, tagY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.74;
       txt(g, o.name, x + cw / 2, nameY, Math.min(14 * d, (ch - ks) * 0.26), { f: FB, w: '800', maxW: cw - 10 * d });
       const ts = Math.min(14 * d, (ch - ks) * 0.26);
@@ -1722,12 +1894,47 @@ function drawKittens(g, S) {
     }
     U.kc = { key, cv: c };
   }
+  { // polish: a warm hearth glow behind the kittens
+    const wg = g.createRadialGradient(gx + gw / 2, gy2 + gh2 * 0.55, 0, gx + gw / 2, gy2 + gh2 * 0.55, Math.max(gw, gh2) * 0.7);
+    wg.addColorStop(0, 'rgba(255,190,90,0.32)'); wg.addColorStop(1, 'rgba(255,190,90,0)');
+    g.fillStyle = wg; g.fillRect(gx - cell * 0.3, gy2 - cell * 0.3, gw + cell * 0.6, gh2 + cell * 0.6);
+  }
   if (U.kc.cv) g.drawImage(U.kc.cv, gx, gy2, gw, gh2);
-  // tap a portrait → its name (or how to meet it); invisible buttons over the cached grid
+  // polish (kid): tapping a rescued kitten makes it hop, float hearts, say its name and purr
+  const hop = U.kHop && U.t - U.kHop.t0 < 1.6 ? U.kHop : null;
+  if (hop) {
+    const i = hop.i, col = i % cols, row = Math.floor(i / cols), t = U.t - hop.t0;
+    const cx = gx + (col + 0.5) * cell, cy = gy2 + (row + 0.5) * cell;
+    const jump = t < 0.5 ? Math.sin(t / 0.5 * Math.PI) * cell * 0.28 : t < 0.8 ? Math.sin((t - 0.5) / 0.3 * Math.PI) * cell * 0.08 : 0;
+    g.fillStyle = CREAM; g.fillRect(cx - cell / 2 + 0.5, cy - cell / 2 + 0.5, cell - 1, cell - 1);
+    g.save(); g.globalAlpha = 0.25; g.fillStyle = INK; g.beginPath(); g.ellipse(cx, cy + cell * 0.4, cell * 0.3 * (1 - jump / cell), cell * 0.06, 0, 0, TAU2); g.fill(); g.restore();
+    g.save(); portrait(g, i + 1, cx, cy - jump, cell * 0.9 * (1 + 0.06 * Math.sin(t * 12) * Math.max(0, 1 - t)), ks[i], dpr); g.restore();
+    for (let k = 0; k < 5; k++) { // hearts
+      const q = (t - k * 0.12) / 1.1;
+      if (q <= 0 || q >= 1) continue;
+      const hx = cx + Math.sin(k * 2.1 + q * 5) * cell * 0.3, hy = cy - cell * 0.3 - q * cell * 0.9, hs = cell * (0.12 + 0.04 * (k % 2));
+      g.save(); g.globalAlpha = 1 - q; g.translate(hx, hy); g.fillStyle = k % 2 ? TOMATO : '#FF8FA3'; g.strokeStyle = INK; g.lineWidth = Math.max(1, hs * 0.12);
+      g.beginPath(); g.moveTo(0, hs * 0.35); g.bezierCurveTo(-hs, -hs * 0.3, -hs * 0.45, -hs, 0, -hs * 0.45); g.bezierCurveTo(hs * 0.45, -hs, hs, -hs * 0.3, 0, hs * 0.35); g.fill(); g.stroke();
+      g.restore();
+    }
+    const nm = hop.name, a = Math.min(1, t / 0.15, (1.6 - t) / 0.3);
+    if (nm && a > 0) {
+      const fs = clamp(15 * d, 12, 40), bw = tw(g, nm, fs, FB, '900') + fs * 1.4, bh = fs * 2;
+      const bx = clamp(cx - bw / 2, px + 8 * d, px + pw - 8 * d - bw), by = Math.max(py + 6 * d, cy - cell * 0.5 - jump - bh - fs * 0.5);
+      g.save(); g.globalAlpha = a; rr(g, bx, by, bw, bh, bh / 2); g.fillStyle = '#fff'; g.fill(); g.lineWidth = Math.max(1.5, 2.2 * d); g.strokeStyle = INK; g.stroke();
+      txt(g, nm, bx + bw / 2, by + bh / 2 + 1, fs, { f: FB, w: '900', col: INK }); g.restore();
+    }
+  }
+  // tap a portrait → hop + name (or how to meet it); invisible buttons over the cached grid
   for (let i = 0; i < LEVELS; i++) {
     const col = i % cols, row = Math.floor(i / cols);
     reg({ id: 'k-cell' + i, x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell, hit: { x: gx + col * cell, y: gy2 + row * cell, w: cell, h: cell },
-      act: () => { const nm = kName(i); toast(ks[i] > 0 ? (nm ? `${nm}${ks[i] > 1 ? ' (golden!)' : ''}, rescued on level ${i + 1}` : `Rescued on level ${i + 1}`) : `Beat level ${i + 1} to meet this kitten`); } });
+      act: () => {
+        if (!(ks[i] > 0)) { toast(`Beat level ${i + 1} to meet this kitten`); return; }
+        const nm = kName(i);
+        U.kHop = { i, t0: U.t, name: nm ? `${nm}${ks[i] > 1 ? ' (golden!)' : ''}` : `Level ${i + 1} kitten` };
+        sfx('purr', 1.1); setTimeoutUI(() => sfx('mew'), 0.15);
+      } });
   }
   const fw = Math.min(iw, 240 * d);
   pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: py + ph - pad - 52 * d, w: fw, h: 52 * d, act: () => api.go(U.ret) });
@@ -1845,7 +2052,12 @@ function cardRect(S, type) {
     return { x: L.rack.x, y: L.rack.y, w: L.rack.w, h: sf.y + sf.h - m - L.rack.y };
   }
   const x = sf.x + m, w = sf.w - 2 * m;
-  if (type === 'lose') { const y = L.callout.y; return { x, y, w, h: Math.max(L.callout.h, sf.y + sf.h - m * 0.5 - y) }; }
+  // polish (band): the portrait lose card docks ABOVE the basket (never over it, like desktop) — the basket, the
+  //   rack and the HUD stay visible; drawLoseCard may flip it to the top of the board when that hides fewer ✕ marks.
+  if (type === 'lose') {
+    const y = L.callout.y, bot = L.hideBasket ? sf.y + sf.h - m * 0.5 : Math.min(sf.y + sf.h - m * 0.5, L.basket.y - m * 0.5);
+    return { x, y, w, h: Math.max(L.callout.h, bot - y) };
+  }
   const B = S.sess && S.sess.B, y = L.rack.y;
   const bottom = B && B.kitten ? B.kitten.y - B.kitten.s * 1.12 - m : L.tray.y - m;
   return { x, y, w, h: Math.max(bottom - y, Math.min(S.H - y - m, 300 * L.u)) };
@@ -1865,13 +2077,24 @@ function cardAnim(g, c, rect) {
 function drawWinCard(g, S, c) {
   const d = U.du, area = cardRect(S, 'win'), res = c.data || {}, sess = S.sess || {};
   const kind = sess.kind || 'level', st = clamp(res.stars || 0, 0, 3);
-  // fix 1: warmer copy. Title by kind and stars; the stats line says what 3★ means instead of "3★ at N".
-  const title = kind === 'daily' ? 'Daily Knot untied!' : kind === 'bonus' ? (st >= 3 ? 'Purr-fect tangle!' : 'Tangle cleared!')
-    : st >= 3 ? 'Purr-fect rescue!' : 'Kitten rescued!';
+  // polish (kid): varied headlines, picked once per card; tough (mini/boss) knots get their own; plain-words stat line
+  const tough = kind === 'level' && toughOf(sess);
+  if (!c.title) {
+    U.winN = (U.winN || 0) + 1;
+    const pool = kind === 'daily' ? ['Daily Knot untied!', 'Today\'s knot: done!'] : kind === 'bonus' ? (st >= 3 ? ['Purr-fect tangle!', 'Tangle tamed!'] : ['Tangle cleared!', 'Untangled!'])
+      : tough ? (tough === 'boss' ? ['Boss knot beaten!', 'Biggest knot: undone!'] : ['Tough knot untied!', 'You cracked it!'])
+        : st >= 3 ? ['Purr-fect rescue!', 'Meow-velous!', 'Paws-itively perfect!', 'Clean as a whisker!']
+          : st === 2 ? ['Kitten rescued!', 'Nicely untied!', 'Free kitty!', 'Great pulling!'] : ['Kitten rescued!', 'Phew, all free!', 'Untangled!'];
+    c.title = pool[((sess.id | 0) * 7 + U.winN) % pool.length];
+    c.hype = Math.min(3, (st >= 3 ? 2 : st === 2 ? 1 : 0) + (tough ? 1 : 0) + ((sess.bonusYarn | 0) > 0 ? 1 : 0));
+  }
+  const title = c.title;
+  const showBest = kind === 'level' && !res.firstWin && (res.newStars | 0) > 0;
+  const bonusN = (res.bonus | 0) || (sess.bonusYarn | 0);
   const peak = res.peak ?? 0, par = res.par ?? 0;
-  const statLine = sess.capped && st < 3 ? 'Snip / +1 Slot used: 2★ max'
-    : st >= 3 ? (peak ? `Tidy basket! Peak ${peak} of ${par} for 3★` : 'Spotless! The basket stayed empty')
-      : `Basket peaked at ${peak}. Keep it to ${par} for 3★`;
+  const statLine = sess.capped && st < 3 ? 'You used Snip or +1 Slot, so 2★ is the most'
+    : st >= 3 ? (peak ? `Tidy! Your basket held ${peak} at most` : 'Spotless! Nothing waited in the basket')
+      : par > 0 ? `Your basket held ${peak}. Hold ${par} or fewer for 3★` : `Your basket held ${peak}. Keep it empty for 3★`;
   const kid = res.kittenId || 0;
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
@@ -1880,7 +2103,7 @@ function drawWinCard(g, S, c) {
       // fix 2: with the NEW BEST ribbon the title clears the ribbon's left edge (it used to touch the "!" at 390 px):
       //   it keeps its size where it can and slides left; it shrinks only when the space left of the ribbon is short.
       let cx = area.x + area.w / 2, maxW = iw0;
-      if (res.newBest) {
+      if (showBest) {
         const lim = area.x + area.w - 84 * e, lft = area.x + pad;
         maxW = Math.min(iw0, lim - lft);
         const w = tw(g, title, fitSize(g, title, maxW, 34 * e, FT, '', 0.2), FT);
@@ -1890,6 +2113,13 @@ function drawWinCard(g, S, c) {
     } },
     { h: 70, fn: (y, hh, e) => {
       const sr = Math.min(26 * e, iw0 / 8);
+      if (c.hype > 0) { // celebration scales with stars / tough knot / combo: a turning sunburst behind the stars
+        const k = clamp((U.t - c.t0 - 0.3) / 0.4, 0, 1), cx = area.x + area.w / 2, cy = y + hh / 2, n = 8 + 4 * c.hype;
+        const R2 = Math.min(iw0 * 0.5, sr * (2.6 + 0.5 * c.hype)) * e3(k);
+        g.save(); g.globalAlpha = 0.18 + 0.1 * c.hype; g.fillStyle = c.hype >= 3 ? AMBER : GOLD; g.beginPath();
+        for (let i = 0; i < n; i++) { const a = U.t * 0.6 + i * TAU2 / n; g.moveTo(cx, cy); g.arc(cx, cy, R2, a, a + Math.PI / n); g.closePath(); }
+        g.fill(); g.restore();
+      }
       for (let i = 0; i < 3; i++) {
         const t = (U.t - c.t0 - 0.35 - i * 0.25) / 0.3, on = i < st;
         const x = area.x + area.w / 2 + (i - 1) * sr * 2.5, yy = y + hh / 2 + (i === 1 ? -6 * e : 4 * e);
@@ -1904,6 +2134,11 @@ function drawWinCard(g, S, c) {
       aIcon(g, 'slot', x0 + ic / 2, y + hh / 2, ic);
       txt(g, line, x0 + ic + 6 * e, y + hh / 2, s, { f: FB, w: '800', align: 'left', maxW: iw0 - ic - 6 * e });
     } },
+    ...(bonusN > 0 ? [{ h: 24, fn: (y, hh, e) => { // contract (polish): combo bonus line
+      const s = 16 * e, label = `Combo bonus +${bonusN}`, lw = tw(g, label, s), ic = 18 * e, x0 = area.x + area.w / 2 - (lw + ic + 6 * e) / 2;
+      aIcon(g, 'ball', x0 + ic / 2, y + hh / 2, ic);
+      txt(g, label, x0 + ic + 6 * e, y + hh / 2 + e, s, { align: 'left', col: TEAL, stroke: INK, sk: 0.24, maxW: iw0 - ic });
+    } }] : []),
     { h: 40, fn: (y, hh, e) => {
       const tB = c.t0 + 0.35 + 0.75 + 0.1, n = Math.round((res.balls || 0) * e3((U.t - tB) / 0.8));
       const label = `+${n}`, s = 26 * e, w2 = tw(g, label, s) + 30 * e, x0 = area.x + area.w / 2 - w2 / 2;
@@ -1937,9 +2172,9 @@ function drawWinCard(g, S, c) {
   cardAnim(g, c, rect);
   panel(g, rect.x, rect.y, rect.w, rect.h, d * Math.max(0.7, lay.k));
   lay.run(rect.y + pad * lay.k);
-  if (res.newBest) {
-    g.save(); g.translate(rect.x + rect.w - 30 * d * lay.k, rect.y + 14 * d * lay.k); g.rotate(0.22);
+  if (showBest) { // inside the card's padding (never past its corner / the safe area)
     const s = 13 * d * lay.k, w2 = tw(g, 'NEW BEST', s) + 14 * d * lay.k;
+    g.save(); g.translate(rect.x + rect.w - pad * lay.k - w2 / 2 - 2 * d, rect.y + pad * lay.k + s * 1.1); g.rotate(0.12);
     rr(g, -w2 / 2, -s, w2, 2 * s, s); g.fillStyle = GOLD; g.fill(); g.lineWidth = 2 * d * lay.k; g.strokeStyle = INK; g.stroke();
     txt(g, 'NEW BEST', 0, s * 0.08, s, { col: INK });
     g.restore();
@@ -1998,11 +2233,12 @@ function drawLoseCard(g, S, c) {
   const sess = S.sess || {}, left = sess.puz && sess.st ? Math.max(0, (sess.puz.n | 0) - (sess.st.count | 0)) : 0;
   const close = left > 0 && left <= Math.max(6, ((sess.puz && sess.puz.n) | 0) * 0.4);
   const warm = close ? `So close! Only ${left} strand${left === 1 ? '' : 's'} to go` : 'Out of room! Undo a pull or try again';
-  const why = marks.length ? 'Strands marked ✕ have no spool or basket room' : 'No strand fits a spool or the basket';
+  // polish (grandparent): plain words, big high-contrast ink text (no small grey line)
+  const why = marks.length ? 'The ✕ yarn has nowhere to go' : 'No yarn fits a spool or the basket';
   const list = [
-    { h: 36, fn: (y, hh, e) => txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 30 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
-    { h: 22, fn: (y, hh, e) => txt(g, warm.slice(warm.indexOf('!') + 2), area.x + area.w / 2, y + hh / 2, 16 * e, { f: FB, w: '900', col: TOMATO_D, maxW: iw }) },
-    { h: 20, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, 13 * e, { f: FB, w: '800', col: '#5A5066', maxW: iw }) },
+    { h: 38, fn: (y, hh, e) => txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
+    { h: 26, fn: (y, hh, e) => txt(g, warm.slice(warm.indexOf('!') + 2), area.x + area.w / 2, y + hh / 2, 19 * e, { f: FB, w: '900', col: TOMATO_D, maxW: iw }) },
+    { h: 25, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, 17 * e, { f: FB, w: '900', col: INK, maxW: iw }) },
     { h: 8 },
     { h: 54, fn: (y, hh, e) => {
       const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length;
@@ -2012,6 +2248,11 @@ function drawLoseCard(g, S, c) {
   const lay = rows(list, d, area.h - 2 * pad);
   const rh = lay.h + 2 * pad * lay.k;
   const rect = { x: area.x, y: area.y + Math.max(0, area.h - rh), w: area.w, h: rh }; // docked to the bottom of its area
+  const L = layoutOf(S);
+  if (L.orient !== 'landscape' && marks.length && area.h - rh > 4) { // flip to the top when that hides fewer ✕ marks
+    const inR = (y0) => marks.filter(p => p.y > y0 - 14 && p.y < y0 + rh + 14).length;
+    if (inR(area.y) < inR(rect.y)) rect.y = area.y;
+  }
   g.save();
   cardAnim(g, c, rect);
   panel(g, rect.x, rect.y, rect.w, rect.h, d * Math.max(0.7, lay.k));
@@ -2064,7 +2305,8 @@ function drawToast(g, S) {
     const sb = S.H - (layoutOf(S).inset || 0);
     if (dl.y - h - 4 * d >= 2 * d) y = Math.max(2 * d, dl.y - h - 8 * d);
     else if (dl.y + dl.h + h + 4 * d <= sb) y = dl.y + dl.h + 6 * d;
-    else y = dl.y + 4 * d;
+    else if (dl.toastY != null) y = Math.max(dl.toastMin || dl.y + 60 * d, dl.toastY - h); // inside, above the footer
+    else y = Math.max(dl.y + 70 * d, dl.y + dl.h - 70 * d - h); // inside, low: never over a dialog's header
   }
   g.save(); g.globalAlpha = a;
   rr(g, S.W / 2 - w / 2, y, w, h, h / 2); g.fillStyle = INK; g.fill();

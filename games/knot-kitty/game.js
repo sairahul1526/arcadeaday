@@ -20,7 +20,7 @@
 //   phone profile) can't fill 975×2110 @ dpr 2.5 at 60 fps. If, over a window of GOV_N frames, the median rAF
 //   interval is > 22 ms AND the median in-callback work is > GOV_WORK ms (so a 30 Hz display / iOS Low Power Mode,
 //   where frames are slow but work is tiny, never triggers it), the dpr cap steps down (×0.5–0.85, by how slow)
-//   and the canvas is re-sized. Floor GOV_FLOOR (still ≥ 1 CSS px per device px band; text stays sharp at 1.25+).
+//   and the canvas is re-sized. Floor GOV_FLOOR = 1 (only a device that cannot hold ~45 fps ever gets there).
 //   It only ever steps down within a page load (no oscillation); S.gov exposes {cap, med, work, steps} for QA.
 // DECISION: S.world: title = 2 (Pumpkin Night) until SEASON_END (IST), else 1; map = world of meta.cur();
 //   play = world of the level (daily/bonus: world of meta.cur()). audio.playWorld(0) on title/map, (world) in play.
@@ -61,7 +61,7 @@ const g = cvs.getContext('2d');
 const SESSION_SCREENS = new Set(['play', 'pause', 'win', 'lose']);
 const KEEP_SESSION = new Set(['play', 'pause', 'win', 'lose', 'shop', 'kittens', 'settings']);
 const MAX_PIXELS = 6.0e6, HARD_PIXELS = 3840 * 2160;
-const GOV_N = 16, GOV_SLOW = 22, GOV_WORK = 3, GOV_FLOOR = 1;
+const GOV_N = 16, GOV_SLOW = 22, GOV_WORK = 1.5, GOV_FLOOR = 1;
 
 const S = { W: 1, H: 1, dpr: 1, T: 0, TL: 0, screen: 'loading', L: null, world: 1, sess: null, ui: {}, noHaptics: false, pending: new Set() };
 const GOV = { cap: Infinity, iv: [], wk: [], skip: 30, steps: 0, med: 0, work: 0 };

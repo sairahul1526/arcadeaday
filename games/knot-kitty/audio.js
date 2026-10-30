@@ -13,10 +13,13 @@
 //   (synced with the leap) and `win` plays arpeggio + purr + one star bell per star at 0.6 + 0.25·i s.
 //   `kittenStage` plays a short "mew", `spoolEnter` a soft roll, `paw` with left>0 a soft pat,
 //   `booster` snip → snip, slot → unlock clack; undo/hint boosters use their own events.
-// DECISION: master = §8.3 DynamicsCompressor (−10 dB, 4:1) → soft-clip ceiling (WaveShaper: linear up to
-//   −4.4 dBFS, tanh knee, never above −0.6 dBFS) so nothing can clip. Firefox's DynamicsCompressor squashes
-//   short blips by ~20 dB, so on Firefox a fixed +1.6 dB gain (≈ Chrome's makeup gain) replaces it.
-//   Gain staging puts the loudest stinger near −6 dBFS. One shared convolver reverb
+// DECISION (polish): loudness. Master = gentle glue DynamicsCompressor (−20 dB, 2.5:1, 12 dB knee, 6 ms / 300 ms,
+//   Chrome's auto make-up) → LIFT trim → soft-clip limiter (WaveShaper: linear up to −4.4 dBFS, tanh knee, ceiling
+//   0.85 = −1.4 dBFS). Music sits at MUSIC_K 0.6 (was 0.35, ~6 dB under the SFX). Measured on a 20 s L12 play via
+//   renderOffline (same graph as live): −15.1 LUFS integrated, true peak −1.5 dBFS (was −23 LUFS / −3.5 dBFS);
+//   music alone −17.5 LUFS; a dense chain/combo stack −12.4 LUFS, peak −1.1 dBFS. Firefox's DynamicsCompressor
+//   squashes short blips by ~20 dB, so there a fixed FF_GAIN (matched to −15 LUFS on the same timeline) replaces it.
+//   One shared convolver reverb
 //   (post-fader sends from music and SFX) gives the cosy room.
 // DECISION (fix1): contract 1. `chain` {n, combo} plays on every chain arrival incl. n = 1 (a light pop; n ≥ 2 a
 //   rising chime, +2 st per extra ball up to +10), and `spoolDone` {i, combo} plays a wooden thunk + sparkle. Both
@@ -35,13 +38,13 @@
 import P from '../shared/platform.js';
 import { bus, SEASON_END } from './consts.js';
 
-const LOOK = 0.1, TICK_MS = 25, MAX_VOICES = 24, MUSIC_K = 0.35, MASTER = 0.8;
+const LOOK = 0.1, TICK_MS = 25, MAX_VOICES = 24, MUSIC_K = 0.6, MASTER = 0.8, LIFT = 2.2, FF_GAIN = 1.6;
 const FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
-const CLIP_CURVE = (() => { // y = x up to 0.6, then 0.6 + 0.33·tanh((x − 0.6)/0.33) (≤ −0.63 dBFS, room for 2× oversampling ringing); input pre-scaled by 0.5
+const CLIP_CURVE = (() => { // y = x up to 0.6, then 0.6 + 0.25·tanh((x − 0.6)/0.25) (ceiling 0.85 = −1.4 dBFS, room for 2× oversampling ringing); input pre-scaled by 0.5
   const n = 4096, c = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 4 - 2, a = Math.abs(x);
-    c[i] = Math.sign(x) * (a <= 0.6 ? a : 0.6 + 0.33 * Math.tanh((a - 0.6) / 0.33));
+    c[i] = Math.sign(x) * (a <= 0.6 ? a : 0.6 + 0.25 * Math.tanh((a - 0.6) / 0.25));
   }
   return c;
 })();
@@ -133,11 +136,11 @@ function makeEngine(ctx) {
   clip.connect(ctx.destination);
   const pre = G(0.5); pre.connect(clip); // the curve's input u ∈ [−1, 1] stands for x = 2u
   let comp;
-  const lift = G(1.2); lift.connect(pre); // post-compressor make-up so the loudest stinger sits near −6 dBFS
-  if (FIREFOX) comp = G(1.2);
-  else {
+  const lift = G(LIFT); lift.connect(pre); // post-glue trim: normal play ≈ −15 LUFS, the soft clip catches the rest
+  if (FIREFOX) comp = G(FF_GAIN);
+  else { // gentle glue: −20 dB, 2.5:1, wide knee, slow-ish release (no pumping); Chrome adds its own make-up gain
     comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -10; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.25;
+    comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 2.5; comp.attack.value = 0.006; comp.release.value = 0.3;
   }
   comp.connect(lift);
   const master = G(MASTER); master.connect(comp);
@@ -295,7 +298,7 @@ function makeEngine(ctx) {
     stuck() { S.sadSting(); later(0.75, () => meow('sad')); duckMusic(2); },
     meow(kind = 'cat') { meow(kind); },
     mew() { meow('mew'); },
-    purr(dur = 1.2) { purr(dur); },
+    purr(dur = 1.2, vol = 0.5) { purr(dur, vol); },
     winBody() { // fanfare + purr; the star bells come from the UI 'star' events (or the fallback timers)
       [523, 659, 784, 1046].forEach((f, i) => tone('sine', f, f, 0.35, 0.18, 0.1 + i * 0.09));
       purr(1.2, 0.42, 0.5);
@@ -619,6 +622,16 @@ export function sfx(name, ...args) {
   E.base = ctx.currentTime;
   try { E.play(name, ...args); } catch (e) { console.warn(e); }
 }
+let purrEnd = 0;
+/** Kitten Corner: a soft purr (default 1.6 s). Re-taps while one is still going are ignored, so it never stacks. */
+export function purr(dur = 1.6) {
+  if (!E || !allowed() || ctx.currentTime < purrEnd - 0.5) return;
+  const d = Math.max(0.6, Math.min(4, +dur || 1.6));
+  purrEnd = ctx.currentTime + d;
+  sfx('purr', d, 0.42);
+}
+/** A kitten meow: 'cat' (default), 'mew' or 'sad'. */
+export function meow(kind = 'cat') { sfx('meow', kind); }
 export function suspend() { held = true; sync(); }
 export function resume() { held = false; sync(); }
 export function isRunning() { return !!ctx && ctx.state === 'running'; }

@@ -472,20 +472,23 @@ export function drawPeg(g, x, y, r) {
 }
 /** Pegs + end loops of one strand (loop = small ring in the strand colour around end pegs). */
 function drawStrandPegs(g, gi, c, sw, r, dim, dx = 0, dy = 0, myst = false) {
+  for (let k = 0; k < gi.pegs.length; k++) strandPeg(g, gi, k, c, sw, r, dim, dx, dy, myst);
+}
+function strandPeg(g, gi, k, c, sw, r, dim, dx, dy, myst) {
   const col = yarnColor(myst ? -1 : c === RAINBOW ? RAINBOW : c, dim);
   const n = gi.pegs.length;
-  for (let k = 0; k < n; k++) {
-    const p = gi.pegs[k], x = p[0] + dx, y = p[1] + dy;
-    if (k === 0 || k === n - 1) {
-      const lr = r + sw * 0.32;
-      g.lineWidth = sw * 0.42 + 2.5; g.strokeStyle = INK;
-      g.beginPath(); g.arc(x, y, lr, 0, TAU); g.stroke();
-      g.lineWidth = sw * 0.42; g.strokeStyle = c === RAINBOW && !myst ? RAIN[k % 6] : col.body;
-      g.stroke();
-    }
-    drawPeg(g, x, y, r);
+  const p = gi.pegs[k], x = p[0] + dx, y = p[1] + dy;
+  if (k === 0 || k === n - 1) {
+    const lr = r + sw * 0.32;
+    g.lineWidth = sw * 0.42 + 2.5; g.strokeStyle = INK;
+    g.beginPath(); g.arc(x, y, lr, 0, TAU); g.stroke();
+    g.lineWidth = sw * 0.42; g.strokeStyle = c === RAINBOW && !myst ? RAIN[k % 6] : col.body;
+    g.stroke();
   }
+  drawPeg(g, x, y, r);
 }
+/** Extent (CSS px from the peg centre) of strandPeg's drawing. */
+const pegExt = (end, r, sw) => Math.max(end ? r + sw * 0.53 + 1.25 : 0, r * 1.4 + 1) + 2;
 
 // Moon crescent in a unit frame: outer unit circle, bite circle centre (bx, by) radius q; o0/o1 and b0/b1 are the
 // parametric angles where they meet (both ellipses are the unit circles stretched by rx, ry, so angles carry over).
@@ -769,6 +772,7 @@ export function drawSpool(g, x, y, h, c, shown, n = 3, opt = {}) {
     g.fillStyle = `rgba(255,244,228,${0.32 * opt.want})`;
     g.beginPath(); g.ellipse(0, 0, W * 0.78, H * 0.62, 0, 0, TAU); g.fill();
   }
+  if (opt.haloOnly) { g.restore(); return; } // sprite path: the live halo goes under a baked spool
   // floor shadow
   g.fillStyle = 'rgba(30,14,20,0.3)';
   g.beginPath(); g.ellipse(W * 0.05, yBot + th + ry * 0.35, W * 0.54, ry * 0.75, 0, 0, TAU); g.fill();
@@ -887,6 +891,14 @@ export function drawSpool(g, x, y, h, c, shown, n = 3, opt = {}) {
   }
 }
 
+/** Sprite boxes (CSS px) that hold an unbounced drawBall / an unscaled, unrotated drawSpool (want halo excluded). */
+const ballBox = (x, y, r) => [x - r * 1.2 - 3, y - r * 1.2 - 3, x + r * 1.6 + 3, y + r * 1.45 + 3];
+function spoolBox(x, y, h, n, w) {
+  const H = n > 3 ? h * 1.4 : h, W = Math.min(w || h * 0.8, H * 1.05) * (n > 3 ? 1.1 : 1);
+  const ry = W * 0.15, lr = Math.max(7, W * 0.2), pr = Math.max(2.6, h * 0.045), yc = y - (H - h) / 2;
+  const hx = Math.max(W * 0.62, lr * 1.25) + 4;
+  return [x - hx, yc - H / 2 + ry * 0.6 - lr * 1.55 - 4, x + hx, Math.max(yc + H / 2 + ry, y + H / 2 + pr * 3.2) + 4];
+}
 /** Yarn ball with wrap lines + glyph. opt { bounce, alpha, dim, glyph (default true) }. */
 export function drawBall(g, x, y, r, c, opt = {}) {
   const rainbow = c === RAINBOW;
@@ -1603,8 +1615,62 @@ bus.on('full', () => { fullT = lastT; });
 bus.on('blocked', d => { blockedT = lastT; if (d && d.why === 'paw') pawTw.set(d.id, lastT); });
 bus.on('levelStart', () => { fullT = -9; blockedT = -9; pawTw = new Map(); });
 
-let bake = { cv: null, board: null, key: '', bkey: '', geo: null, box: null };
-export function invalidate() { bake.key = ''; bake.bkey = ''; }
+// ------------------------------------------------------------------ device-pixel sprites (fix3 perf)
+// DECISION (fix3): every cached layer is a "device sprite": its canvas pixel (0,0) is the integer device pixel
+//   (X0, Y0) and its content is drawn at exact CSS coords through setTransform(dpr, 0, 0, dpr, -X0, -Y0), so the
+//   subpixel phase is baked in. blit() then copies it 1:1 at an integer device offset under an identity transform
+//   (a scaled / fractional drawImage resamples every pixel: measured 18 ms vs 2.4 ms for the board at 4× CPU).
+//   Moving sprites (bob, shake) snap to whole device pixels (≤ 0.5 device px, invisible at dpr ≥ 1).
+function devSprite(x0, y0, x1, y1, dpr, draw, reuse = null) {
+  const X0 = Math.floor(x0 * dpr), Y0 = Math.floor(y0 * dpr);
+  const w = Math.max(1, Math.ceil(x1 * dpr) - X0), h = Math.max(1, Math.ceil(y1 * dpr) - Y0);
+  let cv = reuse && reuse.cv;
+  if (cv && cv.width === w && cv.height === h) { const c0 = cv.getContext('2d'); c0.setTransform(1, 0, 0, 1, 0, 0); c0.clearRect(0, 0, w, h); }
+  else cv = mkCanvas(w, h);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, -X0, -Y0);
+  draw(c);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  return { cv, X0, Y0, dpr };
+}
+/** Draw sprite sp offset by (dx, dy) CSS px: 1:1 at an integer device pixel when g is a plain dpr transform. */
+function blit(g, sp, dx = 0, dy = 0) {
+  if (!sp) return;
+  const m = g.getTransform(), d = sp.dpr;
+  if (m.b === 0 && m.c === 0 && Math.abs(m.a - d) < 1e-6 && Math.abs(m.d - d) < 1e-6) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(sp.cv, Math.round(m.e + dx * d) + sp.X0, Math.round(m.f + dy * d) + sp.Y0);
+    g.setTransform(m);
+  } else g.drawImage(sp.cv, sp.X0 / d + dx, sp.Y0 / d + dy, sp.cv.width / d, sp.cv.height / d);
+}
+/** Same-geometry layer over sprite base (optionally starting from a copy of it). */
+function layerOf(base, copy, draw, reuse) {
+  let cv = reuse && reuse.cv;
+  const { width: w, height: h } = base.cv;
+  if (!cv || cv.width !== w || cv.height !== h) cv = mkCanvas(w, h);
+  const c = cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, w, h);
+  if (copy) c.drawImage(base.cv, 0, 0);
+  c.setTransform(base.dpr, 0, 0, base.dpr, -base.X0, -base.Y0);
+  draw(c);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  return { cv, X0: base.X0, Y0: base.Y0, dpr: base.dpr };
+}
+/** A per-slot sprite memo: once the key has held for 2 frames, draw() is baked to a sprite over box and blitted. */
+const memo = new Map();
+function memoDraw(g, slot, key, box, dpr, draw) {
+  let e = memo.get(slot);
+  if (!e || e.key !== key) {
+    e = { key, sp: null, n: 0, old: e && e.sp };
+    memo.set(slot, e);
+  }
+  if (!e.sp && ++e.n >= 3) { e.sp = devSprite(box[0], box[1], box[2], box[3], dpr, draw, e.old); e.old = null; }
+  if (e.sp) blit(g, e.sp); else draw(g);
+}
+
+let bake = { cv: null, board: null, key: '', bkey: '', geo: null, box: null, A: null, U: null, lkey: '' };
+export function invalidate() { bake.key = ''; bake.bkey = ''; bake.lkey = ''; memo.clear(); }
 
 function flightTarget(dest, rs, bs) {
   if (dest && dest.kind === 'spool' && rs.active[dest.slot]) { const a = rs.active[dest.slot]; return { x: a.x, y: a.y, h: a.h }; }
@@ -1694,57 +1760,55 @@ export function drawPlay(g, S) {
   let mem = fx.get(sess);
   if (!mem) { mem = { keys: new Map(), paws: new Map(), ice: null, lockOpen: new Map() }; fx.set(sess, mem); }
   for (const gi of geo) gi.B = B;
+  const dpr = S.dpr || 1;
+  const snap = v => Math.round(v * dpr) / dpr; // shakes move whole device pixels, so baked layers blit 1:1
   g.save();
-  if (sess.shake) { const k = sess.shake; g.translate((hash((T * 60) | 0, 1) - 0.5) * k * 2, (hash((T * 60) | 0, 2) - 0.5) * k * 2); }
-  { const o = shakeOffset(S); if (o.x || o.y) g.translate(o.x, o.y); }
+  if (sess.shake) { const k = sess.shake; g.translate(snap((hash((T * 60) | 0, 1) - 0.5) * k * 2), snap((hash((T * 60) | 0, 2) - 0.5) * k * 2)); }
+  { const o = shakeOffset(S); if (o.x || o.y) g.translate(snap(o.x), snap(o.y)); }
 
-  // ---- static board + covered strands (baked)
+  // ---- static board + covered strands (baked once per board change, blitted 1:1)
   const box = boardBox(B, puz.cols, puz.rows);
   const pad = Math.max(10, u * 0.5);
   const bx = Math.floor(box.ox - pad), by = Math.floor(box.oy - pad);
   const bw = Math.ceil(box.ow + pad * 2), bh = Math.ceil(box.kit.y + box.ledgeH * 2 - box.oy + pad * 2);
-  const dpr = S.dpr || 1;
   const bkey = [bx, by, bw, bh, dpr, u.toFixed(3), puz.cols, puz.rows, sess.level && sess.level.shape, sess.id].join('|');
   if (bake.bkey !== bkey || !bake.board) {
-    bake.board = mkCanvas(bw * dpr, bh * dpr);
-    const bg = bake.board.getContext('2d');
-    bg.setTransform(dpr, 0, 0, dpr, -bx * dpr, -by * dpr);
-    drawBoardStatic(bg, B, puz.cols, puz.rows, sess.level && sess.level.shape);
-    bake.bkey = bkey; bake.key = '';
+    bake.board = devSprite(bx, by, bx + bw, by + bh, dpr, bg => drawBoardStatic(bg, B, puz.cols, puz.rows, sess.level && sess.level.shape), bake.board);
+    bake.bkey = bkey; bake.key = ''; bake.lkey = '';
     try {
-      feltPattern = bg.createPattern(bake.board, 'no-repeat');
-      if (feltPattern && feltPattern.setTransform) feltPattern.setTransform(new DOMMatrix([1 / dpr, 0, 0, 1 / dpr, bx, by]));
+      feltPattern = bake.board.cv.getContext('2d').createPattern(bake.board.cv, 'no-repeat');
+      if (feltPattern && feltPattern.setTransform) feltPattern.setTransform(new DOMMatrix([1 / dpr, 0, 0, 1 / dpr, bake.board.X0 / dpr, bake.board.Y0 / dpr]));
       else feltPattern = null;
     } catch (e) { feltPattern = null; }
   }
-  const wiggling = sess.wiggles && sess.wiggles.size > 0 && [...sess.wiggles.values()].some(t0 => T - t0 < DUR.wiggle);
   const pegR = Math.max(3.5, u * 0.16);
   const drawCovered = (gg, i, dx = 0, dy = 0, wt = null) => {
     const gi = geo[i], c = puz.strands[i].c, my = isMyst(sess, i);
     drawStrand(gg, gi, c, sw, { dim: true, mystery: my, wiggleT: wt, dx, dy });
     drawStrandPegs(gg, gi, c, sw, pegR, true, 0, 0, my);
   };
-  const key = [sess.bakeKey || '', ss.removed, ss.cov.join(','), sess.revealT ? sess.revealT.size : 0, bkey, geo.length, geo[0] && geo[0].pts[0][0].toFixed(1)].join('#');
-  if (!wiggling) {
+  const removedPegs = cg => { for (let i = 0; i < puz.n; i++) if ((ss.removed >>> i) & 1 && geo[i]) for (const q of geo[i].pegs) drawPeg(cg, q[0], q[1], pegR * 0.9); };
+  // which covered strands wiggle (blocked tap): only those draw live, between a lower and an upper baked layer
+  const wt = i => { const w0 = sess.wiggles && sess.wiggles.get(i); return w0 != null && T - w0 < DUR.wiggle ? T - w0 : null; };
+  let lo = -1, hi = -1;
+  if (sess.wiggles && sess.wiggles.size) ss.cov.forEach((i, k) => { if (wt(i) != null) { if (lo < 0) lo = k; hi = k; } });
+  const key = [ss.removed, ss.cov.join(','), sess.revealT ? sess.revealT.size : 0, bkey, geo.length, geo[0] && geo[0].pts[0][0].toFixed(1)].join('#');
+  if (lo < 0) {
     if (bake.key !== key || bake.geo !== geo || !bake.cv) {
-      if (!bake.cv || bake.cv.width !== bake.board.width || bake.cv.height !== bake.board.height) bake.cv = mkCanvas(bake.board.width, bake.board.height);
-      const cg = bake.cv.getContext('2d');
-      cg.setTransform(1, 0, 0, 1, 0, 0);
-      cg.clearRect(0, 0, bake.cv.width, bake.cv.height);
-      cg.drawImage(bake.board, 0, 0);
-      cg.setTransform(dpr, 0, 0, dpr, -bx * dpr, -by * dpr);
-      for (let i = 0; i < puz.n; i++) if ((ss.removed >>> i) & 1 && geo[i]) for (const q of geo[i].pegs) drawPeg(cg, q[0], q[1], pegR * 0.9);
-      for (const i of ss.cov) drawCovered(cg, i);
+      bake.cv = layerOf(bake.board, true, cg => { removedPegs(cg); for (const i of ss.cov) drawCovered(cg, i); }, bake.cv);
       bake.key = key; bake.geo = geo;
     }
-    g.drawImage(bake.cv, bx, by, bw, bh);
+    blit(g, bake.cv);
   } else {
-    g.drawImage(bake.board, bx, by, bw, bh);
-    for (let i = 0; i < puz.n; i++) if ((ss.removed >>> i) & 1 && geo[i]) for (const q of geo[i].pegs) drawPeg(g, q[0], q[1], pegR * 0.9);
-    for (const i of ss.cov) {
-      const w0 = sess.wiggles.get(i);
-      drawCovered(g, i, 0, 0, w0 != null && T - w0 < DUR.wiggle ? T - w0 : null);
+    const lk = key + '#' + lo + '-' + hi;
+    if (bake.lkey !== lk || bake.lgeo !== geo || !bake.A) {
+      bake.A = layerOf(bake.board, true, cg => { removedPegs(cg); for (let k = 0; k < lo; k++) drawCovered(cg, ss.cov[k]); }, bake.A);
+      bake.U = hi < ss.cov.length - 1 ? layerOf(bake.board, false, cg => { for (let k = hi + 1; k < ss.cov.length; k++) drawCovered(cg, ss.cov[k]); }, bake.U) : null;
+      bake.lkey = lk; bake.lgeo = geo;
     }
+    blit(g, bake.A);
+    for (let k = lo; k <= hi; k++) drawCovered(g, ss.cov[k], 0, 0, wt(ss.cov[k]));
+    if (bake.U) blit(g, bake.U);
   }
 
   // ---- free strands live: lifted, glow, bob, hint rim, press lift
@@ -1760,8 +1824,14 @@ export function drawPlay(g, S) {
     const dy = -bob - (pressed ? 3 : 0);
     const f0 = sess.flash && sess.flash.get(i);
     const flash = f0 != null && T - f0 < 0.3 ? 1 - (T - f0) / 0.3 : 0;
-    drawStrand(g, gi, c, sw, { lift: pressed ? 2 : 1, glow: 1, hint, flash, mystery: my, reveal: rv, dy, wiggleT: w0 != null && T - w0 < DUR.wiggle ? T - w0 : null });
-    drawStrandPegs(g, gi, c, sw, pegR, false, 0, 0, my);
+    const wti = w0 != null && T - w0 < DUR.wiggle ? T - w0 : null;
+    const fe = freeSprites(geo, i, c, sw, pegR, my, dpr, bkey);
+    // a resting free strand only bobs: its baked sprite moves; press / hint / flash / reveal / wiggle draw live
+    if (!pressed && !hint && !flash && wti == null && (rv == null || rv >= 1)) {
+      if (!fe.st) fe.st = strandSprite(gi, c, sw, my, dpr);
+      blit(g, fe.st, 0, dy);
+    } else drawStrand(g, gi, c, sw, { lift: pressed ? 2 : 1, glow: 1, hint, flash, mystery: my, reveal: rv, dy, wiggleT: wti });
+    for (const ps of fe.pegs) blit(g, ps);
     if (rv != null && rv < 1) {
       const m = pointAt(gi.pts, gi.at, gi.len / 2);
       g.strokeStyle = `rgba(255,255,255,${1 - rv})`; g.lineWidth = 2;
@@ -1899,6 +1969,31 @@ export function drawPlay(g, S) {
   if (sess.parts && sess.parts.length) drawParticles(g, sess.parts, 1);
 }
 
+// free (lifted) strand sprites per geo: the resting strand (lift 1 + glow, felt gaps, stickers) and its pegs
+const freeMem = new WeakMap();
+function freeSprites(geo, i, c, sw, pegR, my, dpr, bkey) {
+  let m = freeMem.get(geo);
+  if (!m) { m = new Map(); freeMem.set(geo, m); }
+  const key = bkey + '|' + my + '|' + c + '|' + sw + '|' + pegR + '|' + dpr;
+  let e = m.get(i);
+  if (!e || e.key !== key) {
+    const gi = geo[i], n = gi.pegs.length;
+    const pegs = gi.pegs.map((p, k) => {
+      const ex = pegExt(k === 0 || k === n - 1, pegR, sw);
+      return devSprite(p[0] - ex, p[1] - ex, p[0] + ex, p[1] + ex, dpr, pg => strandPeg(pg, gi, k, c, sw, pegR, false, 0, 0, my));
+    });
+    e = { key, st: null, pegs };
+    m.set(i, e);
+  }
+  return e;
+}
+function strandSprite(gi, c, sw, my, dpr) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of gi.pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+  const M = Math.max(sw / 2 + 9, Math.max(sw * 1.02, 11.5) * 0.9 + 3) + 2;
+  return devSprite(x0 - M, y0 - M, x1 + M, y1 + M, dpr, sg => drawStrand(sg, gi, c, sw, { lift: 1, glow: 1, mystery: my }));
+}
+
 function drawTwists(g, S, sess, ss, mem, u, sw) {
   const puz = sess.puz, st = sess.st, T = S.T, geo = sess.geo;
   const removed = ss.removed;
@@ -1977,6 +2072,7 @@ function drawTwists(g, S, sess, ss, mem, u, sw) {
 
 const spoolMem = new WeakMap(); // per spool object: eased fill level, last wind time, completion time
 function drawRack(g, S, sess, rs, ui, T) {
+  const dpr = S.dpr || 1;
   const st = sess.st, puz = sess.puz;
   const act = rs.active.slice(0, Math.max(1, Math.min(2, (sess.slots || []).length || 2)));
   const nActive = (sess.slots || []).filter(s => s && (s.cur || s.leaving)).length || (st.sc ? st.sc.filter(c => c >= 0).length : 2);
@@ -1990,6 +2086,7 @@ function drawRack(g, S, sess, rs, ui, T) {
   void all;
   if (isFinite(x0)) {
     const th = Math.max(6, 9 * ui);
+    memoDraw(g, 'shelf', [x0, x1, py, th, dpr].join('|'), [x0 - 3, py - 3, x1 + 6, py + Math.max(th * 2.6, th + 4) + 4], dpr, g => {
     g.fillStyle = 'rgba(30,14,20,0.3)'; rr(g, x0 + 3, py + 4, x1 - x0, th, th * 0.45); g.fill();
     const pg = g.createLinearGradient(0, py, 0, py + th);
     pg.addColorStop(0, WALNUT_L); pg.addColorStop(1, WALNUT_D);
@@ -1999,6 +2096,7 @@ function drawRack(g, S, sess, rs, ui, T) {
     for (const bx of [x0 + th * 1.5, x1 - th * 1.5]) {
       g.fillStyle = WALNUT_D; g.beginPath(); g.moveTo(bx - th * 0.5, py + th); g.lineTo(bx + th * 0.5, py + th); g.lineTo(bx, py + th * 2.6); g.closePath(); g.fill(); g.stroke();
     }
+    });
   }
   // next queue (NEXT larger, next-next smaller), with label + "+N" chip
   if (hasNext) {
@@ -2007,7 +2105,10 @@ function drawRack(g, S, sess, rs, ui, T) {
     sess.nextQ.slice(0, 2).forEach((q, i) => {
       const p = rs.next[i];
       if (!p || !q) return;
-      drawSpool(g, p.x, p.y, p.h, q.c, 0, q.n || 3, { w: p.w, pips: false, alpha: i === 0 ? 1 : 0.85 });
+      const n = q.n || 3, al = i === 0 ? 1 : 0.85;
+      if (g.globalAlpha !== 1) drawSpool(g, p.x, p.y, p.h, q.c, 0, n, { w: p.w, pips: false, alpha: al });
+      else memoDraw(g, 'next' + i, [p.x, p.y, p.h, q.c, n, p.w, al, dpr].join('|'), spoolBox(p.x, p.y, p.h, n, p.w), dpr,
+        gg => drawSpool(gg, p.x, p.y, p.h, q.c, 0, n, { w: p.w, pips: false, alpha: al }));
     });
     const total = puz.spools ? puz.spools.length : (sess.level && sess.level.queue ? sess.level.queue.length : 0);
     const more = sess.moreN != null ? sess.moreN : total - (st.next || 0) - Math.min(2, sess.nextQ.length);
@@ -2049,7 +2150,13 @@ function drawRack(g, S, sess, rs, ui, T) {
       if (tgt >= (s.cur.n || 3) && fm.full == null) fm.full = T;
       const fresh = clamp(1 - (T - fm.at) / 0.35, 0, 1);
       const glint = fm.full != null && fm.full > 0 ? (T - fm.full) / 0.5 : 0;
-      drawSpool(g, x, y, p.h, s.cur.c, tgt, s.cur.n || 3, { w: p.w, fill: fm.v, fresh, glint, scale: sc, bounce: s.cur.bounce || 0, spin: s.cur.spin || 0, pips: e >= 1, want: want ? 0.6 + 0.4 * Math.sin(T * 4) : 0 });
+      const n = s.cur.n || 3, wantA = want ? 0.6 + 0.4 * Math.sin(T * 4) : 0, bounce = s.cur.bounce || 0, spin = s.cur.spin || 0;
+      if (e >= 1 && !bounce && !(fresh > 0) && !(glint > 0 && glint < 1) && fm.v === tgt && g.globalAlpha === 1) {
+        // resting bobbin: live halo underneath, the spool itself baked (gradients + threads once per change)
+        if (wantA) drawSpool(g, x, y, p.h, s.cur.c, tgt, n, { w: p.w, want: wantA, haloOnly: true });
+        memoDraw(g, 'spool' + k, [x, y, p.h, s.cur.c, tgt, n, p.w, spin, dpr].join('|'), spoolBox(x, y, p.h, n, p.w), dpr,
+          gg => drawSpool(gg, x, y, p.h, s.cur.c, tgt, n, { w: p.w, fill: tgt, fresh: 0, glint: 0, scale: 1, bounce: 0, spin, pips: true, want: 0 }));
+      } else drawSpool(g, x, y, p.h, s.cur.c, tgt, n, { w: p.w, fill: fm.v, fresh, glint, scale: sc, bounce, spin, pips: e >= 1, want: wantA });
     }
   });
   // Kitty
@@ -2062,7 +2169,7 @@ function drawRack(g, S, sess, rs, ui, T) {
   }
 }
 
-const basketCache = { key: '', cv: null, box: null };
+const basketCache = { key: '', sp: null, box: null };
 function drawBasket(g, S, sess, bs, ui, T, mem) {
   const st = sess.st, puz = sess.puz;
   const cap = bs.length;
@@ -2074,9 +2181,7 @@ function drawBasket(g, S, sess, bs, ui, T, mem) {
   const m = r * 0.6;
   if (basketCache.key !== key) {
     const W = x1 - x0 + m * 2, H = hh + m * 2 + r * 0.4;
-    basketCache.cv = mkCanvas(W * dpr, H * dpr);
-    const bg = basketCache.cv.getContext('2d');
-    bg.setTransform(dpr, 0, 0, dpr, (-x0 + m) * dpr, (-top + m) * dpr);
+    basketCache.sp = devSprite(x0 - m, top - m, x0 - m + W, top - m + H, dpr, bg => {
     // shadow
     bg.fillStyle = 'rgba(30,14,20,0.3)'; rr(bg, x0 + 3, top + 6, x1 - x0, hh, r * 0.8); bg.fill();
     // weave
@@ -2109,6 +2214,7 @@ function drawBasket(g, S, sess, bs, ui, T, mem) {
       bg.fillStyle = wg; bg.beginPath(); bg.ellipse(p.x, p.y + p.r * 0.05, p.r * 1.05, p.r * 0.98, 0, 0, TAU); bg.fill();
       bg.strokeStyle = 'rgba(255,220,170,0.35)'; bg.lineWidth = 1.2; bg.beginPath(); bg.arc(p.x, p.y + p.r * 0.05, p.r * 1.05, 0.2, Math.PI - 0.2); bg.stroke();
     }
+    }, basketCache.sp);
     basketCache.key = key;
     basketCache.box = { x: x0 - m, y: top - m, w: W, h: H };
   }
@@ -2117,7 +2223,8 @@ function drawBasket(g, S, sess, bs, ui, T, mem) {
   const shake = shT >= 0 && shT < 0.5 ? Math.sin(shT * 60) * r * 0.18 * (1 - shT / 0.5) : 0;
   g.save();
   if (shake) g.translate(shake, 0);
-  g.drawImage(basketCache.cv, bx.x, bx.y, bx.w, bx.h);
+  blit(g, basketCache.sp);
+  void bx;
   // state glows: amber at cap−1, red when full / refused / stuck
   const thaw = puz.ice || 0;
   const left = sess.iceLeft != null ? sess.iceLeft : Math.max(0, thaw - (st.done || 0));
@@ -2149,7 +2256,11 @@ function drawBasket(g, S, sess, bs, ui, T, mem) {
   const vis = sess.basket || [];
   for (let b = 0; b < cap; b++) {
     const p = bs[b], v = vis[b];
-    if (v && v.arrived !== false) drawBall(g, p.x, p.y, p.r * 0.92, v.c, { bounce: v.bounce || 0 });
+    if (v && v.arrived !== false) {
+      const br = p.r * 0.92;
+      if (v.bounce) drawBall(g, p.x, p.y, br, v.c, { bounce: v.bounce });
+      else memoDraw(g, 'ball' + b, [p.x, p.y, br, v.c, dpr].join('|'), ballBox(p.x, p.y, br), dpr, gg => drawBall(gg, p.x, p.y, br, v.c, {}));
+    }
   }
   // ice slot (last) with crack stages; shatter when thawed
   if (thaw) {

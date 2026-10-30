@@ -10,15 +10,14 @@
 //   pumpkin with par 3, so the CHAIN x3 climax (three balls waiting in a cap-4 basket) is also a clean 3-star win.
 //   It is patched onto the levels-data.js object before the session is built; normal play never sees it.
 // DECISION: record/og swallow the events that raise UI band callouts (basketWarn, full, doomed, hint...) before they
-//   reach listeners (still logged for the soundtrack), so the take shows exactly one caption at a time. The CHAIN xn!
-//   pop is UI's (contract 1); modes draws its own only when UI didn't pop it (old ui.js), keyed off the chain event.
+//   reach listeners (still logged for the soundtrack), so the take shows exactly one caption at a time. In record the
+//   chain/coins pops are held back too: the take draws its own full-frame CHAIN xN! pop (see the ?record=1 notes).
 // DECISION: cap2 ("1 slot left") is shown only while the basket really sits at cap-1 (PLAYBOOK lesson:
-//   a number caption must agree with the HUD on every frame), between the 3rd basket pull and the key pull.
+//   a number caption must agree with the HUD on every frame), from the hover right before the key pull.
 // DECISION: the scripted hand is drawn for every scripted tap (playable-ad style), not only the first.
-// DECISION: the planner scores every winning rollout by simulating the tap schedule with the §3.4 spool hand-over
-//   waits (DUR), so it picks the line whose beats actually land: key pull ~15 s, win card ~20.5 s. With 20+ strands
-//   that means the CHAIN often comes at move ~15-17 rather than 11-13 (the 3.5-9 s run carries more, faster pulls).
-// DECISION: record/OG audio = the logged bus events handed to audio.renderOffline as {t, name: busEvent, args: data},
+// DECISION: the showcase board carries its picked line (SHOWCASE.show); other boards (?lv=) use planShow's seeded
+//   search. The take's runtime is adaptive (build pulls spread so the key press lands at KEY_AT), not a fixed schedule.
+// DECISION: record/OG audio = the logged bus events handed to audio.js as {t, name: busEvent, args: data},
 //   so the soundtrack uses audio.js's own live mapping; unknown events fall back to §8.2 SFX names.
 // DECISION: __qaInput finds UI buttons by scanning S.ui for {x,y,w,h}+label objects; when none match it
 //   drives the state machine through api (go / next / retry / resume) and returns [] so the checker polls.
@@ -43,9 +42,9 @@ const int = (v, d, lo, hi) => { const n = parseInt(v, 10); return Number.isFinit
 const LV_PARAM = Q.has('lv') ? int(Q.get('lv'), 20, 1, LEVELS) : null;
 const LV = LV_PARAM || 20;
 const SEED = int(Q.get('seed'), 1, 0, 1e9);
-const HOOK = Q.has('hook') ? Q.get('hook') : 'Pull them in the|RIGHT order 🧶';
-const CAP2 = Q.has('cap2') ? Q.get('cap2') : '1 slot left… 😬';
-const FPS = 60, END_T = 25, ENDCARD_T = 22.5;
+const HOOK = Q.has('hook') ? Q.get('hook') : 'Untie her in the|RIGHT order 🧶';
+const CAP2 = Q.has('cap2') ? Q.get('cap2') : '1 slot left…|which one? 😬';
+const FPS = 60;
 const DURS = { leave: DUR.spoolLeave ?? 0.45, enter: DUR.spoolEnter ?? 0.3, ubDelay: DUR.unbasketDelay ?? 0.28, ubDur: DUR.unbasketDur ?? 0.38 };
 
 // Record and OG takes must never touch the real save.
@@ -167,19 +166,52 @@ function applyShowcase() {
 // is held back too, because its COMBO pop would replace the CHAIN x3 climax pop in the same frame.
 const MUTED = new Set(['basketWarn', 'full', 'doomed', 'hint', 'thaw', 'booster', 'boosterRefused', 'stuck', 'spoolDone']);
 
-// ================================================================== ?record=1  (GDD §12.1)
-const REC = { ready: false, t: 0, frames: 0, items: [], held: null, log: [], plan: null, hand: null, lastTapT: 0,
-  keyT: null, cap2On: null, cap2Off: null, pulls0: 0, lastFire: -9, pop: null, chainMax: 0, miss: null, hover: null };
+// ================================================================== ?record=1  (GDD §12.1, PLAYBOOK §6)
+// Polish cut (~23 s, loops). Video time REC.t runs at a fixed 60 fps; GAME time runs through a speed curve
+// (build 1.6x, slam 2.6x, ball flight 1.5x, hit-stop + slow-mo on the CHAIN, rescue 0.95x, win card 1.25x), so the
+// beats land where a Short needs them while the soundtrack (logged against video time) stays in sync:
+//   0.0  hook band + a big tied-up kitten with a "Help!" bubble; first pull ~0.1 s, sad meow on frame 0
+//   2.1  kitten shrinks back onto her ledge     3.0 stakes caption (mid=)
+//   ~7.6 basket at cap-1: "1 slot left" (cap2=) while the hand hesitates over a decoy ("which one?")
+//   ~8.2 key pull -> three balls slam the spool in ~0.4 s -> hit-stop, white flash, shake, huge CHAIN x3! (the caption)
+//   cap3 over the last pulls while the camera pushes in; kittenFree -> rescue zoom, big hearts, FREE band
+//   win card, end card, then the last 0.5 s crossfades into frame 0 so the Short loops cleanly.
+// 'over' = end card + END_HOLD; tools/record.mjs keeps a 3.5 s tail after it (TAIL below must match --tail).
+// DECISION: the take renders at dpr 1.6 (1728x3072 backing store, under MAX_PIXELS) and recFrame downsamples to
+//   1080x1920, so the camera push-ins (raster crops of the finished frame) stay sharp. The kitten and hand are
+//   re-drawn as vectors on top of the crop.
+// DECISION: 'chain' and 'coins' reach no listeners in record (still logged for the soundtrack): UI's small rack pop
+//   would double up with the take's own full-frame CHAIN pop.
+// DECISION: the soundtrack is mastered here (audio.renderBuffer -> BS.1770 integrated loudness -> gain to -14 LUFS
+//   -> 4 ms look-ahead limiter at -1.5 dBFS), since audio.js's own volumes clamp at 1.0 (~ -27 dBFS raw).
+const MID = Q.has('mid') ? Q.get('mid') : 'Basket fills up =|she stays stuck 😿';
+const CAP3 = Q.has('cap3') ? Q.get('cap3') : 'Almost free… 🥺';
+const FREED = Q.has('free') ? Q.get('free') : 'She’s FREE! 😻';
+const num = (k, d, lo, hi) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+const KEY_AT = num('key', 8.2, 3, 20); // video time of the key press
+const REC_DPR = num('rdpr', 1.6, 1, 2.5);
+const SPD = { build: 1.6, slam: 2.6, ball: 1.5, post: 1.45, rescue: 0.85, win: 1.25 };
+const HOOK_END = 3.0, HERO_OUT = 2.1, HOVER = 0.75, GAP_MIN = 0.34, GAP_MAX = 0.8, GAP_AFTER = 0.42;
+const POP_DUR = 1.35, WIN_HOLD = 4.0, END_HOLD = 2.2, TAIL = 3.5, LOOP_X = 0.5, LUFS = -14, CEIL_DB = -1.5;
+const REC_MUTED = new Set(['chain', 'coins']);
+const HERO_MEM = {};
+const REC = { ready: false, t: 0, frames: 0, log: [], plan: null, line: [], k: -1, i: 0, hand: null, held: null, aim: null,
+  lastFire: -9, keyT: null, popT: null, pop: null, chainMax: 0, cap2On: null, hover: null, hov0: null, freeT: null, winT: null,
+  endT: null, overT: null, spd: 1, cam: null, camFree: null, snap: null, buf: null, out: null, pulls: [], loud: null };
 
 function installRecord() {
   window.__rec = { step: recStep, frame: recFrame, audio: recAudio };
-  // Log every bus event against record time for the offline soundtrack; the callout/pop events stop here.
+  window.__recDbg = () => ({ keyT: REC.keyT, popT: REC.popT, cap2On: REC.cap2On, freeT: REC.freeT, winT: REC.winT, endT: REC.endT,
+    overT: REC.overT, chainMax: REC.chainMax, pulls: REC.pulls, loud: REC.loud, dpr: A.S.dpr });
+  // Log every bus event against record (video) time for the offline soundtrack; callout/pop events stop here.
   const emit0 = bus.emit;
   bus.emit = (t, d) => {
     if (REC.ready) {
       REC.log.push({ t: REC.t, ev: t, data: d == null ? d : { ...d } });
       if (t === 'chain' && d) onChain(d);
-      if (MUTED.has(t)) return;
+      if (t === 'pull') REC.pulls.push(+REC.t.toFixed(2));
+      if (t === 'kittenFree' && REC.freeT == null) REC.freeT = REC.t;
+      if (MUTED.has(t) || REC_MUTED.has(t)) return;
     }
     return emit0.call(bus, t, d);
   };
@@ -187,58 +219,107 @@ function installRecord() {
     await fontsReady();
     prepShowcaseSave(LV);
     REC.showcase = applyShowcase();
-    A.resize(1080, 1920, 1);
+    A.resize(1080, 1920, REC_DPR);
     A.go('play', { kind: 'level', id: LV });
     const s = A.S.sess;
     const t0 = performance.now();
     REC.plan = planShow(s, s.st, SEED, 2500);
     REC.planMs = Math.round(performance.now() - t0);
-    REC.items = scheduleShow(REC.plan);
-    REC.hand = { x: A.S.W * 0.82, y: A.S.H * 0.97, fx: A.S.W * 0.82, fy: A.S.H * 0.97, tx: A.S.W * 0.82, ty: A.S.H * 0.97, mt: -1 };
-    REC.lastTapT = REC.items.length ? REC.items[REC.items.length - 1].t : 0;
-    // Frame 0 already shows the hand resting on the first strand (the hook frame must read as "play this").
-    const f0 = REC.items[0], p0 = f0 && f0.id != null ? A.tapPointFor(f0.id) : null;
-    if (p0) { const h = REC.hand; h.fx = h.tx = p0.x + 40; h.fy = h.ty = p0.y + 60; }
+    REC.line = REC.plan.line.slice();
+    REC.k = REC.plan.chain >= 2 ? REC.plan.k : -1;
+    const W = A.S.W, H = A.S.H;
+    REC.hand = { fx: W * 0.82, fy: H * 0.97, tx: W * 0.82, ty: H * 0.97, mt: -1, dur: 0.25 };
+    // Frame 0 already shows the hand resting on the first strand: the press lands on the first stepped frame.
+    const p0 = REC.line.length ? A.tapPointFor(REC.line[0]) : null;
+    if (p0) { const h = REC.hand; h.fx = h.tx = p0.x; h.fy = h.ty = p0.y; REC.aim = { i: 0, x: p0.x, y: p0.y, at: 0 }; }
     REC.ready = true;
-    A.step(0); // draw frame 0 (hook caption + board) before the first step
+    A.step(0); // draw frame 0 (hook band + hero kitten + board) before the first step
+    REC.snap = copyCanvas(REC.snap); // the loop crossfade lands on exactly this frame
     window.__recPlan = { line: REC.plan.line, key: REC.plan.k, chain: REC.plan.chain, peak: REC.plan.peak, stars: REC.plan.stars,
-      ms: REC.planMs, score: Math.round(REC.plan.score), est: REC.plan.est, showcase: REC.showcase, n: s.puz.n };
+      ms: REC.planMs, score: Math.round(REC.plan.score), showcase: REC.showcase, n: s.puz.n, dpr: A.S.dpr };
     window.__recReady = true;
   });
 }
 // Contract 1: chain {n, combo} on every ball landing (n = balls absorbed by that spool so far); older play.js sends {m}.
 function onChain(d) {
   const n = (d.n != null ? d.n : d.m) | 0;
-  if (n < 2) return;
   REC.chainMax = Math.max(REC.chainMax, n);
-  REC.pop = { n, t: REC.t, slot: d.slot == null ? -1 : d.slot };
+  if (n >= 3 && REC.popT == null) { REC.popT = REC.t; REC.pop = { n, t: REC.t }; }
+  else if (REC.pop && n > REC.pop.n && REC.t - REC.pop.t < 0.3) REC.pop.n = n; // a 4th ball right behind the 3rd
 }
 
 function recState() {
   const S = A.S, s = S.sess;
   const stars = P.data && Array.isArray(P.data.stars) ? P.data.stars.reduce((a, b) => a + (b | 0), 0) : 0;
-  return { t: REC.t, mode: REC.t >= END_T ? 'over' : S.screen, score: stars, dead: false,
+  return { t: REC.t, mode: REC.overT != null && REC.t >= REC.overT - 1e-6 ? 'over' : S.screen, score: stars, dead: false,
     pulls: s && s.st ? s.st.moves : 0, basket: s && s.st ? s.st.bt : 0 };
 }
 
+// Game-time speed for the next frame (video time is always 1/60 s per frame).
+function gameSpeed(t) {
+  if (REC.endT != null && t >= REC.endT) return 1;
+  if (REC.winT != null) return SPD.win;
+  if (REC.freeT != null) return SPD.rescue;
+  if (REC.popT != null) {
+    const a = t - REC.popT;
+    if (a < 0.12) return 0.05; // hit-stop on the slam
+    if (a < 0.95) return 0.3 + (SPD.post - 0.3) * ease((a - 0.12) / 0.83); // slow-mo ramp back up under the pop
+    return SPD.post;
+  }
+  if (REC.keyT != null) return ballsFlying() ? SPD.ball : SPD.slam;
+  return SPD.build;
+}
+function ballsFlying() {
+  const S = A.S, s = S.sess;
+  return !!(s && Array.isArray(s.flights) && s.flights.some(f => f && f.kind === 'ball' && !f.wait && S.T >= f.t0 - 0.03));
+}
 function recStep(n = 1) {
   if (!REC.ready) return recState();
   for (let i = 0; i < n; i++) {
     runScript();
-    A.step(1 / FPS);
+    REC.spd = gameSpeed(REC.t);
+    A.step(REC.spd / FPS);
     REC.frames++;
     REC.t = REC.frames / FPS;
+    if (REC.winT == null && A.S.screen === 'win') REC.winT = REC.t;
+    if (REC.endT == null && (REC.winT != null || REC.t >= 21)) {
+      REC.endT = REC.winT != null ? REC.winT + WIN_HOLD : REC.t; // no win by 21 s: cut to the end card anyway
+      REC.overT = REC.endT + END_HOLD;
+    }
   }
   return recState();
 }
 
+function copyCanvas(into) {
+  const c = canvasEl();
+  if (!c || !c.width || typeof document === 'undefined' || !document.createElement) return null;
+  const o = into || document.createElement('canvas');
+  if (o.width !== c.width || o.height !== c.height) { o.width = c.width; o.height = c.height; }
+  const x = o.getContext && o.getContext('2d');
+  if (!x) return null;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.drawImage(c, 0, 0);
+  return o;
+}
+// Frames go out at the take's logical size (1080x1920), downsampled from the dpr-1.6 backing store.
 function recFrame(q = 0.92) {
   const c = canvasEl();
-  return c ? c.toDataURL('image/jpeg', q) : '';
+  if (!c) return '';
+  const W = A.S.W, H = A.S.H;
+  if (c.width && c.width !== W && typeof document !== 'undefined' && document.createElement) {
+    const o = REC.out || (REC.out = document.createElement('canvas'));
+    if (o.width !== W || o.height !== H) { o.width = W; o.height = H; }
+    const x = o.getContext('2d');
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(c, 0, 0, W, H);
+    return o.toDataURL('image/jpeg', q);
+  }
+  return c.toDataURL('image/jpeg', q);
 }
 
-// Soundtrack: the logged bus events go to audio.renderOffline as {t, name: busEvent, args: data}; audio.js maps
-// them with its own live handlers (same sounds as play). Events audio.js doesn't know fall back to §8.2 SFX names.
+// Soundtrack: the logged bus events go to audio.js as {t, name: busEvent, args: data}; audio.js maps them with its own
+// live handlers (same sounds as play). Events audio.js doesn't know fall back to §8.2 SFX names.
 const SFX_OF = {
   pluck: d => ['pluck', [d.i | 0]], pull: () => ['zip', [0.45]], wind: d => ['wind', [d.k, d.n]],
   spoolDone: () => ['spoolDone', []], chain: d => ['chain', [d.m | 0]], basket: () => ['basket', []],
@@ -263,7 +344,15 @@ export function recTimeline(log, dur) {
 async function recAudio(dur) {
   const world = safe(() => A.S.world, 0) || Math.min(6, Math.floor((LV - 1) / 10) + 1);
   const tl = recTimeline(REC.log, dur);
+  tl.unshift({ t: 0, name: 'meow', args: ['sad'] }); // the hook frame speaks: "Help!"
+  if (REC.freeT != null) tl.push({ t: REC.freeT + 0.35, name: 'purr', args: [] });
   tl.world = world;
+  if (typeof Au.renderBuffer === 'function') {
+    try {
+      const buf = await Au.renderBuffer(tl, dur, world);
+      if (buf && buf.getChannelData) return wavOf(master(buf));
+    } catch (e) { P.error(e); }
+  }
   if (!Au.renderOffline) return silentWav(dur);
   try {
     const b64 = await Au.renderOffline(tl, dur, world);
@@ -280,9 +369,94 @@ function silentWav(dur) {
   s(0, 'RIFF'); v.setUint32(4, bytes - 8, true); s(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
   v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
   v.setUint16(34, 16, true); s(36, 'data'); v.setUint32(40, n * 2, true);
+  return b64Of(u);
+}
+function b64Of(u) {
   let str = '';
   for (let i = 0; i < u.length; i += 0x8000) str += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
   return btoa(str);
+}
+function wavOf({ chs, sr }) {
+  const ch = chs.length, n = chs[0].length, bytes = 44 + n * ch * 2;
+  const u = new Uint8Array(bytes), v = new DataView(u.buffer);
+  const s = (o, t) => { for (let i = 0; i < t.length; i++) u[o + i] = t.charCodeAt(i); };
+  s(0, 'RIFF'); v.setUint32(4, bytes - 8, true); s(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, ch, true); v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true);
+  v.setUint16(34, 16, true); s(36, 'data'); v.setUint32(40, n * ch * 2, true);
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
+    const x = Math.max(-1, Math.min(1, chs[c][i] || 0));
+    v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+    o += 2;
+  }
+  return b64Of(u);
+}
+
+// ---- mastering: BS.1770-4 integrated loudness (K-weighted, 400 ms blocks, -70 / -10 LU gates), gain, limiter.
+function biquad(x, c) {
+  const y = new Float32Array(x.length);
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const xi = x[i], yi = c[0] * xi + c[1] * x1 + c[2] * x2 - c[3] * y1 - c[4] * y2;
+    x2 = x1; x1 = xi; y2 = y1; y1 = yi; y[i] = yi;
+  }
+  return y;
+}
+function kWeights(sr) {
+  let Q = 0.7071752369554193, fc = 1681.9744509555319, w = 2 * Math.PI * fc / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * Q);
+  const A = 10 ** (3.99984385397 / 40), sA = Math.sqrt(A);
+  let a0 = (A + 1) - (A - 1) * cs + 2 * sA * al;
+  const shelf = [A * ((A + 1) + (A - 1) * cs + 2 * sA * al) / a0, -2 * A * ((A - 1) + (A + 1) * cs) / a0,
+    A * ((A + 1) + (A - 1) * cs - 2 * sA * al) / a0, 2 * ((A - 1) - (A + 1) * cs) / a0, ((A + 1) - (A - 1) * cs - 2 * sA * al) / a0];
+  Q = 0.5003270373253953; fc = 38.13547087613982; w = 2 * Math.PI * fc / sr; cs = Math.cos(w); al = Math.sin(w) / (2 * Q); a0 = 1 + al;
+  const hp = [(1 + cs) / 2 / a0, -(1 + cs) / a0, (1 + cs) / 2 / a0, -2 * cs / a0, (1 - al) / a0];
+  return [shelf, hp];
+}
+function loudness(chs, sr) {
+  const [sh, hp] = kWeights(sr), n = chs[0].length;
+  const pre = chs.map(x => {
+    const y = biquad(biquad(x, sh), hp), p = new Float64Array(n + 1);
+    for (let i = 0; i < n; i++) p[i + 1] = p[i] + y[i] * y[i];
+    return p;
+  });
+  const blk = Math.round(0.4 * sr), hop = Math.round(0.1 * sr), z = [];
+  for (let s = 0; s + blk <= n; s += hop) { let m = 0; for (const p of pre) m += (p[s + blk] - p[s]) / blk; z.push(m); }
+  const L = m => -0.691 + 10 * Math.log10(Math.max(1e-12, m));
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  let g = z.filter(m => L(m) > -70);
+  if (!g.length) return -70;
+  const rel = L(mean(g)) - 10;
+  g = g.filter(m => L(m) > rel);
+  return g.length ? L(mean(g)) : -70;
+}
+function limiter(chs, sr, ceil) {
+  const n = chs[0].length, la = Math.max(1, Math.round(0.004 * sr)), rel = 1 - Math.exp(-1 / (0.06 * sr));
+  const g = new Float32Array(n);
+  let cur = 1;
+  for (let i = n - 1; i >= 0; i--) { // backward: the gain is already down `la` samples before a peak
+    let p = 0;
+    for (const x of chs) { const a = Math.abs(x[i]); if (a > p) p = a; }
+    cur = Math.min(p > ceil ? ceil / p : 1, cur + 1 / la);
+    g[i] = cur;
+  }
+  cur = g[0];
+  for (let i = 0; i < n; i++) { cur = Math.min(g[i], cur + (1 - cur) * rel); for (const x of chs) x[i] *= cur; } // forward: 60 ms release
+}
+function master(buf) {
+  const sr = buf.sampleRate, chs = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chs.push(Float32Array.from(buf.getChannelData(c)));
+  const ceil = 10 ** (CEIL_DB / 20), L0 = loudness(chs, sr);
+  let L = L0;
+  for (let it = 0; it < 4 && L > -60 && Math.abs(L - LUFS) > 0.25; it++) {
+    const gn = 10 ** (Math.min(30, LUFS - L) / 20);
+    for (const x of chs) for (let i = 0; i < x.length; i++) x[i] *= gn;
+    limiter(chs, sr, ceil);
+    L = loudness(chs, sr);
+  }
+  let pk = 0;
+  for (const x of chs) for (let i = 0; i < x.length; i++) pk = Math.max(pk, Math.abs(x[i]));
+  REC.loud = { inLUFS: +L0.toFixed(1), outLUFS: +L.toFixed(1), peakDb: +(20 * Math.log10(pk || 1e-9)).toFixed(2) };
+  return { chs, sr };
 }
 
 // ------------------------------------------------------------------ record planner
@@ -464,22 +638,6 @@ function simSchedule(items, line, info) {
     end: +(free + (DUR.kittenFree ?? 1.6)).toFixed(2) };
 }
 
-function pickCovered(sess) {
-  const { puz, st } = sess;
-  let best = -1, bs = -Infinity;
-  for (let id = 0; id < puz.n; id++) {
-    if ((st.removed >>> id) & 1) continue;
-    const c = R.canPull ? R.canPull(puz, st, id) : null;
-    if (!c || c.ok || c.why !== 'covered') continue;
-    const nb = (c.blockers || []).length || 1;
-    const p = A.tapPointFor(id);
-    // one or two blockers reads best; prefer the middle of the board (the camera's eye line)
-    const mid = p ? -Math.abs(p.y - A.S.H * 0.48) / (A.S.H * 0.25) - Math.abs(p.x - A.S.W / 2) / A.S.W : -2;
-    const sc = -Math.abs(nb - 1.5) * 2 + mid;
-    if (sc > bs) { bs = sc; best = id; }
-  }
-  return best;
-}
 // Decoy for the "which one?" hover: a free strand that would land in the basket (filling it) and isn't the key.
 function pickDecoy(sess, avoid) {
   const { puz, st } = sess;
@@ -496,159 +654,329 @@ function pickDecoy(sess, avoid) {
   return best;
 }
 
-function glideTo(x, y) {
+function glideTo(x, y, dur = 0.25) {
   const h = REC.hand, e = handPos();
-  h.fx = e.x; h.fy = e.y; h.tx = x; h.ty = y; h.mt = REC.t;
+  h.fx = e.x; h.fy = e.y; h.tx = x; h.ty = y; h.mt = REC.t; h.dur = dur;
+}
+function aimAt(i, id, dur) {
+  const p = A.tapPointFor(id);
+  if (!p) return false;
+  glideTo(p.x, p.y, dur);
+  REC.aim = { i, x: p.x, y: p.y, at: REC.t + dur * 0.85 };
+  return true;
+}
+// Build pulls are spread so the key press lands at KEY_AT whatever the spool hand-overs cost on the way.
+function buildGap(i) {
+  if (REC.k < 0) return 0.45;
+  const left = REC.k - i, end = KEY_AT - HOVER - 0.45;
+  return left > 0 ? Math.max(GAP_MIN, Math.min(GAP_MAX, (end - REC.lastFire) / left)) : GAP_MIN;
 }
 function runScript() {
   const S = A.S, s = S.sess;
-  if (!s) return;
+  if (!s || S.screen !== 'play') return;
+  const t = REC.t;
   if (REC.held) {
-    if (REC.t >= REC.held.upAt) { A.pointer('up', REC.held.x, REC.held.y, 1); REC.held = null; }
+    if (t >= REC.held.upAt) { A.pointer('up', REC.held.x, REC.held.y, 1); REC.held = null; }
     return;
   }
-  const it = REC.items[0];
-  if (!it) return;
-  if (it.hover) {
-    // Hesitate over a wrong strand while the "1 slot left" caption is up, then move on.
-    if (!it.pt && REC.t >= it.t) {
-      const id = pickDecoy(s, it.avoid);
-      const p = id >= 0 ? A.tapPointFor(id) : null;
-      if (!p) { REC.items.shift(); return; }
-      it.pt = { x: p.x, y: p.y };
-      it.end = REC.t + it.dur;
-      glideTo(p.x, p.y);
-      REC.hover = { t0: REC.t, t1: it.end };
+  const i = REC.i;
+  if (i >= REC.line.length) return;
+  const id = REC.line[i], key = i === REC.k, free = sessFree(s);
+  if (key) {
+    // "1 slot left… which one?": the finger circles a wrong strand, then goes for the key.
+    if (!REC.hover) {
+      if (!free || t < REC.lastFire + 0.3) return;
+      const cap = effCap(s.puz, s.st);
+      if (s.st.bt === cap - 1) REC.cap2On = t;
+      const d = pickDecoy(s, id), p = d >= 0 ? A.tapPointFor(d) : null;
+      REC.hover = { t0: t, t1: t + (p ? HOVER : 0.2) };
+      REC.hov0 = t;
+      if (p) glideTo(p.x + 10, p.y + 10, 0.22);
+      return;
     }
-    if (it.end != null && REC.t >= it.end) { REC.items.shift(); REC.hover = null; }
+    if (t < REC.hover.t1) return;
+    if (!REC.aim || REC.aim.i !== i) { if (!aimAt(i, id, 0.2)) REC.i++; return; }
+  } else {
+    if (!REC.aim || REC.aim.i !== i) { if (!aimAt(i, id, i === 0 ? 0 : 0.22)) { REC.i++; return; } }
+    const after = REC.k >= 0 && i > REC.k;
+    if (after) {
+      if (REC.popT == null && t < REC.keyT + 1.6) return; // let the slam play out
+      if (REC.popT != null && t < REC.popT + 0.6) return;
+    }
+    if (t < REC.lastFire + (i === 0 ? 0 : after ? GAP_AFTER : buildGap(i))) return;
+  }
+  if (t < REC.aim.at || !free) return;
+  if (!canPullOk(s.puz, s.st, id)) {
+    // Rule state diverged from the plan (should not happen): finish with the solver from here, no key beat.
+    REC.line = REC.line.slice(0, i).concat(lineFrom(s, s.st).line);
+    if (REC.k >= i) REC.k = -1;
+    REC.aim = null;
     return;
   }
-  // Glide the hand to the next target a moment before the press.
-  if (!it.pt && REC.t >= it.t - 0.42 && S.screen === 'play') {
-    if (it.cover) { it.id = pickCovered(s); if (it.id < 0) { REC.items.shift(); return; } }
-    const p = A.tapPointFor(it.id);
-    if (!p) { REC.items.shift(); return; }
-    it.pt = { x: p.x, y: p.y };
-    glideTo(p.x, p.y);
-  }
-  if (REC.t < it.t || !it.pt || S.screen !== 'play' || !sessFree(s)) return;
-  if (!it.key && !it.cover && REC.t < REC.lastFire + 0.4) return; // after a spool wait, taps resume at a readable pace
-  if (!it.cover && !canPullOk(s.puz, s.st, it.id)) {
-    // Rule state diverged from the plan (should not happen): re-plan from here, keep the timing.
-    const L = lineFrom(s, s.st).line, rest = REC.items.filter(x => !x.cover && !x.hover);
-    REC.items = REC.items.filter(x => x.cover || x.hover);
-    let t = REC.t;
-    L.forEach((id, i) => { t = rest[i] ? Math.max(rest[i].t, t) : t + 0.4; REC.items.push({ t, id, hold: 0.14, key: rest[i] && rest[i].key }); });
-    REC.items.sort((a, b) => a.t - b.t);
-    return;
-  }
-  REC.items.shift();
-  REC.lastFire = REC.t;
-  if (it.key) REC.keyT = REC.t;
-  if (it.cover) REC.miss = { x: it.pt.x, y: it.pt.y, t: REC.t };
-  A.pointer('down', it.pt.x, it.pt.y, 1);
-  REC.held = { x: it.pt.x, y: it.pt.y, upAt: REC.t + it.hold };
-  REC.lastTapT = Math.max(REC.lastTapT, REC.t + it.hold);
+  REC.i++;
+  REC.lastFire = t;
+  if (key) { REC.keyT = t; REC.hover = null; }
+  A.pointer('down', REC.aim.x, REC.aim.y, 1);
+  REC.held = { x: REC.aim.x, y: REC.aim.y, upAt: t + (key ? 0.16 : 0.1) };
 }
 
 // ------------------------------------------------------------------ record overlay
 const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const easeOut = x => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
 function handPos() {
   const h = REC.hand;
-  const k = ease((REC.t - h.mt) / 0.3);
+  const k = ease((REC.t - h.mt) / (h.dur || 0.25));
   return { x: h.fx + (h.tx - h.fx) * k, y: h.fy + (h.ty - h.fy) * k };
 }
 function uOf(S) { return (S.L && S.L.u) || Math.min(S.W / 390, S.H / 700, 2.6); }
+const kitBox = S => { const B = S.sess && S.sess.B, k = B && B.kitten; return k && k.s ? k : null; };
 
-const HOOK_END = 3.0;
-function drawRecOverlay(g, S) {
-  const t = REC.t, u = uOf(S), k = S.W / 1080;
-  const s = S.sess;
-  if (t < ENDCARD_T) {
-    drawMiss(g, S, t, k);
-    drawChainPop(g, S, t, k);
-  }
-  // Scripted hand (hidden once the level is over). On from frame 0, resting by the first strand.
-  const handOn = t < REC.lastTapT + 0.6 && S.screen === 'play' && !(s && s.result) && t < ENDCARD_T;
-  if (handOn) {
-    let p = handPos();
-    if (REC.hover && t >= REC.hover.t0 + 0.3) {
-      // hesitation: the finger circles the wrong strand ("this one?") without pressing
-      const w = t - REC.hover.t0 - 0.3;
-      p = { x: p.x + Math.sin(w * 7) * 14 * k, y: p.y - Math.abs(Math.sin(w * 3.5)) * 18 * k };
+// Camera (logical px): centre + zoom. Push-in after the pop, rescue zoom on kittenFree, hard cut back for the win card.
+function camAt(S, t) {
+  const W = S.W, H = S.H, kb = kitBox(S), B = S.sess && S.sess.B;
+  const base = { x: W / 2, y: H / 2, z: 1 };
+  if (S.screen !== 'play' || REC.winT != null) return base;
+  let c = base;
+  const bx = B && B.x != null ? B.x + B.w / 2 : W / 2;
+  if (REC.popT == null && B && B.y != null) {
+    // Build: slow push onto the board so the thinning yarn fills the frame; on the "which one?" hover, punch in on
+    // the last strands + kitten + basket; whip back out on the key press so the slam to the rack is in shot.
+    const out = REC.keyT != null ? 1 - ease((t - REC.keyT - 0.04) / 0.28) : 1;
+    const pb = ease((t - (HOOK_END - 0.4)) / 4.6) * out;
+    c = { x: W / 2 + (bx - W / 2) * pb, y: H / 2 + (B.y + B.h * 0.5 + 30 - H / 2) * pb, z: 1 + 0.08 * pb };
+    if (REC.hov0 != null) {
+      const ph = ease((t - REC.hov0) / 0.32) * out;
+      const ty = B.y + B.h * 0.74, tz = 1.24;
+      c = { x: c.x + (bx - c.x) * ph, y: c.y + (ty - c.y) * ph, z: c.z + (tz - c.z) * ph };
     }
-    const fade = Math.min(1, (REC.lastTapT + 0.6 - t) / 0.3);
-    g.save();
-    g.globalAlpha *= Math.max(0, fade);
-    drawHand(g, p.x, p.y, 150 * k, !!REC.held);
-    g.restore();
   }
-  // Captions: one at a time, hard cuts (no crossfade), opaque band over the HUD title while up.
-  if (t < HOOK_END && HOOK) caption(g, S, HOOK, 9);
-  else if (CAP2 && t < ENDCARD_T && !(s && s.result)) {
-    const bt = s && s.st ? s.st.bt : 0, cap = s && s.puz ? effCap(s.puz, s.st) : 4;
-    if (REC.cap2On == null && t >= 9.5 && bt >= cap - 1 && REC.keyT == null) REC.cap2On = t;
-    if (REC.cap2On == null && t >= BEAT.hover + 0.4 && REC.keyT == null) REC.cap2On = t; // never hit cap-1: show it before the key pull
-    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT != null) REC.cap2Off = REC.keyT + 0.3;
-    if (REC.cap2On != null && REC.cap2Off == null && REC.keyT == null && bt < cap - 1 && t > REC.cap2On + 0.5 && t < BEAT.hover) REC.cap2Off = t; // HUD no longer says it
-    if (REC.cap2On != null && t >= REC.cap2On && (REC.cap2Off == null || t < REC.cap2Off) && t < 16.5) caption(g, S, CAP2, t - REC.cap2On);
+  if (REC.popT != null) {
+    const a = t - REC.popT;
+    if (a < 0.4) c = { ...base, z: 1.035 }; // room for the shake
+    const p = ease((a - POP_DUR * 0.7) / 1.6);
+    if (p > 0) {
+      const by = B && B.y != null ? B.y + B.h * 0.66 : H * 0.62;
+      c = { x: W / 2 + ((B && B.x != null ? B.x + B.w / 2 : W / 2) - W / 2) * p, y: H / 2 + (by - H / 2) * p, z: 1 + 0.17 * p };
+    }
   }
-  if (t >= ENDCARD_T) endCard(g, S, t);
+  if (REC.freeT != null && kb) {
+    if (!REC.camFree) REC.camFree = c;
+    const p = ease((t - REC.freeT) / 0.6), f = REC.camFree;
+    const tx = kb.x, ty = kb.y - kb.s * 0.55, tz = 1.85;
+    c = { x: f.x + (tx - f.x) * p, y: f.y + (ty - f.y) * p, z: f.z + (tz - f.z) * p };
+  }
+  return c;
+}
+// Raster camera: re-draw the finished frame cropped (needs a real canvas; the node harness has none).
+function applyCam(g, S, t) {
+  const c = camAt(S, t);
+  if (c.z <= 1.0005) return null;
+  const cv = canvasEl();
+  if (!cv || !cv.width || typeof document === 'undefined' || !document.createElement) return null;
+  const buf = REC.buf = copyCanvas(REC.buf);
+  if (!buf) return null;
+  const W = S.W, H = S.H, d = cv.width / W, vw = W / c.z, vh = H / c.z;
+  let x0 = Math.max(0, Math.min(W - vw, c.x - vw / 2)), y0 = Math.max(0, Math.min(H - vh, c.y - vh / 2));
+  if (REC.popT != null && t - REC.popT < 0.4) { // impact shake
+    const a = t - REC.popT, amp = 15 * (1 - a / 0.4);
+    x0 = Math.max(0, Math.min(W - vw, x0 + Math.sin(a * 95) * amp));
+    y0 = Math.max(0, Math.min(H - vh, y0 + Math.cos(a * 71) * amp));
+  }
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(buf, x0 * d, y0 * d, vw * d, vh * d, 0, 0, cv.width, cv.height);
+  g.restore();
+  return { x0, y0, z: c.z, d };
 }
 
-// The covered tap: a bold red ring + cross on the spot, so "you can't pull that one yet" reads at phone size.
-function drawMiss(g, S, t, k) {
-  const m = REC.miss;
-  if (!m || t - m.t > 0.95) return;
-  const a = t - m.t, sc = a < 0.16 ? 0.6 + 0.6 * (a / 0.16) : 1.2 - 0.2 * Math.min(1, (a - 0.16) / 0.15);
-  const al = a > 0.7 ? Math.max(0, 1 - (a - 0.7) / 0.25) : 1, r = 62 * k * sc;
+function drawRecOverlay(g, S) {
+  const t = REC.t;
+  const ending = REC.endT != null && t >= REC.endT + 0.45;
+  if (!ending) {
+    const cam = applyCam(g, S, t);
+    g.save();
+    if (cam) g.setTransform(cam.d * cam.z, 0, 0, cam.d * cam.z, -cam.x0 * cam.d * cam.z, -cam.y0 * cam.d * cam.z);
+    drawHero(g, S, t);
+    drawRecHand(g, S, t);
+    g.restore();
+    drawRescue(g, S, t, cam);
+    drawFlash(g, S, t);
+    const cap = captionNow(S, t);
+    if (!(cap && cap[0]) && REC.popT != null && t < REC.popT + POP_DUR && REC.freeT == null) caption(g, S, ' ', 1); // bare band: no HUD under the pop
+    drawChainPop(g, S, t);
+    if (cap && cap[0]) caption(g, S, cap[0], t - cap[1]);
+  }
+  if (REC.endT != null && t >= REC.endT) endCard(g, S, t, REC.endT);
+  drawLoopFade(g, S, t);
+}
+// One caption at a time, hard cuts; the CHAIN pop is the caption while it's up.
+function captionNow(S, t) {
+  if (t < HOOK_END) return [HOOK, 0];
+  if (REC.winT != null || S.screen !== 'play') return null;
+  if (REC.freeT != null) return [FREED, REC.freeT];
+  if (REC.popT != null) return t < REC.popT + POP_DUR ? null : [CAP3, REC.popT + POP_DUR];
+  if (REC.cap2On != null && CAP2) return [CAP2, REC.cap2On];
+  return [MID, HOOK_END];
+}
+
+// The trapped kitten as the hero: ~3x on the hook frame (OG composition, "Help!" bubble), shrinking onto her ledge
+// at HERO_OUT; again a little bigger for the rescue (under the camera zoom). Same state as the game's kitten.
+function drawHero(g, S, t) {
+  const s = S.sess, kb = kitBox(S), kit = s && s.kitten;
+  if (!kb || !kit || typeof Rn.drawKitten !== 'function' || S.screen !== 'play' || REC.winT != null) return;
+  let boost = 1, help = false;
+  if (t < HERO_OUT) { boost = 3.1; help = true; }
+  else if (t < HERO_OUT + 0.45) boost = 3.1 - 2.1 * ease((t - HERO_OUT) / 0.45);
+  if (REC.freeT != null) boost = 1 + 0.3 * easeOut((t - REC.freeT) / 0.5);
+  if (boost <= 1.001) return; // identical to the game's own kitten underneath
+  const ks = kb.s * boost;
   g.save();
-  g.globalAlpha *= al;
-  g.translate(m.x, m.y);
-  g.lineCap = 'round';
-  for (const [col, w] of [['#2B2440', 22 * k], ['#E8463A', 12 * k]]) {
-    g.strokeStyle = col; g.lineWidth = w;
-    g.beginPath(); g.arc(0, 0, r, 0, 7); g.stroke();
-    g.beginPath(); g.moveTo(-r * 0.5, -r * 0.5); g.lineTo(r * 0.5, r * 0.5); g.moveTo(r * 0.5, -r * 0.5); g.lineTo(-r * 0.5, r * 0.5); g.stroke();
+  if (help) { // warm spotlight so the face reads over the board
+    const gr = g.createRadialGradient(kb.x, kb.y - ks * 0.5, ks * 0.1, kb.x, kb.y - ks * 0.5, ks * 0.85);
+    gr.addColorStop(0, 'rgba(255,226,150,0.55)'); gr.addColorStop(1, 'rgba(255,226,150,0)');
+    g.fillStyle = gr; g.fillRect(kb.x - ks, kb.y - ks * 1.4, ks * 2, ks * 1.6);
+  }
+  g.fillStyle = 'rgba(20,10,24,0.35)';
+  g.beginPath(); g.ellipse(kb.x, kb.y - ks * 0.02, ks * 0.36, ks * 0.06, 0, 0, Math.PI * 2); g.fill();
+  const id = s.id || 0, lc = [];
+  for (const st of s.puz.strands) if (st.c >= 0 && st.c < 6 && !lc.includes(st.c)) lc.push(st.c);
+  try {
+    Rn.drawKitten(g, kb.x, kb.y, ks, { stage: kit.stage, loops: kit.loops, flinch: 0, freeT: kit.freeT, golden: kit.golden, t: S.T,
+      breed: id > 0 ? (id - 1) % 6 : 0, coat: id > 0 ? Math.floor((id - 1) / 6) : 0, loopColors: lc.slice(0, 4), memKey: HERO_MEM });
+  } catch (e) { P.error(e); }
+  if (help) helpBubble(g, kb.x + ks * 0.43, kb.y - ks * 0.9, 1.75 * (1 + 0.035 * Math.sin(t * 7)));
+  g.restore();
+}
+// The OG's "Help!" bubble (scene.drawOG), tail pointing down-left at the kitten.
+function helpBubble(g, x, y, k) {
+  g.save();
+  g.translate(x, y); g.scale(k, k); g.rotate(0.05);
+  g.lineJoin = 'round';
+  const body = () => { g.beginPath(); g.roundRect ? g.roundRect(-74, -36, 148, 72, 36) : g.rect(-74, -36, 148, 72); };
+  g.fillStyle = '#FFF4E4'; g.strokeStyle = '#2B2440'; g.lineWidth = 5;
+  body(); g.fill();
+  g.beginPath(); g.moveTo(-52, 22); g.lineTo(-92, 58); g.lineTo(-24, 30); g.closePath(); g.fill();
+  body(); g.stroke();
+  g.beginPath(); g.moveTo(-50, 34); g.lineTo(-92, 58); g.lineTo(-26, 35); g.stroke();
+  g.fillRect(-54, 26, 32, 8);
+  g.font = '44px "Lilita One", "Nunito", sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 8; g.strokeStyle = '#2B2440'; g.strokeText('Help!', 0, 3);
+  g.fillStyle = '#E8463A'; g.fillText('Help!', 0, 3);
+  g.restore();
+}
+// Scripted hand (playable-ad style): on from frame 0, gone once the kitten is free.
+function drawRecHand(g, S, t) {
+  const s = S.sess;
+  if (S.screen !== 'play' || REC.freeT != null || (s && s.result)) return;
+  const done = REC.i >= REC.line.length && !REC.held;
+  const fade = done ? Math.max(0, 1 - (t - REC.lastFire - 0.25) / 0.25) : 1;
+  if (fade <= 0) return;
+  let p = handPos();
+  if (REC.hover && t >= REC.hover.t0 + 0.22) { // hesitation: circles the wrong strand ("this one?") without pressing
+    const w = t - REC.hover.t0 - 0.22;
+    p = { x: p.x + Math.sin(w * 7) * 16, y: p.y - Math.abs(Math.sin(w * 3.5)) * 20 };
+  }
+  g.save();
+  g.globalAlpha *= fade;
+  drawHand(g, p.x, p.y, 150 * (S.W / 1080), !!REC.held);
+  g.restore();
+}
+function drawFlash(g, S, t) {
+  if (REC.popT == null) return;
+  const a = t - REC.popT;
+  if (a < 0 || a > 0.18) return;
+  g.save();
+  g.globalAlpha = 0.75 * (1 - a / 0.18);
+  g.fillStyle = '#FFFFFF';
+  g.fillRect(0, 0, S.W, S.H);
+  g.restore();
+}
+const YARN = ['#E8463A', '#3A8FE0', '#FFC93C', '#3DBE8B', '#A66BE0', '#FF8FB1'];
+// CHAIN xN! climax, full frame: dark backdrop, spinning sunburst, yarn-ball burst, 200 px gold letters with a fat ink edge.
+function drawChainPop(g, S, t) {
+  const p = REC.pop;
+  if (!p) return;
+  const a = t - p.t;
+  if (a < 0 || a > POP_DUR) return;
+  const W = S.W, H = S.H, x = W / 2, y = H * 0.44;
+  const out = a > POP_DUR - 0.12 ? 1 - (a - (POP_DUR - 0.12)) / 0.12 : 1; // quick scale-out, then cut
+  const sc = (a < 0.13 ? 0.35 + 0.95 * easeOut(a / 0.13) : a < 0.26 ? 1.3 - 0.3 * ease((a - 0.13) / 0.13) : 1 + 0.025 * Math.sin(a * 9)) * out;
+  g.save();
+  g.fillStyle = `rgba(22,12,34,${0.42 * Math.min(1, a / 0.08) * out})`;
+  g.fillRect(0, 0, W, H);
+  g.translate(x, y);
+  // sunburst
+  g.save();
+  g.rotate(a * 0.9);
+  for (let i = 0; i < 16; i++) {
+    g.rotate(Math.PI / 8);
+    g.fillStyle = i % 2 ? 'rgba(255,214,90,0.55)' : 'rgba(255,244,228,0.30)';
+    const R = 760 * sc;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(-70 * sc, -R); g.lineTo(70 * sc, -R); g.closePath(); g.fill();
+  }
+  g.restore();
+  // yarn balls flying out
+  for (let i = 0; i < 18; i++) {
+    const ang = i * 0.349 + 0.2, q = easeOut(Math.min(1, a / 0.7)), r = 140 + 470 * q + (i % 3) * 40;
+    const br = (22 + (i % 4) * 6) * (1 - 0.5 * q) * out;
+    if (br <= 0.5) continue;
+    g.fillStyle = YARN[i % YARN.length]; g.strokeStyle = '#2B2440'; g.lineWidth = 5;
+    g.beginPath(); g.arc(Math.cos(ang) * r, Math.sin(ang) * r * 0.9, br, 0, 7); g.fill(); g.stroke();
+  }
+  g.scale(sc, sc);
+  g.rotate(-0.06);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  const txt = `CHAIN ×${p.n}!`;
+  let fs = 210;
+  g.font = `${fs}px "Lilita One", "Nunito", sans-serif`;
+  while (fs > 90 && g.measureText(txt).width > W - 110) { fs -= 6; g.font = `${fs}px "Lilita One", "Nunito", sans-serif`; }
+  g.fillStyle = '#2B2440';
+  g.lineWidth = fs * 0.3; g.strokeStyle = '#2B2440';
+  g.strokeText(txt, 0, 14); g.fillText(txt, 0, 14); // drop shadow
+  g.strokeText(txt, 0, 0);
+  const gr = g.createLinearGradient(0, -fs * 0.45, 0, fs * 0.45);
+  gr.addColorStop(0, '#FFF2A8'); gr.addColorStop(0.5, '#FFC93C'); gr.addColorStop(1, '#FF9A1F');
+  g.fillStyle = gr;
+  g.fillText(txt, 0, 0);
+  const sub = a > 0.18 ? Math.min(1, (a - 0.18) / 0.1) : 0;
+  if (sub > 0) {
+    g.save();
+    g.translate(0, fs * 0.82);
+    g.rotate(0.1);
+    g.scale(0.7 + 0.3 * sub, 0.7 + 0.3 * sub);
+    g.font = `${Math.round(fs * 0.5)}px "Lilita One", "Nunito", sans-serif`;
+    g.lineWidth = fs * 0.16; g.strokeStyle = '#2B2440'; g.strokeText('PERFECT!', 0, 0);
+    g.fillStyle = '#FFF4E4'; g.fillText('PERFECT!', 0, 0);
+    g.restore();
   }
   g.restore();
 }
-
-// CHAIN xn! climax: a big burst above the spool rack, driven by the contract-1 chain event.
-function drawChainPop(g, S, t, k) {
-  const p = REC.pop;
-  if (!p) return;
-  const dur = p.n >= 3 ? 1.5 : 0.75, a = t - p.t;
-  if (a < 0 || a > dur) return;
-  if (p.ui == null) p.ui = /CHAIN\s*×\s*\d/.test(String((S.ui && S.ui.pop) || '')); // UI popped it: don't double up
-  if (p.ui) return;
-  const L = S.L || {}, rack = L.rack;
-  const big = p.n >= 3;
-  const x = S.W / 2, y = rack ? rack.y + rack.h + (big ? 190 : 120) * k : S.H * 0.3;
-  const sc = a < 0.18 ? 0.4 + 0.9 * (a / 0.18) : a < 0.3 ? 1.3 - 0.3 * ((a - 0.18) / 0.12) : 1;
-  const al = a > dur - 0.25 ? Math.max(0, (dur - a) / 0.25) : 1;
-  g.save();
-  g.globalAlpha *= al;
-  g.translate(x, y - Math.min(1, a / dur) * 30 * k);
-  if (big) {
-    // sunburst rays
-    g.save();
-    g.rotate(a * 0.8);
-    g.fillStyle = 'rgba(255,214,90,0.32)';
-    for (let i = 0; i < 12; i++) {
-      g.rotate(Math.PI / 6);
-      g.beginPath(); g.moveTo(0, 0); g.lineTo(-40 * k * sc, -330 * k * sc); g.lineTo(40 * k * sc, -330 * k * sc); g.closePath(); g.fill();
-    }
-    g.restore();
+// Rescue: big hearts rising off the kitten in screen space (the camera is zoomed in on her).
+function drawRescue(g, S, t, cam) {
+  if (REC.freeT == null || REC.winT != null || S.screen !== 'play' || typeof Rn.drawHeart !== 'function') return;
+  const kb = kitBox(S);
+  if (!kb) return;
+  const a = t - REC.freeT;
+  const z = cam ? cam.z : 1, sx = cam ? (kb.x - cam.x0) * z : kb.x, sy = cam ? (kb.y - kb.s * 0.6 - cam.y0) * z : kb.y - kb.s * 0.6;
+  for (let i = 0; i < 14; i++) {
+    const p = (a - 0.55 - i * 0.06) / 1.25;
+    if (p <= 0 || p >= 1) continue;
+    const ang = -Math.PI / 2 + ((i * 0.618) % 1 - 0.5) * 2.6, dist = 120 + 520 * easeOut(p);
+    try { Rn.drawHeart(g, sx + Math.cos(ang) * dist, sy + Math.sin(ang) * dist * 0.85 - p * 160, (34 + (i % 3) * 12) * (1 - p * 0.35), 1 - p * p); } catch (e) { P.error(e); }
   }
-  g.scale(sc, sc);
-  g.rotate(-0.05);
-  const fs = (big ? 150 : 96) * k;
-  g.font = `${fs}px "Lilita One", "Nunito", sans-serif`;
-  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-  const txt = `CHAIN ×${p.n}!`;
-  g.lineWidth = fs * 0.26; g.strokeStyle = '#2B2440'; g.strokeText(txt, 0, 0);
-  g.fillStyle = big ? '#FFD65A' : '#FFF4E4'; g.fillText(txt, 0, 0);
+}
+// Loop: the last LOOP_X s of the tail crossfade into frame 0.
+function drawLoopFade(g, S, t) {
+  if (!REC.snap || REC.overT == null) return;
+  const t0 = REC.overT + TAIL - LOOP_X;
+  if (t < t0) return;
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = ease((t - t0) / LOOP_X);
+  g.drawImage(REC.snap, 0, 0);
   g.restore();
 }
 
@@ -713,8 +1041,8 @@ function caption(g, S, text, age) {
   g.restore();
 }
 
-function endCard(g, S, t) {
-  const W = S.W, H = S.H, a = Math.min(1, (t - ENDCARD_T) / 0.45), k = W / 1080;
+function endCard(g, S, t, t0) {
+  const W = S.W, H = S.H, a = Math.min(1, (t - t0) / 0.45), k = W / 1080;
   g.save();
   g.globalAlpha = a;
   let drew = false;
@@ -728,7 +1056,7 @@ function endCard(g, S, t) {
   g.fillRect(0, 0, W, H);
   // Logo.
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-  const pop = 1 + 0.06 * Math.max(0, 1 - (t - ENDCARD_T) / 0.35);
+  const pop = 1 + 0.06 * Math.max(0, 1 - (t - t0) / 0.35);
   const logo = (txt, y, fs) => {
     g.font = `${fs * pop}px "Lilita One", sans-serif`;
     g.lineWidth = 26 * k; g.strokeStyle = '#2B2440'; g.strokeText(txt, W / 2, y);
