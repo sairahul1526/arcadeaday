@@ -38,6 +38,16 @@
     box-shadow: 0 3px 0 #E3CDB2; font: 800 13px/1 Nunito, system-ui, sans-serif; -webkit-backdrop-filter: none; backdrop-filter: none; }
   nav.back a:hover, nav.back a:focus-visible { background: #fff; color: #2B2440; }
   body.kk-play nav.back { opacity: 0; visibility: hidden; pointer-events: none; }
+  /* fix2 (critic panel r1): desktop/TV chips were ~100x30 px with 13 px text; ≥ 42 px tall and 16-18 px text there
+     (layout.js webBottomInset reads the chip height, cap 72 px). Phones keep the small chips. */
+  @media (min-width: 900px) and (min-height: 600px) {
+    nav.back { left: 16px; bottom: 16px; gap: 10px; }
+    nav.back a { padding: 11px 20px; font-size: 16px; box-shadow: 0 4px 0 #E3CDB2; }
+  }
+  @media (min-width: 1800px) and (min-height: 1000px) {
+    nav.back { left: 22px; bottom: 22px; gap: 12px; }
+    nav.back a { padding: 13px 24px; font-size: 19px; border-width: 3px; }
+  }
 </style>
 </head>
 <body>

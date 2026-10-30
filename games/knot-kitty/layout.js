@@ -33,13 +33,17 @@ function webBottomInset(H) {
     if (!nav) return 0;
     const r = nav.getBoundingClientRect();
     if (!r.height || getComputedStyle(nav).display === 'none') return 0;
-    return Math.min(56, Math.round(r.height + 14));
+    // fix2: desktop chips are 42–51 px tall and sit 16–22 px up (index.html): measure from the chip top
+    return clamp(Math.round(H - r.top + 2), 0, 80);
   } catch (e) { return 0; }
 }
 
 // Fix 1 (UI): reference board for sizing decisions = the biggest shipped board, 8×10 (frame 9.2 × 10.2 units,
 //   plus 1.4 units for the kitten ledge → 11.6). GATE = §7.6 floor for its unit at 320×480.
 const REF_W = 9.2, REF_H = 11.6, GATE = 24.4;
+// fix2 (critic panel r1, kitten head over the frame): kitten band reserve in units. Desktop 0.6 → 0.85 and tablets
+//   0.5 so the head clearance (≈ 0.45 unit, fitBoard) comes out of the reserve instead of the kitten's size.
+const LAND_RES = 0.85, TAB_RES = 0.5;
 
 /** GDD §9.1. Returns { W, H, u, orient, m, safe, hud, rack, callout, board, tray, basket, boosters, boostDir }. */
 export function computeLayout(W, H) {
@@ -132,7 +136,7 @@ export function computeLayout(W, H) {
       const bkH = Math.max(46, Math.min(66 * u, 50 + 16 * u));
       const trayH = bkH + gap + rowH;
       const unit = unitOf(bw, boardH(rack0, trayH)), unitMin = unitOf(bw, boardH(rackMin, trayH));
-      if (unitMin >= GATE && unit >= 0.85 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, unit };
+      if (!tab && unitMin >= GATE && unit >= 0.85 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, unit };
     }
     let rackH = rack0, trayH = C.trayH;
     // leftover height → rack (spools), clamp so 8×10 never drops under the §7.6 gate
@@ -140,6 +144,8 @@ export function computeLayout(W, H) {
     const spareH = boardH(rack0, trayH) - REF_H * (bwB / REF_W);
     // band mode shares spare height: half to the rack (bigger spools), the rest stays with the board for the kitten
     if (spareH > 0) rackH = Math.min(rackMax, rack0 + (C.mode === 'band' ? spareH * 0.5 : spareH));
+    // fix2 (tablet portrait): every band is height-bound there, so the rack gives up to 16u to the board
+    else if (tab) rackH = Math.max(rackMin, rack0 + spareH);
     const needGate = REF_H * GATE;
     if (boardH(rackH, trayH) < needGate) rackH = Math.max(rackMin, rackH - (needGate - boardH(rackH, trayH)));
     L.rack = R(sx, sy + hudH, safe.w, rackH);
@@ -155,6 +161,7 @@ export function computeLayout(W, H) {
       // the kitten band reserves up to 0.6 unit more (bigger kitten) while the reference board stays ≥ the gate
       // polish round 3 (RENDER ask): the phone kitten may grow to 128u (was 100u) in the spare band height
       L.board.kitRes = clamp(bh / GATE - REF_H, 0, 0.6); L.board.kitPx = 128 * u; L.board.kitMax = 1.4;
+      L.board.kitGrow = true; // fix2: approved phone band keeps its kitten size (clearance only from leftover room)
     } else if (C.mode === 'col') {
       L.boostDir = 'col';
       L.basket = R(sx + m, L.tray.y, bw, trayH);
@@ -166,6 +173,8 @@ export function computeLayout(W, H) {
       L.boosters = R(sx + m + bkW + m, L.tray.y, bw - bkW - m, trayH);
       L.board = R(sx + m, top, bw, bh);
     }
+    // fix2: tablets reserve the kitten's clearance band (see fitBoard) so its head stays off the frame
+    if (tab) { L.board.kitRes = TAB_RES; L.board.kitPx = 150 * u; L.board.kitMax = 0.8; }
     // DECISION (ui2 L3): height under the board rect that only the tray uses. When the tray is empty (L1: basket
     //   hidden, no booster unlocked yet) ui.js sets L.board.trayFree and play's onResize re-fits the board into it, so
     //   the board + kitten group no longer leaves the bottom quarter of a tall phone blank.
@@ -184,8 +193,10 @@ export function computeLayout(W, H) {
       // DECISION (polish round 3, desktop/TV): the board now uses the whole safe height (scale by height, not
       //   80 %), its width is cut to the reference board at that unit, and board + column are centred as one
       //   group. The column's HUD lines up with the board top and its tray with the board bottom.
-      const unit = Math.min(bwid / REF_W, bh / (REF_H + 0.6));
-      const refW = Math.min(bwid, REF_W * unit + m), gapC = Math.max(2 * m, 26 * u);
+      const unit = Math.min(bwid / REF_W, bh / (REF_H + LAND_RES));
+      // fix2 (critic panel r1: "spools 600+ px from the board"): the board rect is exactly the reference board
+      //   and fitBoard right-aligns narrower boards (alignX = 1), so every board ends gapC from the column.
+      const refW = Math.min(bwid, REF_W * unit), gapC = clamp(16 * u, 20, 44);
       const total = refW + gapC + colW;
       bx = sx + Math.max(m, (safe.w - total) / 2); bwid = refW;
       cx = Math.min(sr - colW, bx + refW + gapC);
@@ -209,7 +220,8 @@ export function computeLayout(W, H) {
     L.basket = R(cx, L.tray.y, cw, basketH);
     L.boosters = R(cx, L.tray.y + basketH, cw, boostH);
     L.board = R(bx, top, bwid, bh);
-    L.board.kitRes = H >= 640 ? 0.6 : 0; L.board.kitPx = 150 * u; L.board.kitMax = 0.8;
+    L.board.kitRes = H >= 640 ? LAND_RES : 0; L.board.kitPx = 150 * u; L.board.kitMax = 0.8;
+    L.board.alignX = 1;
   }
   return L;
 }
@@ -221,31 +233,42 @@ export function fitBoard(level, rect) {
   const gw = cols - 1 + 1.2, gh = rows - 1 + 1.2;
   const kres = rect.kitRes || 0;
   // DECISION (polish round 3, RENDER ask): boss boards (they carry a shape) reserve a taller kitten band so render's
-  //   1.4× boss (capped at maxH = feet − (frame bottom − 0.3 unit)) really draws at 1.4×. The extra band (0.7 unit)
+  //   1.4× boss (capped at maxH, now B.kitten.maxH) really draws at 1.4×. The extra band (fix2: 1.1 unit, it includes the head clearance)
   //   may cost board size only while the unit stays ≥ the §7.6 gate; below it the boss just stays smaller.
   const boss = !!level.shape;
   const fitU = band => Math.min(rect.w / gw, rect.h / (gh + band + kres));
   let unit = fitU(1.4);
-  if (boss) unit = Math.min(unit, Math.max(fitU(2.1), Math.min(unit, GATE)));
+  // boss band: 1.4 × 1.6 unit + clearance − the 1.25 unit natural feet offset ≈ 1.1 unit more than a normal kitten
+  const grow = !!rect.kitGrow;
+  if (boss) unit = Math.min(unit, Math.max(fitU(grow ? 2.1 : 2.5), Math.min(unit, GATE)));
   unit = Math.max(1, unit);
   // polish band: spare height under a width-limited board grows the kitten (up to rect.kitMax units / rect.kitPx px)
   const ks0 = 1.6 * unit, kitPx = rect.kitPx || 0;
   const room = Math.max(0, rect.h - (gh + 1.4) * unit);
   let ext = kitPx > ks0 ? Math.max(0, Math.min(room, Math.max(kres, rect.kitMax != null ? rect.kitMax : 1) * unit, (kitPx - ks0) / 0.95)) : 0;
-  let lift = 0; // boss only: extra drop of the kitten's feet below the normal ledge
-  if (boss) {
-    const need = e => Math.max(0, 1.4 * (ks0 + 0.95 * e) - 0.3 * unit - (1.25 * unit + 0.85 * e));
-    for (let i = 0; i < 8 && ext > 0 && room - ext < need(ext); i++) ext *= 0.7; // shrink the grown kitten until 1.4× fits
-    if (room - ext < need(ext)) ext = 0;
-    lift = Math.min(need(ext), Math.max(0, room - ext));
-  }
+  // DECISION (fix2, critic panel r1: "kitten head overlaps the board frame"): the sprite is drawn exactly s tall
+  //   (bosses 1.4 × s, capped by render's maxH), feet at frame bottom + 1.25 unit + 0.85 ext, so the head used to
+  //   reach ≈ 0.35 unit (bosses 0.3 unit, by maxH) into the frame. The feet now drop by `lift` so the head clears the
+  //   frame bottom by CLR. The clearance is paid first from the spare room (it shrinks the kitten's growth `ext`,
+  //   never the board); when even the full room can't pay it (gate-bound phones) the kitten drops as far as it can.
+  //   lift(e) = a + b·e  (a, b from: k·(1.6u + 0.95e) + CLR − (1.25u + 0.85e), k = 1.4 boss / 1 normal).
+  //   Exception: the approved phone band (rect.kitGrow) keeps its grown kitten and the old boss band (head may
+  //   touch 0.3 unit into the frame); there the clearance only uses room the kitten's growth left over.
+  const k = boss ? 1.4 : 1, CLR = (grow && boss ? -0.3 : 0.1) * unit;
+  const a = k * ks0 + CLR - 1.25 * unit, b = k * 0.95 - 0.85;
+  if (!grow || boss) ext = Math.max(0, Math.min(ext, (room - a) / (1 + b)));
+  const lift = Math.max(0, Math.min(a + b * ext, room - ext));
   const w = gw * unit, h = gh * unit, tot = h + 1.4 * unit + ext + lift;
-  const x = rect.x + (rect.w - w) / 2;
+  const ax = rect.alignX != null ? rect.alignX : 0.5;
+  const x = rect.x + (rect.w - w) * ax;
   const y = rect.y + (rect.h - tot) / 2;
   const sw = Math.max(6.5, Math.min(0.27 * unit, Math.max(22, 0.25 * unit)));
+  const feet = y + h + 1.25 * unit + ext * 0.85 + lift;
   return {
     ox: x + 0.6 * unit, oy: y + 0.6 * unit, unit, sw, x, y, w, h, cols, rows,
-    kitten: { x: x + w / 2, y: y + h + 1.25 * unit + ext * 0.85 + lift, s: ks0 + ext * 0.95 },
+    kitten: { x: x + w / 2, y: feet, s: ks0 + ext * 0.95, maxH: Math.max(ks0 + ext * 0.95, feet - (y + h) - CLR) },
+    // fix2: band between the frame bottom and the kitten's feet; nothing else should draw over the frame here
+    kitClear: R(x, y + h, w, feet - (y + h)),
   };
 }
 
@@ -271,7 +294,8 @@ export function rackSlots(L) {
   return {
     active: [at(a0, 1, cw), at(a1, 1, cw)],
     next: [at(n0, 0.78, cw * 0.78), at(n1, 0.6, cw * 0.6)],
-    more: { x: Math.min(right - 12 * u, n1 + h * 0.35), y: r.y + r.h * 0.16 },
+    // landscape racks are taller than the spools: keep the "+N more" chip just above the last spool, not at the rack top
+    more: { x: Math.min(right - 12 * u, n1 + h * 0.35), y: land ? Math.max(r.y + r.h * 0.16, shelf - h * 1.25) : r.y + r.h * 0.16 },
     kitty,
   };
 }

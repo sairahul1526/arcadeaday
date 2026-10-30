@@ -429,6 +429,14 @@
     "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
    ],
    "prompt": "The same chubby orange tabby kitten as the reference (identical design, stripes, colours, eye colour and proportions), calm and content: sitting upright facing the viewer, ears up, big bright open eyes with a white highlight, small gentle closed-mouth smile, front paws planted together on the floor in front of the body so the chest and neck are clearly visible, tail curled around the side, plain white background, centered, full body."
+  },
+  {
+   "id": "paw-sleepy",
+   "max": 256,
+   "refs": [
+    "../../studio/art-raw/knot-kitty/art/kit-tabby-sad.png"
+   ],
+   "prompt": "Game prop: one fluffy orange tabby kitten front paw with a short chubby forearm, resting flat and relaxed as if its owner is fast asleep, seen from directly above. The forearm comes in from the bottom-left corner and the round paw rests at the top-right, with three soft pink toe beans peeking out, soft stripes on the fur, fluffy tufts at the edges. Same fur colours, plum outline and painted style as the reference kitten. Isolated single object on a plain white background, no body, no face, no shadow, no text."
   }
  ]
 }

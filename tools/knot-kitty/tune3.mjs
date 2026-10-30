@@ -4,6 +4,13 @@
 //   node tools/knot-kitty/tune3.mjs daily 0/6 [secs]        tune a slice of the 60 daily boards
 //   node tools/knot-kitty/tune3.mjs merge                   write levels-data.js / dailies-data.js from parts-v3
 //   node tools/knot-kitty/tune3.mjs table                   re-measure everything (1000 runs) -> polish/levels-v3.md
+//   KK3_PARTS=studio/2026-10-30/fix2/parts-ramp node tools/knot-kitty/tune3.mjs ramp 4-20 [secs]   early-ramp retune (fix2)
+//
+// DECISION (fix2, early ramp): L4-L20 are re-dressed (geometry kept) so the third star needs planning. 'ramp' scores
+//   candidates on the greedy ('average') bot's 3-star share (L4-L7 20-35 %, L8-L20 10-25 %), greedy win rate
+//   (>= 0.9 on L4-L7, within +-0.08 of the shipped v3 rate on L8-L20), AIM3 for random taps (L10 / L20 bosses aimed
+//   lower than v3: 0.18 / 0.07), expert bot 100 %, and a soft cap on the 'fit' bot's 3-star share. Same caps / par
+//   ranges / teach gates as 'run'.
 //
 // DECISION (v3): the existing geometry of every level is kept (same pegs, bows, strand count, crossings), so
 //   readability at 320x480 and the 18-strand boss silhouettes are untouched. Only the dressing changes, with the
@@ -67,6 +74,17 @@ export function greedy3(id) {
   if (id <= 40) return [0.6, 0.85];
   return [0.45, 0.75];
 }
+// fix2 early ramp: shipped v3 greedy win rates (1000 runs, 2026-10-30) and the ramp targets
+const GREEDY_V3 = { 4: 1, 5: 1, 6: 1, 7: 0.83, 8: 0.66, 9: 1, 10: 0.61, 11: 0.75, 12: 0.79, 13: 0.51, 14: 0.86, 15: 0.72, 16: 0.75, 17: 0.66, 18: 0.58, 19: 0.72, 20: 0.49 };
+export const RAMP = process.argv.includes('ramp');
+export function rampTargets(id) {
+  const aim = id === 10 ? 0.18 : id === 20 ? 0.07 : AIM3[id];
+  const band = id === 10 ? [0.08, 0.24] : id === 20 ? [0.02, 0.10] : band3(id);
+  const g3 = id <= 7 ? [0.2, 0.35] : [0.1, 0.25];
+  const gw = id <= 7 ? [0.9, 1] : [Math.max(0, GREEDY_V3[id] - 0.08), Math.min(1, GREEDY_V3[id] + 0.08)];
+  return { aim, band, greedy: gw, g3 };
+}
+const isRamp = id => RAMP && id >= 4 && id <= 20;
 const DAILY_AIM = 0.27, DAILY_BAND = [0.2, 0.35], DAILY_GREEDY = [0.65, 0.9];
 
 // ------------------------------------------------------------------ bots
@@ -120,12 +138,24 @@ const JITS = [0.5, 1, 1.5, 2, 2.5, 3, 4];
 function geoOf(L) { return { strands: L.strands.map(s => { const pts = R.strandCurve(s.pegs, s.bow || 0); return { pegs: s.pegs, bow: s.bow || 0, pts, at: R.arcLengths(pts) }; }) }; }
 
 function targetsOf(id) {
+  if (isRamp(id)) return rampTargets(id);
   if (id >= 1000) return { aim: DAILY_AIM, band: DAILY_BAND, greedy: DAILY_GREEDY };
   return { aim: AIM3[id], band: band3(id), greedy: greedy3(id) };
 }
 const dist = (v, [a, b]) => (v < a ? a - v : v > b ? v - b : 0);
 
+function rampScore(id, b) {
+  const T = rampTargets(id);
+  const mid = (b.random + b.tap) / 2, hi = Math.max(b.random, b.tap), lo = Math.min(b.random, b.tap);
+  let s = 14 * dist(b.g3, T.g3) + 16 * dist(b.average, T.greedy) + 6 * Math.abs(mid - T.aim) + 15 * (Math.max(0, hi - T.band[1]) + Math.max(0, T.band[0] - lo));
+  s += 60 * (1 - b.expert) + 3 * Math.max(0, 0.6 - b.e3) + 3 * Math.max(0, b.casual - b.average - 0.05);
+  s += 4 * Math.max(0, b.f3 - T.g3[1]);
+  // pull toward the band centres (the 1000-run confirm re-samples, so edge picks drift out of band)
+  s += 5 * Math.abs(b.g3 - (T.g3[0] + T.g3[1]) / 2) + 2 * Math.abs(b.average - (T.greedy[0] + T.greedy[1]) / 2);
+  return s;
+}
 function score(id, b, par) {
+  if (isRamp(id)) return rampScore(id, b);
   const T = targetsOf(id);
   const hi = Math.max(b.random, b.tap), lo = Math.min(b.random, b.tap), mid = (b.random + b.tap) / 2;
   const gm = (T.greedy[0] + T.greedy[1]) / 2;
@@ -158,6 +188,8 @@ function measure(puz, seed, runs) {
   b.tap = tapStats(puz, runs, seed + 5);
   b.e3 = out.expertS.stars[3] / runs;
   b.g1 = (out.averageS.stars[0] + out.averageS.stars[1]) / runs; // greedy runs ending lost or 1*
+  b.g3 = out.averageS.stars[3] / runs;
+  if (RAMP) { out.fitS = R.botStats(puz, 'fit', runs, seed + 6); b.fit = out.fitS.winRate; b.f3 = out.fitS.stars[3] / runs; }
   b.full = out;
   return b;
 }
@@ -185,7 +217,7 @@ function tune(id, secs) {
     const sc = score(id, b, o.level.par);
     if (!best || sc < best.sc) {
       best = { o, b, sc, seed, cap, jm };
-      if (sc < 0.25 && el() > secs * 0.3) break;
+      if (sc < (RAMP ? 0.6 : 0.25) && el() > secs * 0.5) break;
     }
   }
   if (!best) { console.log(`L${id}: NO CANDIDATE`, tried, JSON.stringify(fails)); return null; }
@@ -203,7 +235,8 @@ function stamp(id, res) {
     v: 3, seed: best.seed, jit: best.jm, crossings: best.o.puz.crossings.length, exact: best.o.sol.exact, states: best.o.sol.states,
     random: +fin.random.toFixed(3), tap: +fin.tap.toFixed(3), casual: +fin.casual.toFixed(3), average: +fin.average.toFixed(3), expert: +fin.expert.toFixed(3),
     avgPeak: { casual: f.casualS.avgPeak == null ? null : +f.casualS.avgPeak.toFixed(2), expert: f.expertS.avgPeak == null ? null : +f.expertS.avgPeak.toFixed(2) },
-    stars: { casual: f.casualS.stars, average: f.averageS.stars, expert: f.expertS.stars }, runs: 1000, free0: res.best.o.free0,
+    stars: { casual: f.casualS.stars, average: f.averageS.stars, expert: f.expertS.stars, ...(f.fitS ? { fit: f.fitS.stars } : {}) }, runs: 1000, free0: res.best.o.free0,
+    ...(f.fitS ? { fit: +fin.fit.toFixed(3), ramp: 'fix2' } : {}),
     aim: targetsOf(id).aim, score: +best.sc.toFixed(3),
   };
   return L;
@@ -260,16 +293,18 @@ if (cmd === 'probe') {
   rows.sort((x, y) => x[3] - y[3]);
   for (const r of rows) console.log(`cap ${r[0]} par ${r[1]} jm ${r[2]} | rnd ${r[3]} tap ${r[4]} cas ${r[5]} avg ${r[6]} exp ${r[7]}`);
   console.log(rows.length, 'valid');
-} else if (cmd === 'run' || cmd === 'daily') {
+} else if (cmd === 'run' || cmd === 'daily' || cmd === 'ramp') {
   const secs = +(a2 || 60);
   let ids = [];
-  if (cmd === 'run') ids = a1.split(',').flatMap(x => { const [p, q] = x.split('-').map(Number); return q ? Array.from({ length: q - p + 1 }, (_, i) => p + i) : [p]; });
+  if (cmd === 'run' || cmd === 'ramp') ids = a1.split(',').flatMap(x => { const [p, q] = x.split('-').map(Number); return q ? Array.from({ length: q - p + 1 }, (_, i) => p + i) : [p]; });
   else { const [p, of] = a1.split('/').map(Number); for (let i = 0; i < 60; i++) if (i % of === p) ids.push(1000 + i); }
   for (const id of ids) {
     const res = tune(id, BOSS.has(id) ? secs * 1.5 : secs);
     if (!res) continue;
     const L = stamp(id, res), s = L.stats, T = targetsOf(id);
-    const ok = dist(s.random, T.band) <= 0.01 && dist(s.tap, T.band) <= 0.02 && s.expert >= 0.999 && dist(s.average, T.greedy) <= 0.05;
+    const g3 = s.stars.average[3] / 1000, f3 = s.stars.fit ? s.stars.fit[3] / 1000 : null;
+    const ok = dist(s.random, T.band) <= 0.01 && dist(s.tap, T.band) <= 0.02 && s.expert >= 0.999 && dist(s.average, T.greedy) <= 0.05 && (!T.g3 || dist(g3, T.g3) <= 0.03);
+    if (T.g3) console.log(`  ramp L${id}: g3 ${pct(g3)} (want ${pct(T.g3[0])}-${pct(T.g3[1])}) gwin ${pct(s.average)} (want ${pct(T.greedy[0])}-${pct(T.greedy[1])}) fit ${pct(s.fit)} f3 ${pct(f3)} e3 ${pct(s.stars.expert[3] / 1000)}`);
     console.log(`${id >= 1000 ? 'D' + (id - 1000) : 'L' + id} cap ${L.cap} par ${L.par} x ${s.crossings} | rnd ${pct(s.random)} (aim ${pct(T.aim)}) tap ${pct(s.tap)} cas ${pct(s.casual)} avg ${pct(s.average)} exp ${(s.expert * 100).toFixed(1)} | sc ${s.score} ${ok ? 'OK' : 'MISS'} [${res.valid}/${res.tried}, ${res.secs.toFixed(0)}s] ${JSON.stringify(res.fails)}`);
     if (id >= 1000) L.id = id; // part naming
     savePart(id, L);

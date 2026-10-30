@@ -460,6 +460,14 @@ The user does every account, upload, submission and email. Runs prepare everythi
 - **Two tabs of a whole-save game erase each other** (last write wins). On the web, merge before every save and on `P.onStoredChange`: progress takes the max or union, and currency, boosters and settings come together from the newest write, so a merge never duplicates yarn. Read through `P.readStored()`, never `localStorage` (Playables warns, even about the word in a comment).
 - **Every small label is 12 px or more on compact screens:** queue labels, chips, badges and sub-captions all need `Math.max(12, …)`. A text-size matrix at 10 sizes finds them; eyeballing 2 sizes does not.
 
+## Lessons: critic panel r1 → fix round 2 (2026-10-30)
+- **Six critics scored 7–8 (mean 7.75) with zero blockers on a build QA called clean.** What they flagged was the play itself: early levels with no decisions (a greedy policy 3-starred 13 of 20), instruction text at 12 px written in jargon ("Hold 1 or fewer for 3★"), a lose card with no way out, and no content after the last level. Run the panel *before* the final polish, not after.
+- **Tune early levels by the greedy bot's 3-star share, not its win rate.** The target is 98% wins and 16–34% 3-star on L4–L20, so new players win but rarely max. A board that random taps can beat (the L10 boss before the retune) reads as "too easy" to every critic.
+- **Split fix agents by file ownership** (UI-CARDS: ui.js; UI-LAYOUT: layout.js and index.html chrome; RENDER: render/scene/art; LEVELS: rules/levels/data). Four in parallel finished in about 50 minutes with no conflicts. Where two need the same file, one owns it and the other sends exact edits.
+- **The Playables warnings match text, not calls.** A comment with the word "navigator.share" and a hard-coded `https://arcadeaday.com` share URL both warn. Build share URLs from `location.origin + location.pathname`, and gate sharing with `P.canShare` (off on yt and the portals).
+- **Every lose card offers a way forward:** Undo, Hint and +1 Slot with counts (buy-and-use at 0), plus a free Hint after 2 losses on the same level. Every new mechanic gets a "?" next to the level title that shows its coach lines again.
+- **Content after the campaign:** generated bonus boards with their own ramp (bonus-data.js, 60 boards, about 98 KB) answer "what do I play after L60?" cheaply. Re-dressed remixes of campaign boards don't.
+
 ## Lessons: QA and tuning (Days 1–9)
 These still apply in v2. Give the relevant ones to every QA, bot and video agent.
 

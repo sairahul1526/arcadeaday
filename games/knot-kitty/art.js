@@ -25,6 +25,7 @@ export const ALL = [
   ...BGS.filter(Boolean).map(b => `bg-${b}`),
   ...WINS,
   'kit-hero-idle',
+  'paw-sleepy', // sleepy-paw twist (L28+): painted forearm, 8 KB
 ];
 // DECISION: the title shows world 2 (Pumpkin Night) until SEASON_END (same IST-date rule as game.js seasonWorld),
 // so FIRST must hold the backdrop the title actually paints, plus the painted Kitty it sits in front of. Otherwise

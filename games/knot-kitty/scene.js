@@ -1774,6 +1774,48 @@ export function drawRoomVignette(g, rect, world, t) {
     drawWorld(g, rect.w, Hv, world, t || 0, 'map');
   }
   g.restore();
+  vigLast.set(world, { top, y0, x: rect.x, w: rect.w, Hv });
+  seamFeather(g, rect, world, t, d, Hv);
+}
+// Map world seam (critic r1: a hard horizontal cut between two paintings). ui.js draws the bands bottom-up
+// (world 1 first), so when band w is drawn, band w-1 (directly below) was drawn moments ago and vigLast holds its
+// alignment. The bottom F px of band w get world w-1's painting mirrored upward, fading 1 -> 0, so one room
+// dissolves into the next. It stays inside band w's own rect, so ui.js's locked-band dimming still covers it.
+// Cost: one strip blit + one gradient fill per visible seam (≤ 2 on screen); the strip canvas is reused.
+const vigLast = new Map(); // world -> { top, y0, x, w, Hv } of its band, as last drawn
+let seamCv = null;
+function seamFeather(g, rect, world, t, d, Hv) {
+  if (world <= 1) return;
+  const below = vigLast.get(world - 1), bot = rect.y + rect.h;
+  if (!below || Math.abs(below.top - bot) > 1 || Math.abs(below.w - rect.w) > 0.5 || Math.abs(below.Hv - Hv) > 0.5) return;
+  const F = Math.min(rect.h * 0.4, Math.max(36, Hv * 0.075));
+  const y1 = bot - F;
+  if (!(F > 4) || bot < 0 || y1 > Hv) return; // seam off screen
+  if (!getBake(rect.w, Hv, world - 1, d.s, 'map', true)) return; // world below not baked yet: hard seam this frame
+  const s = d.s, Y1 = Math.floor(y1 * s), X0 = Math.floor(rect.x * s);
+  const sw = Math.max(1, Math.ceil(rect.w * s)), sh = Math.max(1, Math.ceil(bot * s) - Y1);
+  if (!seamCv) seamCv = mkCanvas(sw, sh);
+  if (seamCv.width < sw || seamCv.height < sh) { seamCv.width = Math.max(seamCv.width, sw); seamCv.height = Math.max(seamCv.height, sh); }
+  const sg = seamCv.getContext('2d');
+  sg.setTransform(1, 0, 0, 1, 0, 0);
+  sg.globalCompositeOperation = 'source-over'; sg.globalAlpha = 1;
+  sg.clearRect(0, 0, seamCv.width, seamCv.height);
+  // Mirror world w-1's first F rows about the seam: its band is sticky, so its painting usually STARTS at the seam
+  // (below.y0 === below.top) and there is nothing above to continue. k = painting row at the seam; screen y of
+  // painting row py = bot + k - py, so the reflection meets the real row k exactly at the seam (no step).
+  const k = below.top - below.y0;
+  sg.setTransform(s, 0, 0, -s, rect.x * s - X0, (bot + k) * s - Y1);
+  drawWorld(sg, rect.w, Hv, world - 1, t || 0, 'map');
+  sg.setTransform(1, 0, 0, 1, 0, 0);
+  sg.globalCompositeOperation = 'destination-in';
+  const gr = sg.createLinearGradient(0, 0, 0, sh);
+  gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,1)');
+  sg.fillStyle = gr; sg.fillRect(0, 0, sw, sh);
+  sg.globalCompositeOperation = 'source-over';
+  g.save();
+  g.beginPath(); g.rect(rect.x, rect.y, rect.w, rect.h); g.clip();
+  g.drawImage(seamCv, 0, 0, sw, sh, X0 / s, Y1 / s, sw / s, sh / s);
+  g.restore();
 }
 
 // Idle-time pre-bake of the six map bakes (only for worlds whose painting has decoded; a procedural bake would be

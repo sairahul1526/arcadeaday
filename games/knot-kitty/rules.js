@@ -494,6 +494,13 @@ export function botRun(puz, kind, r) {
         const pool = a.length ? a : b.length ? b : legal;
         pick = pool[(r() * pool.length) | 0];
       }
+    } else if (kind === 'fit') {
+      // fit-first (the critic's policy, fix2): a free strand that winds onto an active spool, else one whose colour
+      //   is already in the basket, else any free strand; ties at random. No look-ahead at NEXT.
+      const a = legal.filter(id => fitsSpool(puz, st, id));
+      const b = a.length ? a : legal.filter(id => st.basket.includes(puz.strands[id].c));
+      const pool = b.length ? b : legal;
+      pick = pool[(r() * pool.length) | 0];
     } else {
       // expert: look bot + 1-ply safety
       const safe = legal.filter(id => { const s2 = doPull(puz, cloneState(st), id, null); return !s2.dead && (s2.removed === puz.full || legalMoves(puz, s2).length > 0); });

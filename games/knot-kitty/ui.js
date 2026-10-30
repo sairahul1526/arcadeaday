@@ -45,7 +45,7 @@ import * as LV from './levels.js';
 import { canPull } from './rules.js';
 import * as AU from './audio.js';
 import * as PL from './play.js';
-import { img, WINS, BOSSES } from './art.js';
+import { img, WINS, BOSSES, bgArt } from './art.js';
 
 // ---------- style ----------
 const INK = '#2B2440', CREAM = '#FFF4E4', STITCH = '#E9D3B5', SHADE = '#D9BF9C', TOMATO = '#E8463A', TOMATO_D = '#B8322A';
@@ -58,8 +58,13 @@ const BK = ['undo', 'hint', 'slot', 'snip'];
 const ICOL = { pause: TEAL, retry: TEAL, undo: TEAL, hint: GOLD, slot: CREAM, snip: TOMATO, gear: TEAL, cart: TEAL, paw: TOMATO,
   calendar: CREAM, share: TEAL, close: TOMATO, home: TOMATO, lock: CREAM };
 const BNAME = { undo: 'Undo', hint: 'Hint', slot: '+1 Slot', snip: 'Snip' };
-const BDESC = { undo: 'Takes back your last pull', hint: 'Shows a good next move', slot: 'One more basket space (max 2★)',
-  snip: 'Pull any strand, even covered (max 2★)' };
+// fix 2 (grandparent: "(max 2★)" is jargon): plain words, read at ≥ 16 px in the shop
+const BDESC = { undo: 'Takes back your last pull', hint: 'Shows a good next move', slot: 'One more basket space. Using it means 2 stars at most',
+  snip: 'Pull any strand, even a covered one. 2 stars at most' };
+// fix 2: the one-line meaning of each mechanic, re-shown by tapping the HUD "?" (the first-time banner fades in ~2 s)
+const MECH_LINE = { knot: 'Tied strands go together as one pull', lock: 'A padlock opens when you pull its key strand',
+  mystery: 'Grey yarn shows its colour once nothing is on top', paw: 'A sleepy paw waits until you pull the number on its bubble',
+  rainbow: 'Rainbow yarn fits any spool', jumbo: 'The big spool takes 6 strands', ice: 'The ice slot thaws after spools fill' };
 const BTEACH = { undo: 'Undo takes back a pull', hint: 'Hint shows a good move', slot: '+1 Slot adds a basket space',
   snip: 'Snip pulls any strand' };
 const TEACH_LINE = { knot: 'Tied together: they go as one', lock: 'Pull the key strand to unlock',
@@ -138,6 +143,23 @@ function wrapFit(g, s, maxW, maxH, size, min, f = FB, w = '800', lh = 1.14) {
   }
   const s2 = Math.min(size, size * maxW / best.m, maxH / (2 * lh));
   return s2 > s1 ? { lines: [best.a, best.b], size: s2 } : { lines: [s], size: s1 };
+}
+// fix 2: instructional copy never drops below `min` css px. Greedy word wrap at `size`, stepping the size down to
+//   `min` only while it needs more than `maxL` lines; at `min` it keeps every line (callers budget for wf.lines.length).
+function wrapMin(g, s, maxW, size, min, maxL = 2, f = FB, w = '800') {
+  const words = String(s).split(' ');
+  const wrap = (z) => {
+    const out = []; let cur = '';
+    for (const wd of words) { const t = cur ? cur + ' ' + wd : wd; if (cur && tw(g, t, z, f, w) > maxW) { out.push(cur); cur = wd; } else cur = t; }
+    if (cur) out.push(cur);
+    return out;
+  };
+  let z = Math.max(size, min), ls = wrap(z);
+  while (z > min && (ls.length > maxL || ls.some(l => tw(g, l, z, f, w) > maxW))) { z = Math.max(min, z - 1); ls = wrap(z); }
+  // a single word wider than maxW is the only case that may shrink under min (never happens with our copy)
+  const wide = Math.max(...ls.map(l => tw(g, l, z, f, w)));
+  if (wide > maxW) z = Math.max(10, z * maxW / wide);
+  return { lines: ls, size: z };
 }
 function lines(g, wf, x, cy, o = {}) {
   const lh = wf.size * 1.14, y0 = cy - (wf.lines.length - 1) * lh / 2;
@@ -319,7 +341,7 @@ const U = {
   callout: null, queue: [], pop: null, popQ: [],
   card: null, cards: [], extra: [], after: null, giftKeys: new Set(), winDone: false, loseDone: false, winAt: 0, loseAt: 0,
   sessRef: null, tut: null, tutOn: false, idle: 0, hand: null, ghost: null, attn: [], fly: [], intro: null,
-  rate: {}, undoPulse: 0, shakes: {},
+  rate: {}, undoPulse: 0, shakes: {}, losses: {}, freeHintUsed: {},
   map: { scroll: 0, v: 0, target: null, down: null, drag: false, sel: 1, nodes: [], last: 0, lastY: 0 },
   shop: { tab: 'outfits', sel: 'tabby', bsel: 'undo' }, reset: 0, toast: null,
   kc: { key: '', cv: null }, dailyLv: { key: '', lv: null }, sil: new Map(),
@@ -336,7 +358,7 @@ const isLand = S => S.W / S.H >= 1.15;
 //   and the all-beaten screen with no card up; play, cards and every dialog hide them (body.kk-play, see index.html),
 //   so a stray tap can't leave the game mid-level. They are hidden with visibility (not display), so layout.js still
 //   measures the same inset and S.L never goes stale; screens that hide the chips simply use the full height.
-const navShown = S => !!S && (S.screen === 'title' || S.screen === 'map' || S.screen === 'allbeaten') && !U.card;
+const navShown = S => !!S && (S.screen === 'title' || S.screen === 'map' || S.screen === 'allbeaten') && !U.card && !U.how;
 const dlgInset = S => (navShown(S) ? layoutOf(S).inset || 0 : 0);
 function syncNav(S) {
   const show = navShown(S);
@@ -382,7 +404,7 @@ function pill(g, b) {
   const avail = b.w - 2 * pad - (iw ? iw + h * 0.12 : 0) - (b.badge ? h * 0.3 : 0);
   const stroke = fg === '#fff' ? INK : null;
   if (b.sub) {
-    const s1 = fitSize(g, b.label, avail, h * 0.46, FT, '', 0.2), s2 = Math.max(11.2, fitSize(g, b.sub, avail, Math.max(11.5, h * 0.19), FB, '900'));
+    const s1 = fitSize(g, b.label, avail, h * 0.46, FT, '', 0.2), s2 = Math.max(12, fitSize(g, b.sub, avail, Math.max(12, h * 0.2), FB, '900'));
     txt(g, b.label, x + b.w / 2, cy - h * 0.1, s1, { col: fg, stroke, sk: 0.2 });
     txt(g, b.sub, x + b.w / 2, cy + h * 0.27, s2, { f: FB, w: '900', col: fg === '#fff' ? CREAM : INK });
   } else {
@@ -701,7 +723,8 @@ function dirMechanics(s) {
 //   marked seen. If the player pulls before it could show, it is dropped unmarked and the tags still cover it.
 const TEACH_PLAN = {
   3: { key: 'teach3', rings: ['basket', 'next'], arrow: true, label: { text: 'Spare yarn waits here', at: 'basket' }, marks: ['f_basket', 'f_next'] },
-  4: { key: 'teach4', rings: ['par', 'next'], label: { text: 'Keep yarn left of ★ for 3★', at: 'par' }, marks: ['x_par'] },
+  // fix 2 (critics r1): plain words, and L4 teaches the plan (watch NEXT, keep the basket empty), ≥ 16 px
+  4: { key: 'teach4', rings: ['par', 'next'], label: { text: 'Look at NEXT: pull the colour that\'s coming, keep the basket empty', at: 'next' }, marks: ['x_par'] },
 };
 function teachFor(s) {
   if (!s || s.kind !== 'level' || SHOWREEL) return null;
@@ -851,7 +874,7 @@ function onBus(type, d) {
       break;
     case 'hint': if (d && d.id != null && d.id < 0) { U.undoPulse = U.t + 4; if (U.t - (U.rate.refuse || -9) > 1.5) say('Undo a pull first', { pri: 2, dur: 2.2 }); } break;
     case 'doomed':
-      if (safe(() => M.boosterUnlocked('undo'), false) && rateOk('doomed', 8)) say('Tight spot! Undo can help', { pri: 1, dur: 2.2 });
+      if (safe(() => M.boosterUnlocked('undo'), false) && rateOk('doomed', 8)) say('This is getting tight. Try Undo.', { pri: 2, dur: 2.4 });
       break;
   }
 }
@@ -1031,13 +1054,12 @@ function finishWin(fn) {
   }
   for (const c of U.extra) if (!list.some(x => x.key === c.key)) list.push(c);
   U.extra = [];
-  // ui2 U6: a star gift landing on the same win as a booster unlock (15★ ≈ L5) rides on the unlock card, so the
-  //   player gets one reward moment instead of two cards back to back.
-  const un = list.find(x => x.type === 'unlockBooster'), gi = list.findIndex(x => x.type === 'gift');
-  if (un && gi >= 0 && !(un.data && un.data.extra)) { un.data = { ...(un.data || {}), extra: list[gi].data || {} }; list.splice(gi, 1); }
+  // fix 6 (was ui2 U6, which only folded a star gift into a booster unlock): after a win there is at most ONE extra
+  //   card. Every gift / chest / unlock of this win folds into a single Rewards card with one COLLECT.
+  const cards = list.length > 1 ? [{ type: 'rewards', key: 'rewards|' + list.map(x => x.key).join(','), data: { parts: list.map(x => ({ type: x.type, data: x.data || {} })) }, t0: U.t, emitted: [] }] : list;
   U.card = null;
-  if (!list.length) { fn(); return; }
-  U.cards = list; U.after = fn;
+  if (!cards.length) { fn(); return; }
+  U.cards = cards; U.after = fn;
   nextCard();
 }
 function nextCard() {
@@ -1045,6 +1067,23 @@ function nextCard() {
   if (U.cards.length) { U.card = U.cards.shift(); U.card.t0 = U.t; return; }
   const fn = U.after; U.after = null;
   if (fn) fn();
+}
+/** fix r2: lose-card Hint. Buys one first when stock is 0 (yarn allowing), then api.rescueHint rewinds to the last
+ *  spot with a way out and shows the move. `free` = the one free Hint after 2 losses (no stock, no yarn). */
+function loseHint(free, lkey) {
+  if (!free && safe(() => M.booster('hint'), 0) <= 0) {
+    if (safe(() => M.balance(), 0) < BOOSTERS.hint.price) {
+      U.shakes['l-hint'] = U.t; toast('Not enough yarn balls');
+      return;
+    }
+    if (!safe(() => M.buyBooster('hint'), false)) return;
+    bus.emit('buy', { item: 'hint' });
+  }
+  const ok = !!(api && typeof api.rescueHint === 'function' && safe(() => api.rescueHint(free), false));
+  if (!ok) { U.shakes['l-hint'] = U.t; toast('No way out from here. Try Retry'); return; }
+  if (free) U.freeHintUsed[lkey] = true;
+  const S = U.S;
+  if (S && S.sess && !S.sess.stuck) U.card = null;
 }
 function loseBooster(k) {
   if (!tapBooster(k)) return;
@@ -1137,6 +1176,7 @@ export function draw(g, S) {
       else drawDaily(g, S);
     }
     if (U.card) { U.reg = true; drawCard(g, S); }
+    if (U.how) drawHow(g, S);
     if (U.toast) drawToast(g, S);
   } finally { g.restore(); }
   syncNav(S);
@@ -1227,12 +1267,15 @@ function drawTitle(g, S) {
     const r = 23 * e, gapX = Math.min(28 * e, (maxW - 8 * r) / 3), total = 8 * r + 3 * gapX;
     items.forEach(([id, ic, label, act, dot], i) => {
       const x = cx - total / 2 + i * (2 * r + gapX);
-      iconBtn(g, { id: 't-' + id, label, x, y, w: 2 * r, h: 2 * r, icon: ic, act, dot, d: e });
-      // ui2 U8: ≥12px labels on a soft ink backing so they read over any background art
+      // fix r2: labels sit on a cream felt pill (ink text) so they read over the baked pumpkins at 360x640, and the
+      //   label is part of the button's hit area (critics: "only the circles are tappable")
       const mw = 2 * r + gapX - 4, fs = Math.max(12, fitSize(g, label, mw - 8, Math.max(12, 13 * e), FB, '800')), lw = Math.min(mw, tw(g, label, fs, FB, '800') + fs * 0.9);
-      const ly = y + 2 * r + 10 * e;
-      rr(g, x + r - lw / 2, ly - fs * 0.72, lw, fs * 1.44, fs * 0.72); g.fillStyle = 'rgba(43,30,40,0.42)'; g.fill();
-      txt(g, label, x + r, ly, fs, { f: FB, w: '800', col: '#fff', stroke: INK, sk: 0.22, maxW: lw - 4 });
+      const ly = y + 2 * r + 10 * e, hw = Math.max(2 * r, lw);
+      iconBtn(g, { id: 't-' + id, label, x, y, w: 2 * r, h: 2 * r, icon: ic, act, dot, d: e,
+        hit: { x: x + r - hw / 2, y, w: hw, h: ly + fs * 0.72 - y } });
+      rr(g, x + r - lw / 2, ly - fs * 0.72, lw, fs * 1.44, fs * 0.72); g.fillStyle = CREAM; g.fill();
+      g.lineWidth = Math.max(1, 1.6 * e); g.strokeStyle = INK; g.stroke();
+      txt(g, label, x + r, ly, fs, { f: FB, w: '800', col: INK, maxW: lw - 4 });
     });
   };
   const playBtn = (cx, y, w, e) => pill(g, { id: 'title-play', label: 'PLAY', sub: playSub || null, kind: 'primary', x: cx - w / 2, y, w, h: 72 * e, act: playAct, d: e });
@@ -1288,16 +1331,31 @@ function drawTitle(g, S) {
 }
 
 // ---------- map ----------
+// DECISION (fix 2, critics "desktop map squeezed into the lower right"): on landscape screens the path's vertical
+//   pitch uses s = min(du, H/640) instead of du, so ~6-7 levels (a full left-right swing of the path) show at once,
+//   and the swing widens to 30 % of the width (≤ 230 s) so the path is balanced around the centre. Phones, tablets
+//   and square screens keep s = du (unchanged). mm.s is also the resize anchor unit (mapKeep).
 function mapM(S) {
-  const d = U.du, W = S.W, H = S.H, inset = layoutOf(S).inset || 0;
+  const d = U.du, W = S.W, H = S.H, inset = layoutOf(S).inset || 0, land = isLand(S);
+  const s = land ? Math.min(d, H / 640) : d;
   const topH = 60 * d, playH = 52 * d, botH = playH + 24 * d + inset;
-  const dy = 66 * d, gap = 90 * d;
+  const dy = 66 * s, gap = 90 * s;
   const yc = i => (i - 1) * dy + (worldOf(Math.min(LEVELS, i)) - 1) * gap;
-  const baseY = H - botH - 56 * d;
-  const topY = yc(LEVELS) + 150 * d;
-  const maxScroll = Math.max(0, topY - (baseY - topH - 20 * d));
-  const amp = Math.min(W * 0.27, 120 * d);
-  return { d, W, H, topH, playH, botH, dy, gap, yc, baseY, maxScroll, amp, cx: W / 2, inset };
+  const baseY = H - botH - 56 * s;
+  const topY = yc(LEVELS) + 150 * s;
+  // fix 2: the trophy (and node 60) stop clear of the header at full scroll (it used to sit half under it)
+  const maxScroll = Math.max(0, topY - (baseY - topH - 54 * d));
+  const amp = land ? Math.min(W * 0.3, 230 * s) : Math.min(W * 0.27, 120 * d);
+  return { d, s, W, H, topH, playH, botH, dy, gap, yc, baseY, maxScroll, amp, cx: W / 2, inset };
+}
+// fix 2 (kid13 "top lock node half under the header"): 0..1 opacity for a map item spanning [y0, y1] so nothing is
+//   ever drawn half under the header or the PLAY strip: fully shown once clear, gone by the time its centre reaches
+//   the edge. The path itself still runs under both bars.
+function mapClear(mm, y0, y1, stripY) {
+  const c = (y0 + y1) / 2, top = mm.topH + 2 * mm.d, bot = stripY - 2 * mm.d;
+  const a = y0 >= top ? 1 : c <= top ? 0 : (c - top) / Math.max(1, c - y0);
+  const b = y1 <= bot ? 1 : c >= bot ? 0 : (bot - c) / Math.max(1, y1 - c);
+  return clamp(Math.min(a, b), 0, 1);
 }
 const nY = (mm, Y) => mm.baseY - Y + U.map.scroll;
 const nX = (mm, i) => mm.cx + Math.sin(i * 0.95) * mm.amp;
@@ -1311,13 +1369,13 @@ function mapFocus(S, snap) {
 function mapKeep(mm) {
   const m = U.map, key = mm.W + 'x' + mm.H, mid = mm.topH + (mm.H - mm.topH - mm.botH) / 2;
   if (m.key && m.key !== key && m.anchor != null) {
-    const s = m.anchor * mm.d - mm.baseY + mid;
+    const s = m.anchor * mm.s - mm.baseY + mid;
     m.scroll = clamp(s, 0, mm.maxScroll);
-    if (m.target != null) m.target = clamp(m.tAnchor * mm.d - mm.baseY + mid, 0, mm.maxScroll);
+    if (m.target != null) m.target = clamp(m.tAnchor * mm.s - mm.baseY + mid, 0, mm.maxScroll);
   }
   m.key = key;
-  m.anchor = (m.scroll + mm.baseY - mid) / mm.d;
-  m.tAnchor = m.target != null ? (m.target + mm.baseY - mid) / mm.d : null;
+  m.anchor = (m.scroll + mm.baseY - mid) / mm.s;
+  m.tAnchor = m.target != null ? (m.target + mm.baseY - mid) / mm.s : null;
 }
 function mapUpdate(dt, S) {
   const mm = mapM(S), m = U.map;
@@ -1367,11 +1425,12 @@ function trophy(g, x, y, s) {
   g.restore();
 }
 function drawMap(g, S) {
-  const mm = mapM(S), d = mm.d, W = mm.W, H = mm.H;
+  const mm = mapM(S), d = mm.d, sd = mm.s, W = mm.W, H = mm.H;
   mapKeep(mm);
   const cur = safe(() => M.cur(), 1), sel = clamp(U.map.sel || 1, 1, Math.min(cur, LEVELS));
   U.map.sel = sel;
   const span = mm.dy + mm.gap;
+  const playY = H - mm.inset - 12 * d - mm.playH, stripY = playY - 10 * d; // bottom PLAY strip (drawn last)
   // world bands
   for (let w = 1; w <= 6; w++) {
     const lo = w === 1 ? mm.yc(1) - 420 * d : mm.yc(10 * (w - 1)) + 0.62 * span;
@@ -1409,10 +1468,11 @@ function drawMap(g, S) {
   if (reach >= f) { g.save(); g.setLineDash([3 * d, 7 * d]); strokePath(f, Math.min(l, reach), 'rgba(0,0,0,0)', TOMATO_D, 2 * d, [3 * d, 7 * d]); g.restore(); }
   // chests + world labels
   for (let w = 1; w <= 6; w++) {
-    const cy = nY(mm, mm.yc(10 * w) + (w < 6 ? 0.3 * span : 70 * d));
+    const cy = nY(mm, mm.yc(10 * w) + (w < 6 ? 0.3 * span : 70 * sd));
     const cx = w < 6 ? lerp(nX(mm, 10 * w), nX(mm, 10 * w + 1), 0.42) : mm.cx + mm.amp * 0.65;
-    if (cy > -40 * d && cy < H + 40 * d) chestIcon(g, cx, cy, 34 * d, safe(() => M.chestClaimed(w), false));
-    const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * d) : nY(mm, mm.yc(10 * (w - 1)) + 0.64 * span);
+    const ca = mapClear(mm, cy - 22 * d, cy + 12 * d, stripY);
+    if (ca > 0 && cy > -40 * d && cy < H + 40 * d) { g.save(); g.globalAlpha *= ca; chestIcon(g, cx, cy, 34 * d, safe(() => M.chestClaimed(w), false)); g.restore(); }
+    const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * sd) : nY(mm, mm.yc(10 * (w - 1)) + 0.64 * span);
     // fix 2: under a modal (settings / shop / kittens / daily over the map) the labels are hidden: at 1440×900 the
     //   settings card's bottom edge cut the "World 1" strip in half.
     if (S.screen === 'map' && ly > -30 * d && ly < H + 30 * d) {
@@ -1426,13 +1486,16 @@ function drawMap(g, S) {
   }
   // trophy
   // fix 1 (state M2): the trophy is a button: All Beaten / Bonus Tangles once every level is beaten
-  const ty = nY(mm, mm.yc(LEVELS) + 130 * d);
-  if (ty > -60 * d && ty < H + 60 * d) {
-    const tx = mm.cx - mm.amp * 0.3, done = cur > LEVELS, ts = 54 * d;
+  const ty = nY(mm, mm.yc(LEVELS) + 130 * sd);
+  const tsz = 54 * d, ta = mapClear(mm, ty - tsz * 0.62, ty + tsz * 0.46, stripY);
+  if (ta > 0 && ty > -60 * d && ty < H + 60 * d) {
+    const tx = mm.cx - mm.amp * 0.3, done = cur > LEVELS, ts = tsz;
+    g.save(); g.globalAlpha *= ta;
     if (done) { const p = 0.5 + 0.5 * Math.sin(U.t * 3); g.save(); g.globalAlpha = 0.35 + 0.3 * p; g.beginPath(); g.arc(tx, ty - ts * 0.1, ts * (0.62 + 0.06 * p), 0, 7); g.fillStyle = GOLD; g.fill(); g.restore(); }
     const tb = reg({ id: 'm-trophy', label: done ? 'All beaten' : 'Trophy', x: tx - ts * 0.5, y: ty - ts * 0.6, w: ts, h: ts * 1.1,
       act: () => { if (done) api.go('allbeaten'); else toast(`Beat all ${LEVELS} levels to win the trophy`); } });
     if (hov(tb)) { g.save(); g.translate(0, -2); trophy(g, tx, ty, ts); g.restore(); } else trophy(g, tx, ty, ts);
+    g.restore();
   }
   // nodes
   U.map.nodes = [];
@@ -1441,7 +1504,10 @@ function drawMap(g, S) {
     const x = pts[i - 1][0], y = pts[i - 1][1];
     const boss = i % PER_WORLD === 0, r = (boss ? 23 : 17) * d;
     const st = safe(() => M.stars(i), 0), open = i <= cur, isCur = i === Math.min(cur, LEVELS) && cur <= LEVELS;
+    const na = mapClear(mm, y - r - 8 * d, y + r + (open && i < cur ? 15 * d : 8 * d), stripY);
+    if (na <= 0) continue;
     g.save();
+    g.globalAlpha *= na;
     g.beginPath(); g.arc(x + 1.5 * d, y + 3 * d, r, 0, 7); g.fillStyle = 'rgba(43,36,64,0.35)'; g.fill();
     if (isCur) { const p = 0.5 + 0.5 * Math.sin(U.t * 4); g.beginPath(); g.arc(x, y, r + (4 + 4 * p) * d, 0, 7); g.lineWidth = 3 * d; g.strokeStyle = `rgba(255,255,255,${0.5 + 0.4 * p})`; g.stroke(); }
     if (i === sel && open) { g.beginPath(); g.arc(x, y, r + 4 * d, 0, 7); g.lineWidth = 4 * d; g.strokeStyle = GOLD; g.stroke(); }
@@ -1452,13 +1518,14 @@ function drawMap(g, S) {
     if (!open) aIcon(g, 'lock', x, y, r * 1.0, 'rgba(43,36,64,0.75)');
     else txt(g, String(i), x, y + r * 0.06, r * 0.95, { col: isCur ? '#fff' : INK, stroke: isCur ? INK : null, sk: 0.2, maxW: r * 1.55 });
     if (open && i < cur) for (let j = 0; j < 3; j++) aStar(g, x + (j - 1) * 12 * d, y + r + 8 * d - (j === 1 ? 2 * d : 0), 6 * d, j < st, 0);
-    g.restore();
-    if (open) U.map.nodes.push({ id: i, x, y, r });
-    else U.map.nodes.push({ id: i, x, y, r, locked: true });
     if (isCur) {
       const side = Math.sin(i * 0.95) > 0 ? -1 : 1;
       aKitty(g, x + side * (r + 22 * d), y + r * 0.8, 44 * d, 'idle', U.t, wear);
     }
+    g.restore();
+    if (na < 0.4) continue; // mostly hidden under a bar: not tappable
+    if (open) U.map.nodes.push({ id: i, x, y, r });
+    else U.map.nodes.push({ id: i, x, y, r, locked: true });
   }
   if (cur > LEVELS && ty > -60 * d && ty < H + 60 * d) aKitty(g, mm.cx + mm.amp * 0.3, ty + 30 * d, 50 * d, 'celebrate', U.t, wear);
   // top bar
@@ -1476,7 +1543,9 @@ function drawMap(g, S) {
   const lbl = `${ng.have} / ${ng.need}`;
   aStar(g, sx + 11 * d, cy - 6 * d, 10 * d, true, 0);
   txt(g, lbl, sx + 25 * d, cy - 6 * d, 18 * d, { align: 'left', maxW: sw - 28 * d });
-  const barY = cy + 9 * d, barW = sw - 6 * d, prev = Math.floor(ng.have / 15) * 15, p = ng.need > prev ? (ng.have - prev) / (ng.need - prev) : 1;
+  // fix 2 (art director): the fill matches its "have / need" label (it used to show progress inside the current
+  //   15-star segment, so "62 / 75" drew a nearly empty bar)
+  const barY = cy + 9 * d, barW = sw - 6 * d, p = ng.need > 0 ? ng.have / ng.need : 1;
   rr(g, sx + 3 * d, barY, barW, 7 * d, 3.5 * d); g.fillStyle = STITCH; g.fill();
   rr(g, sx + 3 * d, barY, Math.max(7 * d, barW * clamp(p, 0, 1)), 7 * d, 3.5 * d); g.fillStyle = GOLD; g.fill();
   rr(g, sx + 3 * d, barY, barW, 7 * d, 3.5 * d); g.lineWidth = Math.max(1, 1.6 * d); g.strokeStyle = INK; g.stroke();
@@ -1488,8 +1557,7 @@ function drawMap(g, S) {
   aIcon(g, 'ball', bx2 + 15 * d, cy, 20 * d);
   txt(g, bal, bx2 + 28 * d + (bw2 - 34 * d) / 2, cy + 1 * d, 17 * d, { maxW: bw2 - 34 * d });
   // bottom PLAY on a backing strip (fix 1, desktop m1): nodes and world banners scroll under the strip, not the button
-  const pw = Math.min(W - 24 * d, 300 * d), py = H - mm.inset - 12 * d - mm.playH;
-  const stripY = py - 10 * d;
+  const pw = Math.min(W - 24 * d, 300 * d), py = playY;
   g.fillStyle = CREAM; g.fillRect(0, stripY, W, H - stripY);
   g.fillStyle = INK; g.fillRect(0, stripY, W, 3 * d);
   g.save(); g.setLineDash([6 * d, 5 * d]); g.strokeStyle = STITCH; g.lineWidth = 1.6 * d; g.beginPath(); g.moveTo(0, stripY + 9 * d); g.lineTo(W, stripY + 9 * d); g.stroke(); g.restore();
@@ -1549,6 +1617,24 @@ function drawHUD(g, S, live) {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
     txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.max(11, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
   }
+  // fix 10: the first-time mechanic line fades in ~3 s; a small "?" next to the level title (and the title itself)
+  //   re-shows it in plain words, one mechanic per tap
+  const mechs = showBtns ? Object.keys(MECH).filter(k => MECH_LINE[k] && safe(() => MECH[k](sess.puz || {}), false)) : [];
+  if (mechs.length) {
+    const tW = Math.min(tw(g, title, ts), maxW), rq = Math.max(10, ts * 0.48);
+    const qx = h.x + h.w / 2 + tW / 2 + rq + 5, qy = h.y + h.h * (plaque ? 0.4 : 0.38);
+    const room = qx + rq <= h.x + h.w - (L.m + dd + 4);
+    if (room) {
+      g.save(); g.beginPath(); g.arc(qx, qy, rq, 0, 7); g.fillStyle = CREAM; g.fill();
+      g.lineWidth = Math.max(1.5, 2 * u); g.strokeStyle = INK; g.stroke(); g.restore();
+      txt(g, '?', qx, qy + rq * 0.04, rq * 1.3, { col: INK });
+    }
+    const x0 = h.x + h.w / 2 - tW / 2 - 4, x1 = room ? qx + rq + 4 : h.x + h.w / 2 + tW / 2 + 4;
+    reg({ id: 'hud-help', label: 'What does this do?', x: x0, y: h.y, w: x1 - x0, h: h.h, act: () => {
+      const i = (U.mechI | 0) % mechs.length;
+      U.mechI = i + 1; forceSay(MECH_LINE[mechs[i]], 3, 4);
+    } });
+  }
 }
 function drawBoosters(g, S) {
   const L = layoutOf(S), sess = S.sess;
@@ -1575,9 +1661,11 @@ function drawCallout(g, S, L) {
   const a = Math.min(1, c.t / 0.15, Math.max(0, (c.dur - c.t) / 0.2));
   if (a <= 0) return;
   const padX = 14 * u, maxW = b.w - 2 * padX;
-  const wf = wrapFit(g, c.text, maxW, b.h * 0.86, Math.min(18 * u, b.h * 0.62), 13 * u, FB, '800');
+  // fix 2: coaching lines read at ≥ 16 css px; they wrap (2 lines, 3 on a very narrow band) and the bubble grows to
+  //   hold them rather than the text shrinking to 12 px to fit the band height
+  const wf = wrapMin(g, c.text, maxW, Math.max(16, Math.min(19 * u, b.h * 0.62)), 16, 2, FB, '800');
   const textW = Math.max(...wf.lines.map(l => tw(g, l, wf.size, FB, '800')));
-  const pw = Math.min(b.w, textW + 2 * padX), ph = Math.min(b.h, wf.size * 1.14 * wf.lines.length + 10 * u);
+  const pw = Math.min(b.w, textW + 2 * padX), ph = wf.size * 1.14 * wf.lines.length + 12 * u;
   let cx = b.x + b.w / 2, cy = b.y + b.h / 2, tail = null;
   const side = calloutSide(g, S, L, pw, ph);
   if (side) { cx = side.cx; cy = side.cy; tail = side.tail; }
@@ -1718,8 +1806,8 @@ const FIRST = [
   { key: 'f_basket', ok: (s, L) => !L.hideBasket && (s.basket || []).length > 0, text: 'Basket: extra yarn waits here', at: 'basket' },
   { key: 'f_next', ok: s => (s.nextQ || []).length > 0, text: 'This spool comes next', at: 'next' },
   { key: 'f_c4', ok: s => colourCount(s) >= 4, text: '4 colours now! Match each to its spool', at: 'rack' },
-  { key: 'x_more', ok: s => moreOf(s) > 0, text: s => `+${moreOf(s)} = more spools still to come`, at: 'more', dur: 6 },
-  { key: 'x_par', ok: s => parShown(s) >= 0, text: 'Keep yarn left of the ★ flag for 3★', at: 'par', dur: 7 },
+  { key: 'x_more', ok: s => moreOf(s) > 0, text: s => (moreOf(s) === 1 ? '+1 = one more spool after these' : `+${moreOf(s)} = ${moreOf(s)} more spools after these`), at: 'more', dur: 6 },
+  { key: 'x_par', ok: s => parShown(s) >= 0, text: 'Keep the basket nearly empty to earn 3 stars', at: 'par', dur: 7 },
 ];
 // DECISION (ui2 L1): a first-time tag knows its TARGET box (t) and a preferred side; placeTag tries every side
 //   (above / below / left / right), slides along the target and may shrink one step, scoring each spot by how much
@@ -1757,27 +1845,35 @@ function tagObstacles(S, L, at) {
   const rs = safe(() => rackSlots(L), null);
   if (rs) {
     for (const p of rs.active) add(p.x - p.w / 2, p.y - p.h * 0.95, p.x + p.w / 2, p.y + p.h / 2, 2.5);
-    rs.next.forEach((p, i) => add(p.x - p.w / 2, p.y - p.h * (i ? 0.9 : 1.25), p.x + p.w / 2, p.y + p.h / 2, 2.5));
+    // fix r2 (critic: the L6/L7 "+1" tag covered the NEXT spool): the NEXT spool and its "NEXT" label above it are
+    //   a heavy obstacle, so a tag never sits on what the player must look at next
+    rs.next.forEach((p, i) => add(p.x - p.w / 2 - 4, p.y - p.h * (i ? 0.9 : 1.3), p.x + p.w / 2 + 4, p.y + p.h / 2, i ? 2.5 : 7));
     if (rs.kitty) add(rs.kitty.x - rs.kitty.s * 0.45, rs.kitty.y - rs.kitty.s, rs.kitty.x + rs.kitty.s * 0.45, rs.kitty.y, 1.5);
     if (rs.more && at !== 'more' && moreOf(s) > 0) { const r = Math.max(10, 12 * L.u); add(rs.more.x - r * 1.1, rs.more.y - r * 0.75, rs.more.x + r * 1.1, rs.more.y + r * 0.75, 2.5); }
   }
   if (L.basket && !L.hideBasket && at !== 'basket' && at !== 'par') add(L.basket.x, L.basket.y, L.basket.x + L.basket.w, L.basket.y + L.basket.h, 1.5);
   const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
   const br = keys.length ? safe(() => boosterRects(L, keys), {}) : {};
-  for (const k of keys) { const r = br[k]; if (r) add(r.x, r.y, r.x + r.w, r.y + r.h, 2.5); }
+  // fix r2 (critic: the L20 tag sat on the boosters): boosters and the HUD buttons are things the player taps, so
+  //   they weigh more than the kitten; a tag over the board or the HUD title is the cheaper spot
+  for (const k of keys) { const r = br[k]; if (r) add(r.x - 4, r.y - 4, r.x + r.w + 4, r.y + r.h + 4, 7); }
+  for (const id of ['hud-pause', 'hud-retry']) { const b = findBtn(id); if (b) add(b.x, b.y, b.x + b.w, b.y + b.h, 4); }
   return o;
 }
 function placeTag(g, S, L, text, an, at, u) {
-  const t = an.t, W = S.W, H = S.H, ob = tagObstacles(S, L, at), base = clamp(14 * u, 12, 30);
+  // fix 2 (grandparent): instructional tags read at ≥ 16 css px; a long line wraps to 2 lines instead of shrinking
+  const t = an.t, W = S.W, H = S.H, ob = tagObstacles(S, L, at), base = clamp(17 * u, 16, 30);
   const ov = (x0, y0, x1, y1) => { let sc = 0; for (const q of ob) { const w = Math.min(x1, q.x1) - Math.max(x0, q.x0), h = Math.min(y1, q.y1) - Math.max(y0, q.y0); if (w > 0 && h > 0) sc += q.wt * w * h; } return sc; };
   let best = null;
-  for (const [si, size] of [base, Math.max(12, base * 0.86)].entries()) {
-    const fs = fitSize(g, text, Math.min(W - 24, 320 * u) - 1.4 * size, size, FB, '900');
-    const w = tw(g, text, fs, FB, '900') + 1.4 * fs, h = fs * 2.1, tip = fs * 0.6, gap = 2;
+  for (const [si, size] of [base, Math.max(16, base * 0.9)].entries()) {
+    const mw = Math.min(W - 24, 340 * Math.max(1, u)) - 1.4 * size;
+    const wf = wrapMin(g, text, mw, size, 16, 2, FB, '900');
+    const fs = wf.size, lw = Math.max(...wf.lines.map(l => tw(g, l, fs, FB, '900')));
+    const w = lw + 1.4 * fs, h = fs * (1.14 * wf.lines.length + (wf.lines.length > 1 ? 0.96 : 0.78)), tip = fs * 0.6, gap = 2;
     const tryAt = (side, x, y, tx, ty, pen) => {
       if (x < 6 || y < 4 || x + w > W - 6 || y + h > H - 4) return;
       const sc = ov(x, y, x + w, y + h) / (w * h) + pen + si * 0.12;
-      if (!best || sc < best.sc) best = { sc, side, x, y, w, h, tip, fs, tx, ty };
+      if (!best || sc < best.sc) best = { sc, side, x, y, w, h, tip, fs, tx, ty, lines: wf.lines };
     };
     const N = 8;
     for (const side of ['above', 'below']) {
@@ -1814,8 +1910,9 @@ function drawTag(g, S, text, p, u, a) {
   const dir = side === 'above' || side === 'left' ? -1 : 1;
   const bob = Math.sin(U.t * 4) * 2 * -dir;
   g.save(); g.globalAlpha = a; if (vert) g.translate(0, bob); else g.translate(bob, 0);
-  g.fillStyle = 'rgba(43,36,64,0.25)'; rr(g, x + 2, y + 3, w, h, h / 2); g.fill();
-  g.beginPath(); rr(g, x, y, w, h, h / 2);
+  const rad = p.lines && p.lines.length > 1 ? fs * 0.9 : h / 2; // a 2-line tag gets softer corners so no text is cut
+  g.fillStyle = 'rgba(43,36,64,0.25)'; rr(g, x + 2, y + 3, w, h, rad); g.fill();
+  g.beginPath(); rr(g, x, y, w, h, rad);
   g.fillStyle = CREAM; g.fill(); g.lineWidth = Math.max(2, 2.4 * u); g.strokeStyle = INK; g.stroke();
   g.beginPath();
   if (vert) {
@@ -1829,7 +1926,8 @@ function drawTag(g, S, text, p, u, a) {
     g.fillStyle = CREAM; g.fill(); g.stroke();
     g.fillRect(side === 'left' ? bx - 3 : bx, ty - tip + 2, 3, 2 * tip - 4);
   }
-  txt(g, text, x + w / 2, y + h / 2 + 1, fs, { f: FB, w: '900', col: INK });
+  const ls = p.lines || [text], lh = fs * 1.14, y0 = y + h / 2 + 1 - (ls.length - 1) * lh / 2;
+  ls.forEach((l, i) => txt(g, l, x + w / 2, y0 + i * lh, fs, { f: FB, w: '900', col: INK }));
   g.restore();
 }
 function drawFirst(g, S, L) {
@@ -1868,14 +1966,21 @@ function drawBanner(g, S, L) {
   if (!b) return;
   const t = U.t - b.t0;
   if (t < 0) return;
-  if (t > 2.3) { U.banner = null; return; }
-  const sess = S.sess, u = L.u, bd = sess && sess.B ? sess.B : L.board;
+  // fix 11: 1.6 s in all (pop 0.28 s, hold, 0.35 s fade that ends at exactly 0 and then the banner is dropped, so no
+  //   faint ghost lingers), and it sits over the HUD header / top margin instead of the top third of the board
+  const DUR_B = 1.6, FADE = 0.35;
+  if (t >= DUR_B) { U.banner = null; return; }
+  const sess = S.sess, u = L.u, bd = sess && sess.B ? sess.B : L.board, hb = L.hud && L.hud.w > 0 ? L.hud : null;
   const boss = b.kind === 'boss' && sess && sess.kind === 'level';
-  const h = Math.max(54, Math.min((boss ? 92 : 86) * u, bd.h * 0.26)), n0 = h * 0.32 + 8;
-  // the ribbon may run past a narrow phone board's sides (never off screen) so its text stays ≥ 12 px
-  const w = Math.min(S.W - 2 * n0, Math.max(bd.w * 0.96, Math.min(S.W - 2 * n0, boss ? 330 : 280)), (boss ? 440 : 380) * Math.max(u, 0.8));
-  const cx = clamp(bd.x + bd.w / 2, w / 2 + n0, S.W - w / 2 - n0), cy = Math.max(bd.y + h * 0.62, h * (boss ? 0.72 : 0.56) + 4), sc = t < 0.3 ? eBack(t / 0.3) : 1, a = t > 1.9 ? 1 - (t - 1.9) / 0.4 : 1;
-  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.03); g.scale(sc, sc);
+  const h = Math.max(54, Math.min((boss ? 88 : 76) * u, hb ? Math.max(54, hb.h * 1.5) : bd.h * 0.26)), n0 = h * 0.32 + 8;
+  const ref = hb || bd;
+  // the ribbon may run past a narrow header's sides (never off screen) so its text stays ≥ 12 px
+  const w = Math.min(S.W - 2 * n0, Math.max(ref.w * 0.96, Math.min(S.W - 2 * n0, boss ? 330 : 280)), (boss ? 440 : 380) * Math.max(u, 0.8));
+  const cx = clamp(ref.x + ref.w / 2, w / 2 + n0, S.W - w / 2 - n0);
+  const cy = hb ? Math.max(hb.y + hb.h / 2, h * (boss ? 0.72 : 0.56) + 4) : Math.max(bd.y + h * 0.62, h * (boss ? 0.72 : 0.56) + 4);
+  const sc = t < 0.28 ? eBack(t / 0.28) : 1, fo = clamp((t - (DUR_B - FADE)) / FADE, 0, 1), a = 1 - fo * fo * (3 - 2 * fo);
+  if (a <= 0.01) return;
+  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(cx, cy); g.rotate(-0.03); g.scale(sc * (1 - 0.06 * fo), sc * (1 - 0.06 * fo));
   const n = h * 0.32;
   g.beginPath(); g.moveTo(-w / 2 - n, -h * 0.3); g.lineTo(-w / 2, -h * 0.3); g.lineTo(-w / 2, h * 0.42); g.lineTo(-w / 2 - n, h * 0.42); g.lineTo(-w / 2 - n * 0.5, h * 0.06); g.closePath();
   g.moveTo(w / 2 + n, -h * 0.3); g.lineTo(w / 2, -h * 0.3); g.lineTo(w / 2, h * 0.42); g.lineTo(w / 2 + n, h * 0.42); g.lineTo(w / 2 + n * 0.5, h * 0.06); g.closePath();
@@ -1895,10 +2000,10 @@ function drawBanner(g, S, L) {
     let tt = title;
     if (ts < h * 0.24) { const last = nm.split(' ').pop(); tt = `${last} is tangled!`; ts = fitSize(g, tt, tw0, h * 0.34, FT, '', 0.2); }
     txt(g, tt, tcx, -h * 0.1, ts, { col: '#fff', stroke: INK, sk: 0.2, maxW: tw0 });
-    txt(g, 'Boss level: take your time', tcx, h * 0.27, h * 0.19, { f: FB, w: '900', col: CREAM, maxW: tw0 });
+    txt(g, 'Boss level: take your time', tcx, h * 0.27, Math.max(12, h * 0.19), { f: FB, w: '900', col: CREAM, maxW: tw0 });
   } else {
     txt(g, 'TOUGH KNOT!', 0, -h * 0.1, h * 0.46, { col: '#fff', stroke: INK, sk: 0.2, maxW: w - 24 * u });
-    txt(g, 'Take your time', 0, h * 0.3, h * 0.2, { f: FB, w: '900', col: CREAM, maxW: w - 24 * u });
+    txt(g, 'Take your time', 0, h * 0.3, Math.max(12, h * 0.2), { f: FB, w: '900', col: CREAM, maxW: w - 24 * u });
   }
   g.restore();
 }
@@ -2011,6 +2116,7 @@ function drawPause(g, S) {
       pill(g, { id: 'p-restart', label: arm ? 'Tap again' : 'Restart', kind: arm ? 'primary' : 'secondary', x: px + pad, y, w: bw, h: 48 * e, act: () => askRestart(S, 'p-restart'), d: e });
       pill(g, { id: 'p-map', label: 'Map', kind: 'secondary', x: px + pad + bw + 10 * e, y, w: bw, h: 48 * e, act: () => api.go('map'), d: e });
     } },
+    { h: 52, fn: (y, hh, e) => pill(g, { id: 'p-how', label: 'How to play', icon: 'hint', kind: 'cream', x: px + pad, y, w: iw, h: 46 * e, act: () => openHow(), d: e }) },
     { h: 8 },
     { h: 44, fn: (y, hh, e) => slider(g, { k: 'music', label: 'Music', x: px + pad, y, w: iw, h: hh, v: set.music, d: e }) },
     { h: 44, fn: (y, hh, e) => slider(g, { k: 'sfx', label: 'Sounds', x: px + pad, y, w: iw, h: hh, v: set.sfx, d: e }) },
@@ -2036,7 +2142,8 @@ function setSet(k, v) { safe(() => M.setSetting(k, v)); bus.emit('settings', { k
 // ---------- generic dialog frame ----------
 function dialogFrame(g, S, maxW, list, opt = {}) {
   const d = U.du, W = S.W, H = S.H - dlgInset(S);
-  const pw = Math.min(W - 20 * d, maxW * d), px = (W - pw) / 2, pad = 18 * d;
+  // fix2 (critic panel r1: modals ≤ ~900 css px on desktop/TV; they already scale with U.du, ≥ 16 px body at d ≥ 1.33)
+  const pw = Math.min(W - 20 * d, maxW * d, Math.max(900, maxW)), px = (W - pw) / 2, pad = 18 * d;
   const lay = rows(list(pw - 2 * pad, px + pad), d, H - 20 * d - 2 * pad);
   const ph = opt.full ? H - 20 * d : lay.h + 2 * pad * lay.k, py = (H - ph) / 2;
   panel(g, px, py, pw, ph, d);
@@ -2048,7 +2155,11 @@ function dialogFrame(g, S, maxW, list, opt = {}) {
 // ---------- settings ----------
 function drawSettings(g, S) {
   const set = safe(() => M.settings(), { music: 0.7, sfx: 0.9, haptics: true });
-  const W = S.W, close = () => api.go(U.ret);
+  const W = S.W, close = () => { U.resetAsk = null; api.go(U.ret); };
+  // fix 5: Reset sits in its own group under CLOSE (a dashed rule and a ≥ 24 px gap between them) and opens a
+  //   confirm card (Keep / Erase) instead of the old two-taps-in-3-s arm, which a double-tap on CLOSE could hit.
+  const wasReg = U.reg;
+  if (U.resetAsk) U.reg = false;
   const fr = dialogFrame(g, S, 380, (iw, x0) => {
     const l = [
       { h: 46, fn: (y, hh, e) => txt(g, 'Settings', W / 2, y + hh / 2, 30 * e, { maxW: iw }) },
@@ -2058,22 +2169,118 @@ function drawSettings(g, S) {
     ];
     if (hasVibrate()) l.push({ h: 46, fn: (y, hh, e) => toggle(g, { id: 's-haptics', label: 'Haptics', x: x0, y, w: iw, h: hh, on: set.haptics, d: e, act: () => setSet('haptics', !set.haptics) }) });
     l.push({ h: 10 });
-    l.push({ h: 50, fn: (y, hh, e) => {
-      const arm = U.reset && U.t < U.reset;
-      const label = arm ? 'Tap again to reset' : 'Reset progress';
-      const bw = Math.min(iw, 260 * e);
-      pill(g, { id: 's-reset', label, kind: 'cream', x: W / 2 - bw / 2, y, w: bw, h: 44 * e, d: e, act: () => {
-        if (U.reset && U.t < U.reset) { U.reset = 0; safe(() => M.resetAll()); toast('Progress reset'); }
-        else { U.reset = U.t + 3; }
-      } });
-      if (arm) { rr(g, W / 2 - bw / 2, y, bw, 44 * e, 22 * e); g.lineWidth = 3 * e; g.strokeStyle = TOMATO; g.stroke(); }
-    } });
-    l.push({ h: 30, fn: (y, hh, e) => txt(g, 'Fonts: Lilita One, Nunito (SIL OFL)', W / 2, y + hh / 2, Math.max(12, 12 * e), { f: FB, w: '700', col: '#6E6377', maxW: iw }) });
-    l.push({ h: 6 });
     l.push({ h: 56, fn: (y, hh, e) => { const bw = Math.min(iw, 240 * e); pill(g, { id: 's-close', label: 'CLOSE', kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 52 * e, act: close, d: e }); } });
+    l.push({ h: 30, fn: (y, hh, e) => {
+      g.save(); g.setLineDash([5 * e, 5 * e]); g.lineWidth = Math.max(1, 1.5 * e); g.strokeStyle = 'rgba(43,36,64,0.3)';
+      g.beginPath(); g.moveTo(x0 + iw * 0.12, y + hh / 2); g.lineTo(x0 + iw * 0.88, y + hh / 2); g.stroke(); g.restore();
+    } });
+    l.push({ h: 48, fn: (y, hh, e) => {
+      const bw = Math.min(iw, 230 * e);
+      pill(g, { id: 's-reset', label: 'Reset progress', kind: 'cream', x: W / 2 - bw / 2, y, w: bw, h: 42 * e, d: e, act: () => { U.resetAsk = { t0: U.t }; } });
+    } });
+    l.push({ h: 28, fn: (y, hh, e) => txt(g, 'Fonts: Lilita One, Nunito (SIL OFL)', W / 2, y + hh / 2, Math.max(12, 12 * e), { f: FB, w: '700', col: '#6E6377', maxW: iw }) });
     return l;
   });
+  U.reg = wasReg;
+  if (U.resetAsk) drawResetAsk(g, S);
   return fr;
+}
+function drawResetAsk(g, S) {
+  dim(g, S, 0.45);
+  const d = U.du, W = S.W, H = S.H - dlgInset(S), c = U.resetAsk;
+  const pw = Math.min(W - 32 * d, 340 * d), pad = 18 * d, iw = pw - 2 * pad;
+  const body = wrapMin(g, 'This erases all your stars, yarn, outfits and kittens.', iw, Math.max(17, 17 * Math.min(d, 1.2)), 16, 3, FB, '800');
+  const bodyH = body.lines.length * body.size * 1.14;
+  const btnH = 50 * d, ph = pad + 40 * d + 8 * d + bodyH + 18 * d + btnH + pad, px = (W - pw) / 2, py = (H - ph) / 2;
+  const t = U.t - c.t0, sc = t < 0.22 ? 0.88 + 0.12 * eBack(t / 0.22) : 1;
+  g.save(); g.translate(W / 2, py + ph / 2); g.scale(sc, sc); g.translate(-W / 2, -(py + ph / 2));
+  panel(g, px, py, pw, ph, d);
+  txt(g, 'Erase progress?', W / 2, py + pad + 20 * d, 26 * d, { maxW: iw });
+  lines(g, body, W / 2, py + pad + 48 * d + bodyH / 2, { col: INK });
+  const by = py + ph - pad - btnH, bw = (iw - 12 * d) / 2;
+  pill(g, { id: 'r-keep', label: 'Keep', kind: 'secondary', x: px + pad, y: by, w: bw, h: btnH, d, act: () => { U.resetAsk = null; } });
+  pill(g, { id: 'r-erase', label: 'Erase', kind: 'primary', x: px + pad + bw + 12 * d, y: by, w: bw, h: btnH, d, act: () => {
+    U.resetAsk = null; safe(() => M.resetAll()); toast('Progress erased');
+  } });
+  // Enter / Space picks the safe choice
+  const kb = findBtn('r-keep'), eb = findBtn('r-erase');
+  if (kb) kb.primary = true;
+  if (eb) eb.primary = false;
+  g.restore();
+}
+
+// ---------- how to play (fix r2) ----------
+// DECISION (critic panel r1, grandparent 4): the site's "how to play" chip used to scroll away to the SEO sheet and
+//   leave the game. It now opens this in-game card (game.js intercepts the chip's click), as does Pause. Three small
+//   painted pictures, one plain line each at ≥ 16 px. It draws over the title / pause screen and owns the input while
+//   open (the screen under it registers no buttons).
+export function openHow() { if (U.S && (U.S.screen === 'title' || U.S.screen === 'pause')) U.how = { t0: U.t }; }
+const HOW = [
+  ['pull', 'Tap the top strand. It winds onto its spool.'],
+  ['wait', 'Other colours wait in the basket.'],
+  ['stars', 'Keep the basket nearly empty for 3 stars.'],
+];
+function howPic(g, k, x, y, w, h, e) {
+  g.save();
+  rr(g, x, y, w, h, 12 * e); g.fillStyle = '#F6E3C6'; g.fill(); g.lineWidth = Math.max(1, 2 * e); g.strokeStyle = STITCH; g.stroke();
+  rr(g, x, y, w, h, 12 * e); g.clip();
+  const tray = (cx, cy, n, balls) => {
+    const sr = Math.min(h * 0.16, w / (n * 2.6)), tw2 = n * sr * 2.5;
+    rr(g, cx - tw2 / 2, cy - sr * 1.35, tw2, sr * 2.7, sr * 1.35); g.fillStyle = '#B98A5E'; g.fill(); g.lineWidth = Math.max(1, 2 * e); g.strokeStyle = INK; g.stroke();
+    for (let i = 0; i < n; i++) {
+      const bx = cx - tw2 / 2 + sr * 1.25 + i * sr * 2.5;
+      g.beginPath(); g.arc(bx, cy, sr, 0, 7); g.fillStyle = '#8A6242'; g.fill();
+      if (balls[i] != null) safe(() => R.drawBall(g, bx, cy, sr * 0.95, balls[i]));
+    }
+  };
+  if (k === 'pull') {
+    const sw = Math.max(5, h * 0.13), u = sw / 0.27;
+    safe(() => R.drawYarnRun(g, [[x + w * 0.08, y + h * 0.62], [x + w * 0.3, y + h * 0.7], [x + w * 0.62, y + h * 0.72]], 2, sw, u));
+    safe(() => R.drawYarnRun(g, [[x + w * 0.12, y + h * 0.86], [x + w * 0.3, y + h * 0.66], [x + w * 0.48, y + h * 0.44]], 0, sw, u, { glow: 0.6 }));
+    // arrow from the strand to its spool
+    g.strokeStyle = INK; g.lineWidth = Math.max(1.5, 2.4 * e); g.lineCap = 'round';
+    const ax0 = x + w * 0.52, ay0 = y + h * 0.36, ax1 = x + w * 0.68, ay1 = y + h * 0.3;
+    g.beginPath(); g.moveTo(ax0, ay0); g.lineTo(ax1, ay1); g.stroke();
+    g.beginPath(); g.moveTo(ax1 - 7 * e, ay1 - 4 * e); g.lineTo(ax1, ay1); g.lineTo(ax1 - 5 * e, ay1 + 6 * e); g.stroke();
+    safe(() => R.drawSpool(g, x + w * 0.82, y + h * 0.42, h * 0.62, 0, 1, 3, { w: h * 0.46 }));
+    safe(() => R.drawHand(g, x + w * 0.3, y + h * 0.7, h * 0.42, true));
+  } else if (k === 'wait') {
+    safe(() => R.drawSpool(g, x + w * 0.22, y + h * 0.3, h * 0.42, 1, 1, 3, { w: h * 0.32 }));
+    safe(() => R.drawSpool(g, x + w * 0.5, y + h * 0.3, h * 0.42, 3, 1, 3, { w: h * 0.32 }));
+    tray(x + w / 2, y + h * 0.74, 3, [2, 4, null]);
+  } else {
+    for (let i = 0; i < 3; i++) safe(() => R.drawStar(g, x + w * (0.28 + i * 0.22), y + h * (i === 1 ? 0.26 : 0.32), h * 0.16, true));
+    tray(x + w / 2, y + h * 0.74, 3, [null, null, null]);
+  }
+  g.restore();
+}
+function drawHow(g, S) {
+  if (S.screen !== 'title' && S.screen !== 'pause') { U.how = null; return; }
+  U.btns = []; U.sliders = []; U.reg = true; // the card owns the input: nothing under it can be hit
+  dim(g, S, 0.5);
+  const c = U.how, d = U.du, W = S.W, H = S.H - dlgInset(S);
+  const t = U.t - c.t0, sc = t < 0.22 ? 0.88 + 0.12 * eBack(t / 0.22) : 1;
+  g.save(); g.translate(W / 2, H / 2); g.scale(sc, sc); g.translate(-W / 2, -H / 2);
+  dialogFrame(g, S, 380, (iw, x0) => {
+    const picW = Math.min(112 * d, iw * 0.36), picH = picW * 0.72, gap = 12 * d, tW = iw - picW - gap;
+    const sz = Math.max(16, 17 * Math.min(d, 1.25));
+    const l = [{ h: 46, fn: (y, hh, e) => txt(g, 'How to play', W / 2, y + hh / 2, 30 * e, { maxW: iw }) }];
+    HOW.forEach(([k, s]) => {
+      const wf = wrapMin(g, s, tW, sz, 16, 3, FB, '800');
+      const rh = Math.max(picH, wf.lines.length * wf.size * 1.14) + 10 * d;
+      l.push({ h: rh / d, fn: (y, hh, e) => {
+        const k2 = e / d, pw = picW * k2, ph = picH * k2;
+        howPic(g, k, x0, y + (hh - ph) / 2, pw, ph, e);
+        const tx = x0 + pw + gap * k2;
+        const lh = wf.size * 1.14, y0 = y + hh / 2 - (wf.lines.length - 1) * lh / 2;
+        wf.lines.forEach((ln, i) => txt(g, ln, tx, y0 + i * lh, wf.size, { f: FB, w: '800', col: INK, align: 'left' }));
+      } });
+    });
+    l.push({ h: 10 });
+    l.push({ h: 56, fn: (y, hh, e) => { const bw = Math.min(iw, 220 * e); pill(g, { id: 'how-ok', label: 'GOT IT', kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 52 * e, d: e, act: () => { U.how = null; } }); } });
+    return l;
+  });
+  g.restore();
 }
 
 // ---------- shop ----------
@@ -2142,12 +2349,18 @@ function drawShop(g, S) {
       reg({ id: 'o-' + o.id, label: o.name, x, y, w: cw, h: ch, act: () => { U.shop.sel = o.id; U.shop.msg = null; } });
       rr(g, x, y, cw, ch, 12 * d); g.fillStyle = o.worn ? '#E3F5EF' : sel ? '#FFF9EC' : '#F6E6CF'; g.fill();
       g.lineWidth = sel ? 4 * d : 2 * d; g.strokeStyle = sel ? GOLD_D : o.worn ? TEAL_D : INK; g.stroke();
-      const ks = Math.min(ch * 0.52, cw * 0.62);
+      // fix 1 (BLOCKER): the head layers reach ~1.36 kitty-heights above the feet (witch hat brim at -84 units plus
+      //   the 50-unit cone, crown and helmet star at about -120), so a preview sized to 0.52 card heights put the hat
+      //   through the card's top border and over the card above. Every preview now reserves that headroom (same
+      //   size and baseline for all outfits, so they compare fairly) and is clipped to its own card.
+      const ks = Math.min(ch * 0.62 / 1.36, cw * 0.56), feetY = y + 4 * d + ks * 1.36, rem = y + ch - feetY;
+      g.save(); rr(g, x + 1, y + 1, cw - 2, ch - 2, 11 * d); g.clip();
       // polish: always the idle pose — the raised 'cheer' paws hid the scarf/outfit being shown
-      aKitty(g, x + cw / 2, y + 6 * d + ks, ks, 'idle', U.t, o.id);
-      const nameY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.33, tagY = y + ks + 6 * d + (ch - ks - 6 * d) * 0.74;
-      txt(g, o.name, x + cw / 2, nameY, Math.min(14 * d, (ch - ks) * 0.26), { f: FB, w: '800', maxW: cw - 10 * d });
-      const ts = Math.min(14 * d, (ch - ks) * 0.26);
+      aKitty(g, x + cw / 2, feetY, ks, 'idle', U.t, o.id);
+      g.restore();
+      const nameY = feetY + rem * 0.3, tagY = feetY + rem * 0.74;
+      const ts = Math.max(12, Math.min(14 * d, rem * 0.34));
+      txt(g, o.name, x + cw / 2, nameY, ts, { f: FB, w: '800', maxW: cw - 10 * d });
       if (o.worn) txt(g, 'WEARING', x + cw / 2, tagY, ts, { col: TEAL_D, maxW: cw - 10 * d });
       else if (o.owned) txt(g, 'OWNED', x + cw / 2, tagY, ts, { col: INK, maxW: cw - 10 * d });
       else { const pw2 = tw(g, String(o.price), ts) + ts * 1.4; aIcon(g, 'ball', x + cw / 2 - pw2 / 2 + ts * 0.5, tagY, ts * 1.1); txt(g, String(o.price), x + cw / 2 + ts * 0.7, tagY, ts, { maxW: cw - ts * 3 }); }
@@ -2166,24 +2379,29 @@ function drawShop(g, S) {
       if (o.worn) { const b2 = findBtn('shop-main'); if (b2) b2.primary = false; }
     }
   } else {
-    const gap = 8 * d, rh = Math.min((bh - gap * 3) / 4, 96 * d);
-    const y0 = by + (bh - (rh * 4 + gap * 3)) / 2;
+    // fix 1: rows start right under the tabs (they were centred in the body, which left a ~90 px dead band under
+    //   the tabs on tall phones). Each row is a top band (icon, name, Buy) and the plain-words description at
+    //   ≥ 16 css px across the full row width below it, so it reads in 2 lines instead of 4 squeezed beside Buy.
+    const gap = 8 * d, rh = Math.min((bh - gap * 3) / 4, 124 * d), top = Math.min(48 * d, rh * 0.45);
+    const y0 = by;
     BK.forEach((k, i) => {
       const y = y0 + i * (rh + gap), unl = safe(() => M.boosterUnlocked(k), false), n = safe(() => M.booster(k), 0);
       g.save(); if (!unl) g.globalAlpha = 0.55;
       rr(g, ix, y, iw, rh, 12 * d); g.fillStyle = '#F6E6CF'; g.fill(); g.lineWidth = 2 * d; g.strokeStyle = INK; g.stroke();
-      const ir = Math.min(rh * 0.36, 23 * d);
-      g.beginPath(); g.arc(ix + 10 * d + ir, y + rh / 2, ir, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 2.5 * d; g.stroke();
-      aIcon(g, unl ? k : 'lock', ix + 10 * d + ir, y + rh / 2, ir * 1.05);
+      const ir = Math.min(top * 0.42, 20 * d), cyT = y + 6 * d + top / 2;
+      g.beginPath(); g.arc(ix + 10 * d + ir, cyT, ir, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 2.5 * d; g.stroke();
+      aIcon(g, unl ? k : 'lock', ix + 10 * d + ir, cyT, ir * 1.05);
       const bw = Math.min(110 * d, iw * 0.3), tx = ix + 18 * d + 2 * ir, tW = iw - (tx - ix) - bw - 18 * d;
-      txt(g, `${BNAME[k]}${unl ? '  ×' + n : ''}`, tx, y + rh * 0.3, Math.min(18 * d, rh * 0.26), { align: 'left', maxW: tW });
-      const wf = wrapFit(g, unl ? BDESC[k] : `Unlocks at level ${BOOSTERS[k].unlock}`, tW, rh * 0.5, Math.min(13 * d, rh * 0.2), 10 * d, FB, '700');
+      txt(g, `${BNAME[k]}${unl ? '  ×' + n : ''}`, tx, cyT + d, Math.max(14, Math.min(19 * d, top * 0.42)), { align: 'left', maxW: tW });
+      const dTop = y + 6 * d + top + 2 * d, dH = y + rh - 6 * d - dTop, ds = Math.max(16, 16 * Math.min(d, 1.25));
+      const wf = wrapMin(g, unl ? BDESC[k] : `Unlocks at level ${BOOSTERS[k].unlock}`, iw - 26 * d, ds, 16, Math.max(1, Math.floor(dH / (16 * 1.14))), FB, '700');
       const lh = wf.size * 1.14;
-      wf.lines.forEach((l2, j) => txt(g, l2, tx, y + rh * 0.66 + (j - (wf.lines.length - 1) / 2) * lh, wf.size, { f: FB, w: '700', align: 'left', col: '#5A5066' }));
+      wf.lines.forEach((l2, j) => txt(g, l2, ix + 13 * d, dTop + dH / 2 + (j - (wf.lines.length - 1) / 2) * lh, wf.size, { f: FB, w: '700', align: 'left', col: '#4A4056' }));
       g.restore();
       if (unl) {
-        const bh2 = Math.min(44 * d, rh * 0.6);
-        pill(g, { id: 'l-' + k, label: 'Buy', kind: U.shop.bsel === k ? 'primary' : 'secondary', x: ix + iw - 10 * d - bw, y: y + rh / 2 - bh2 / 2, w: bw, h: bh2, d,
+        const bh2 = Math.min(42 * d, top * 0.92);
+        // fix 1: every Buy is the same teal (the last-tapped one used to turn tomato red, so Undo's looked different)
+        pill(g, { id: 'l-' + k, label: 'Buy', kind: 'secondary', x: ix + iw - 10 * d - bw, y: cyT - bh2 / 2, w: bw, h: bh2, d,
           badge: { price: BOOSTERS[k].price }, act: () => {
             U.shop.bsel = k;
             if (safe(() => M.balance(), 0) < BOOSTERS[k].price) { U.shakes['l-' + k] = U.t; shopMsg('Not enough yarn balls'); return; }
@@ -2191,7 +2409,7 @@ function drawShop(g, S) {
           } });
       }
     });
-    txt(g, msg || 'Boosters help in any level', px + pw / 2, footY + 26 * d, (msg ? 16 : 14) * d, { f: FB, w: '800', col: msg ? TOMATO_D : '#5A5066', maxW: iw });
+    txt(g, msg || 'Boosters help in any level', px + pw / 2, footY + 26 * d, Math.max(16, 16 * d), { f: FB, w: '800', col: msg ? TOMATO_D : '#5A5066', maxW: iw });
   }
   U.reg = wasReg;
   if (U.shop.confirm) drawShopConfirm(g, S, px, py, pw, ph, d);
@@ -2304,7 +2522,7 @@ function portrait(g, id, cx, cy, s, st, dpr) {
 //   bubble is gone entirely (nothing floats over the header any more); a tap still hops, purrs and floats hearts.
 //   Page = the world of the newest rescue on open; ‹ › buttons, page dots, swipe and ←/→ keys turn pages.
 function kitLayout(iw, gh, d) {
-  const capOf = c => clamp(c * 0.2, 17, 36);
+  const capOf = c => clamp(c * 0.2, 17, Math.max(36, 20 * d));
   let best = null;
   for (const mode of ['below', 'right']) {
     let c = 60;
@@ -2362,14 +2580,19 @@ function drawKittens(g, S) {
   txt(g, cnt, px + pw - pad - 42 * d - cw / 2, hy + d, cs, { col: TEAL_D });
   txt(g, 'Kitten Corner', ix, hy, 26 * d, { align: 'left', maxW: iw - 50 * d - cw });
   // pager: ‹ World n · name (rescued k/10) ›
-  const pr = 21 * d, pyc = hy + 26 * d + pr, pgW = Math.min(iw, 460 * d), pgX = ix + (iw - pgW) / 2; // arrows hug the title
+  // fix r2 (UI-LAYOUT: "tiles tiny at 1920x1080, the panel is full width but the grid stays small"): the grid is
+  //   height-bound, so on a wide panel the pager moves up onto the title row and the tiles get that height back
+  const pr = 21 * d, titleW = tw(g, 'Kitten Corner', 26 * d);
+  const upW = iw - 2 * Math.max(titleW + 16 * d, cw + 64 * d), pagerUp = land && upW >= 300 * d;
+  const pgW = pagerUp ? Math.min(460 * d, upW) : Math.min(iw, 460 * d), pgX = ix + (iw - pgW) / 2; // arrows hug the title
+  const pyc = pagerUp ? hy + 4 * d : hy + 26 * d + pr;
   arrowBtn(g, { id: 'k-prev', label: 'Previous world', x: pgX, y: pyc - pr, w: 2 * pr, h: 2 * pr, disabled: wd <= 1, act: () => kitTurn(-1) }, -1);
   arrowBtn(g, { id: 'k-next', label: 'Next world', x: pgX + pgW - 2 * pr, y: pyc - pr, w: 2 * pr, h: 2 * pr, disabled: wd >= 6, act: () => kitTurn(1) }, 1);
   const wGot = ks.slice(base, base + PER_WORLD).filter(v => v > 0).length;
   const tW = pgW - 4 * pr - 16 * d;
   txt(g, (WORLDS[wd] || {}).name || `World ${wd}`, ix + iw / 2, pyc - 7 * d, 20 * d, { col: INK, maxW: tW });
   { // page dots + this world's count
-    const dr = 3.6 * d, gap = 12 * d, lab = `${wGot} / ${PER_WORLD}`, ls = clamp(13 * d, 12, 26);
+    const dr = 3.6 * d, gap = 12 * d, lab = `${wGot} / ${PER_WORLD}`, ls = clamp(14 * d, 13, 40);
     const lw = tw(g, lab, ls, FB, '900'), total = 6 * gap + 8 * d + lw, x0 = ix + iw / 2 - total / 2, dy = pyc + 13 * d;
     for (let i = 1; i <= 6; i++) {
       g.beginPath(); g.arc(x0 + (i - 0.5) * gap, dy, i === wd ? dr * 1.35 : dr, 0, 7);
@@ -2403,7 +2626,7 @@ function drawKittens(g, S) {
     if (!(hop && hop.i === i)) { g.save(); portrait(g, i + 1, c.cx, c.cy, c.s * 0.9, st, dpr); g.restore(); }
     // caption: the kitten's name once rescued, the level that frees it while locked
     const boss = j === 9, nm = st ? (kName(i) || `Kitten ${i + 1}`) : `Level ${i + 1}`;
-    const maxW = c.s * (boss ? 1.25 : 0.98), f0 = clamp(K.ch * 0.62, 12, 24);
+    const maxW = c.s * (boss ? 1.25 : 0.98), f0 = clamp(K.ch * 0.62, 12, Math.max(24, 13 * d));
     let label = st === 2 ? '★ ' + nm : nm, fs = fitSize(g, label, maxW, f0, FB, '900');
     if (fs < 11.5 && label.includes(' ')) { label = (st === 2 ? '★ ' : '') + nm.split(' ').pop(); fs = fitSize(g, label, maxW, f0, FB, '900'); }
     txt(g, label, c.cx, c.capY, Math.max(11, fs), { f: FB, w: '900', col: st === 2 ? GOLD_D : st ? INK : '#8A7F7A' });
@@ -2551,8 +2774,10 @@ function cardRect(S, type) {
   if (L.orient === 'landscape') {
     // the lose card takes ALL the column space between the rack and the basket (polish round 3 centres the callout
     //   in that space on big screens, so anchoring at callout.y would squeeze the card into the lower half)
-    if (type === 'lose') { const y0 = Math.min(L.callout.y, L.rack.y + L.rack.h); return { x: L.rack.x, y: y0, w: L.rack.w, h: L.basket.y - y0 - m * 0.5 }; }
-    return { x: L.rack.x, y: L.rack.y, w: L.rack.w, h: sf.y + sf.h - m - L.rack.y };
+    // fix2: cards dock in the column but stay ≤ 900 css px wide (2560+ screens), centred in it
+    const cw = Math.min(L.rack.w, 900), cx = L.rack.x + (L.rack.w - cw) / 2;
+    if (type === 'lose') { const y0 = Math.min(L.callout.y, L.rack.y + L.rack.h); return { x: cx, y: y0, w: cw, h: L.basket.y - y0 - m * 0.5 }; }
+    return { x: cx, y: L.rack.y, w: cw, h: sf.y + sf.h - m - L.rack.y };
   }
   const x = sf.x + m, w = sf.w - 2 * m;
   // polish (band): the portrait lose card docks ABOVE the basket (never over it, like desktop) — the basket, the
@@ -2630,13 +2855,20 @@ function drawWinCard(g, S, c) {
   const showBest = kind === 'level' && !res.firstWin && (res.newStars | 0) > 0;
   const bonusN = (res.bonus | 0) || (sess.bonusYarn | 0);
   const peak = res.peak ?? 0, par = res.par ?? 0;
-  const statLine = sess.capped && st < 3 ? 'Snip or +1 Slot used, so 2★ is the most'
-    : st >= 3 ? (peak ? `Tidy! Basket held ${peak} at most` : 'Spotless! Basket stayed empty')
-      : par > 0 ? `Basket held ${peak}. Hold ${par} or fewer for 3★` : `Basket held ${peak}. Keep it empty for 3★`;
+  // fix 2: the coaching line is plain words (no ★ shorthand) and reads at ≥ 16 css px, wrapping to 2 lines
+  const statLine = sess.capped && st < 3 ? 'You used Snip or +1 Slot, so 2 stars is the most'
+    : st >= 3 ? (peak ? `Tidy! The basket held only ${peak}` : 'Spotless! The basket stayed empty')
+      : par > 0 ? `The basket held ${peak}. Hold ${par} or fewer to earn 3 stars` : `The basket held ${peak}. Keep it empty to earn 3 stars`;
   const kid = res.kittenId || 0;
   const pad = 14 * d, iw0 = area.w - 2 * pad;
   const wear = safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby');
-  const winStack = bonusN > 0 && tw(g, statLine, 12, FB, '800') + tw(g, `+${bonusN} combo`, 12, FB, '900') + 2 * 24 * d + 14 * d > iw0;
+  const sIc = 18 * d, sGp = 6 * d, combo = bonusN > 0 ? `+${bonusN} combo` : '';
+  // fix r2 (UI-LAYOUT: "stat line looks small at 2560x1440"): it scales with the card like the title does
+  const swf = wrapMin(g, statLine, iw0 - sIc - sGp, Math.max(16, 16 * d), 16, 2, FB, '800');
+  const sLH = swf.size * 1.14, comboW = combo ? tw(g, combo, swf.size, FB, '900') + sIc + sGp : 0;
+  const sLW = Math.max(...swf.lines.map(l => tw(g, l, swf.size, FB, '800')));
+  const comboInline = combo && swf.lines.length === 1 && sLW + sIc + sGp + 14 * d + comboW <= iw0;
+  const statH = swf.lines.length * sLH + (combo && !comboInline ? sLH + 4 : 0) + 8;
   const list = [
     { h: 44, fn: (y, hh, e) => txt(g, title, area.x + area.w / 2, y + hh / 2, 34 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw0 }) },
     { h: 70, fn: (y, hh, e) => {
@@ -2665,7 +2897,7 @@ function drawWinCard(g, S, c) {
     ...(showBest ? [{ h: 30, fn: (y, hh, e) => { // centred gold pill under the stars (never against the panel edge)
       const k = clamp((U.t - c.t0 - 1.2) / 0.25, 0, 1);
       if (k <= 0) return;
-      const s = 14 * e, label = `NEW BEST: ${st}★`, w2 = Math.min(iw0, tw(g, label, s) + 26 * e), h2 = Math.min(hh - 4 * e, 24 * e);
+      const s = 14 * e, label = `NEW BEST: ${st} ${st === 1 ? 'STAR' : 'STARS'}`, w2 = Math.min(iw0, tw(g, label, s) + 26 * e), h2 = Math.min(hh - 4 * e, 24 * e);
       const cx = area.x + area.w / 2, cy = y + hh / 2, sc = eBack(k);
       g.save(); g.translate(cx, cy); g.scale(sc, sc);
       rr(g, -w2 / 2, -h2 / 2, w2, h2, h2 / 2); g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1.5, 2 * e); g.strokeStyle = INK; g.stroke();
@@ -2674,41 +2906,30 @@ function drawWinCard(g, S, c) {
     } }] : []),
     // ui2 U2: the basket stat and the combo bonus share ONE row ([basket] stat · [ball] +N combo). If both don't fit
     //   on one line at ≥ 12 px the combo chip drops under the stat inside the same (taller) row.
-    { h: winStack ? 44 : bonusN > 0 ? 26 : 24, fn: (y, hh, e) => {
-      const ic = 18 * e, gp = 6 * e, combo = bonusN > 0 ? `+${bonusN} combo` : '';
-      const cW = sz => (combo ? tw(g, combo, sz, FB, '900') + ic + gp : 0);
-      const one = sz => tw(g, statLine, sz, FB, '800') + ic + gp + (combo ? 14 * e + cW(sz) : 0);
-      let sz = 15 * e;
-      while (sz > 12 && one(sz) > iw0) sz -= 0.5;
-      const stack = combo && (winStack || one(sz) > iw0);
-      const seg = (x0, cy, sz2) => {
-        aIcon(g, 'slot', x0 + ic / 2, cy, ic);
-        txt(g, statLine, x0 + ic + gp, cy, sz2, { f: FB, w: '800', align: 'left', maxW: iw0 - ic - gp });
-        return x0 + ic + gp + Math.min(iw0 - ic - gp, tw(g, statLine, sz2, FB, '800'));
+    // ui2 U2 + fix 2: [basket] coaching line (1-2 lines at ≥ 16 px, sized before layout so the row is tall enough),
+    //   then the combo chip on the same line when it fits, else on its own line under it.
+    { h: statH / d, fn: (y, hh, e) => {
+      const fs = swf.size, x0 = area.x + area.w / 2 - (sLW + sIc + sGp + (comboInline ? 14 * d + comboW : 0)) / 2;
+      const ly0 = y + 4 + sLH / 2;
+      aIcon(g, 'slot', x0 + sIc / 2, ly0, sIc);
+      swf.lines.forEach((l, i) => txt(g, l, x0 + sIc + sGp, ly0 + i * sLH, fs, { f: FB, w: '800', align: 'left' }));
+      const chip = (cx0, cy) => {
+        aIcon(g, 'ball', cx0 + sIc / 2, cy, sIc);
+        txt(g, combo, cx0 + sIc + sGp, cy + 0.5, fs, { f: FB, w: '900', align: 'left', col: TEAL_D });
       };
-      const chip = (x0, cy, sz2) => {
-        aIcon(g, 'ball', x0 + ic / 2, cy, ic);
-        txt(g, combo, x0 + ic + gp, cy + e * 0.5, sz2, { f: FB, w: '900', align: 'left', col: TEAL_D });
-      };
-      if (!stack) {
-        const total = Math.min(iw0, one(sz)), x0 = area.x + area.w / 2 - total / 2;
-        const xe = seg(x0, y + hh / 2, sz);
-        if (combo) {
-          g.fillStyle = 'rgba(43,36,64,0.35)'; g.beginPath(); g.arc(xe + 7 * e, y + hh / 2, 2 * e, 0, TAU2); g.fill();
-          chip(xe + 14 * e, y + hh / 2, sz);
-        }
-      } else {
-        const s1 = Math.max(12, Math.min(15 * e, sz)), w1 = Math.min(iw0, tw(g, statLine, s1, FB, '800') + ic + gp);
-        seg(area.x + area.w / 2 - w1 / 2, y + hh * 0.3, s1);
-        chip(area.x + area.w / 2 - cW(s1) / 2, y + hh * 0.78, s1);
-      }
+      if (combo && comboInline) {
+        const xe = x0 + sIc + sGp + sLW;
+        g.fillStyle = 'rgba(43,36,64,0.35)'; g.beginPath(); g.arc(xe + 7 * d, ly0, 2 * d, 0, TAU2); g.fill();
+        chip(xe + 14 * d, ly0);
+      } else if (combo) chip(area.x + area.w / 2 - comboW / 2, ly0 + swf.lines.length * sLH + 4);
     } },
-    { h: 40, fn: (y, hh, e) => {
+    // fix 7: a replay that earns no yarn shows no "+0" row
+    ...((res.balls | 0) > 0 ? [{ h: 40, fn: (y, hh, e) => {
       const tB = c.t0 + 0.35 + 0.75 + 0.1, n = Math.round((res.balls || 0) * e3((U.t - tB) / 0.8));
       const label = `+${n}`, s = 26 * e, w2 = tw(g, label, s) + 30 * e, x0 = area.x + area.w / 2 - w2 / 2;
       aIcon(g, 'ball', x0 + 12 * e, y + hh / 2, 24 * e);
       txt(g, label, x0 + 30 * e, y + hh / 2 + e, s, { align: 'left', col: GOLD, stroke: INK, sk: 0.22 });
-    } },
+    } }] : []),
     bossId ? { h: 150, fn: (y, hh, e) => { // boss: the grand illustrated boss over a turning gold burst, with its grand name
       const cx = area.x + area.w / 2, capH = Math.max(40 * e, 36), s = Math.max(20 * e, hh - capH - 6 * e), feet = y + s + 2 * e;
       const k = e3(clamp((U.t - c.t0 - 0.2) / 0.5, 0, 1)), R2 = Math.min(iw0 * 0.5, s * 0.72) * k, cy = feet - s * 0.5;
@@ -2749,7 +2970,7 @@ function drawWinCard(g, S, c) {
     { h: 6 },
     { h: 58, fn: (y, hh, e) => {
       const ir = 23 * e, icons = [['w-replay', 'retry', 'Replay', () => finishWin(() => api.retry())], ['w-map', 'home', 'Map', () => finishWin(() => api.go('map'))]];
-      if (P.canShare) icons.push(['w-share', 'share', 'Share', () => shareWin(sess, res)]);
+      if (P.canShare) { icons.push(['w-share', 'share', 'Share', () => shareWin(sess, res, c)]); if (U.t - c.t0 > 1) prepShare(c, sess, res); }
       const gap = 8 * e, pw = Math.max(80 * e, Math.min(240 * e, iw0 - icons.length * (2 * ir + gap)));
       const total = pw + icons.length * (2 * ir + gap), x0 = area.x + area.w / 2 - total / 2;
       iconBtn(g, { id: icons[0][0], label: icons[0][2], icon: icons[0][1], x: x0, y: y + 2 * e, w: 2 * ir, h: 2 * ir, act: icons[0][3], d: e });
@@ -2797,20 +3018,97 @@ function drawMarks(g, S, pts) {
   }
   g.restore();
 }
-function shareWin(sess, res) {
+// fix 8: Share sends a 1080x1350 picture (world backdrop, the rescued kitten, stars, "Level N", the game title and
+//   the URL). DECISION: the image is baked ahead (once, ~1 s after the win card opens) and kept on the card, so the
+//   tap calls the Web Share API synchronously inside the user gesture (Safari drops the activation across an awaited
+//   toBlob). Order: share({files,text,url}) when canShare({files}); else share({text,url}); else copy + "Copied!".
+// The page's own address (arcadeaday.com/knot-kitty/ on the web); share is off on yt and portals (P.canShare).
+const SHARE_URL = typeof location !== 'undefined' ? location.origin + location.pathname : '';
+function shareText(sess, res) {
   const st = '★'.repeat(clamp(res.stars || 1, 1, 3));
-  const text = sess.kind === 'daily' ? `I untangled today's Daily Knot in Knot Kitty ${st}` : sess.kind === 'level' ? `I rescued the kitten on level ${sess.id} of Knot Kitty ${st}` : `I cleared a bonus tangle in Knot Kitty ${st}`;
-  safe(() => P.share({ title: 'Knot Kitty', text }));
+  return sess.kind === 'daily' ? `I untangled today's Daily Knot in Knot Kitty ${st}` : sess.kind === 'level' ? `I rescued the kitten on level ${sess.id} of Knot Kitty ${st}` : `I cleared a bonus tangle in Knot Kitty ${st}`;
+}
+function shareImage(sess, res) {
+  const Wc = 1080, Hc = 1350, cv = document.createElement('canvas');
+  cv.width = Wc; cv.height = Hc;
+  const g = cv.getContext('2d');
+  if (!g) return null;
+  const world = sess.kind === 'level' ? clamp(worldOf(Math.min(LEVELS, sess.id | 0 || 1)), 1, 6) : 1;
+  const bg = img(bgArt(world));
+  g.fillStyle = '#F7E9D2'; g.fillRect(0, 0, Wc, Hc);
+  if (bg && bg.width) { const s = Math.max(Wc / bg.width, Hc / bg.height); g.drawImage(bg, (Wc - bg.width * s) / 2, (Hc - bg.height * s) / 2, bg.width * s, bg.height * s); }
+  const vg = g.createLinearGradient(0, 0, 0, Hc);
+  vg.addColorStop(0, 'rgba(43,30,40,0.42)'); vg.addColorStop(0.3, 'rgba(43,30,40,0.05)'); vg.addColorStop(0.7, 'rgba(43,30,40,0.05)'); vg.addColorStop(1, 'rgba(43,30,40,0.5)');
+  g.fillStyle = vg; g.fillRect(0, 0, Wc, Hc);
+  txt(g, 'Knot Kitty', Wc / 2, 150, 124, { col: '#fff', stroke: INK, sk: 0.16, maxW: Wc - 120 });
+  const sub = sess.kind === 'level' ? `Level ${sess.id}` : sess.kind === 'daily' ? 'Daily Knot' : 'Bonus tangle';
+  txt(g, sub, Wc / 2, 268, 78, { col: GOLD, stroke: INK, sk: 0.18, maxW: Wc - 160 });
+  // the rescued kitten (painted sprite), else the hero kitty cheering
+  const kid = res.kittenId || 0, feet = 930, s = 520;
+  const glow = g.createRadialGradient(Wc / 2, feet - s * 0.45, 0, Wc / 2, feet - s * 0.45, s * 0.75);
+  glow.addColorStop(0, 'rgba(255,236,170,0.85)'); glow.addColorStop(1, 'rgba(255,236,170,0)');
+  g.fillStyle = glow; g.beginPath(); g.arc(Wc / 2, feet - s * 0.45, s * 0.75, 0, TAU2); g.fill();
+  const okKid = kid && R.kittenSprite && safe(() => R.kittenSprite(kid, true), null);
+  if (okKid) safe(() => R.drawKitten(g, Wc / 2, feet, s, { id: kid, stage: 4, loops: 0, flinch: 0, freeT: -1, breed: breedOf(kid), coat: coatOf(kid), golden: !!res.golden, t: 0, loopColors: [], memKey: cv }));
+  else aKitty(g, Wc / 2, feet, s * 0.8, 'idle', 0, safe(() => (M.outfits().find(o => o.worn) || {}).id, 'tabby'));
+  const st = clamp(res.stars || 0, 0, 3);
+  for (let i = 0; i < 3; i++) aStar(g, Wc / 2 + (i - 1) * 190, 1060 + (i === 1 ? -18 : 0), i === 1 ? 82 : 70, i < st, (i - 1) * 0.2);
+  const u = 'arcadeaday.com/knot-kitty', us = 46, uw = tw(g, u, us, FB, '900') + 70;
+  rr(g, Wc / 2 - uw / 2, 1230, uw, 76, 38); g.fillStyle = CREAM; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
+  txt(g, u, Wc / 2, 1269, us, { f: FB, w: '900', col: INK });
+  return cv;
+}
+function prepShare(c, sess, res) {
+  if (c.shareReq || !P.canShare || typeof document === 'undefined') return;
+  c.shareReq = true;
+  safe(() => {
+    const cv = shareImage(sess, res);
+    if (cv && cv.toBlob) cv.toBlob(b => { if (b && typeof File === 'function') c.shareFile = new File([b], 'knot-kitty.png', { type: 'image/png' }); }, 'image/png');
+  });
+}
+function shareWin(sess, res, c) {
+  if (!P.canShare) return;
+  const text = shareText(sess, res), url = SHARE_URL, nav = typeof navigator !== 'undefined' ? navigator : {};
+  const copy = () => {
+    const done = () => toast('Copied!');
+    try { if (nav.clipboard && nav.clipboard.writeText) { nav.clipboard.writeText(text + ' ' + url).then(done, () => toast('arcadeaday.com/knot-kitty')); return; } } catch {}
+    toast('arcadeaday.com/knot-kitty');
+  };
+  const f = c && c.shareFile;
+  try {
+    if (f && nav.share && nav.canShare && nav.canShare({ files: [f] })) {
+      // a failed file share (not a user cancel) falls back to the text share, then the copy
+      nav.share({ files: [f], text, url }).catch(e => { if (!e || e.name !== 'AbortError') safe(() => nav.share({ text, url }).catch(() => {})); });
+      return;
+    }
+    if (nav.share) { nav.share({ text, url }).catch(e => { if (!e || e.name !== 'AbortError') copy(); }); return; }
+  } catch {}
+  copy();
 }
 function drawLoseCard(g, S, c) {
   const d = U.du, area = cardRect(S, 'lose'), pad = 12 * d, iw = area.w - 2 * pad;
   const unU = safe(() => M.boosterUnlocked('undo'), false), unS = safe(() => M.boosterUnlocked('slot'), false);
   const nU = safe(() => M.booster('undo'), 0), nS = safe(() => M.booster('slot'), 0), bal = safe(() => M.balance(), 0);
+  const unH = safe(() => M.boosterUnlocked('hint'), false), nH = safe(() => M.booster('hint'), 0);
   const undoPrimary = unU && (nU > 0 || bal >= BOOSTERS.undo.price);
+  // fix r2 (lose card): Hint sits between Undo and +1 Slot. It rewinds to the last spot with a way out and shows
+  //   the move there (api.rescueHint). A booster at 0 stock says its price in plain words ("Hint · 40 yarn") and
+  //   buys-and-uses on tap. After 2 losses on this level with no hints and too little yarn, one Hint is free.
+  const sess0 = S.sess || {}, lkey = sess0.kind + ':' + sess0.id;
+  if (!c.counted) { c.counted = true; U.losses[lkey] = (U.losses[lkey] || 0) + 1; }
+  const freeHint = unH && nH <= 0 && bal < BOOSTERS.hint.price && (U.losses[lkey] || 0) >= 2 && !U.freeHintUsed[lkey];
+  const boost = (k, id, name, icon, n, act) => {
+    const b = { id, label: name, icon, kind: 'secondary', act };
+    if (n > 0) b.badge = { n };
+    else { b.buy = `${name} · ${BOOSTERS[k].price} yarn`; b.sub = `${BOOSTERS[k].price} yarn`; }
+    return b;
+  };
   const btns = [];
-  if (unU) btns.push({ id: 'l-undo', label: 'Undo', icon: 'undo', badge: nU > 0 ? { n: nU } : { price: BOOSTERS.undo.price }, kind: undoPrimary ? 'primary' : 'secondary', act: () => loseBooster('undo') });
-  if (unS) btns.push({ id: 'l-slot', label: '+1 Slot', icon: 'slot', badge: nS > 0 ? { n: nS } : { price: BOOSTERS.slot.price }, kind: 'secondary', act: () => loseBooster('slot') });
-  btns.push({ id: 'l-retry', label: 'Retry', icon: 'retry', kind: undoPrimary ? 'secondary' : 'primary', act: () => { U.loseDone = true; U.card = null; api.retry(); } });
+  if (unU) btns.push({ ...boost('undo', 'l-undo', 'Undo', 'undo', nU, () => loseBooster('undo')), kind: undoPrimary ? 'primary' : 'secondary' });
+  if (unH) btns.push(freeHint ? { id: 'l-hint', label: 'Free Hint', icon: 'hint', kind: 'secondary', act: () => loseHint(true, lkey) }
+    : boost('hint', 'l-hint', 'Hint', 'hint', nH, () => loseHint(false, lkey)));
+  if (unS) btns.push(boost('slot', 'l-slot', '+1 Slot', 'slot', nS, () => loseBooster('slot')));
+  const retry = { id: 'l-retry', label: 'Retry', icon: 'retry', kind: undoPrimary ? 'secondary' : 'primary', act: () => { U.loseDone = true; U.card = null; api.retry(); } };
   // fix 1: free strands that have nowhere to go get a ✕ (drawn under the card, which is docked low so the board
   //   top stays visible), and the copy is warm: "So close!" + how few strands were left.
   const marks = stuckMarks(S);
@@ -2831,14 +3129,26 @@ function drawLoseCard(g, S, c) {
       txt(g, warm.split('!')[0] + '!', area.x + area.w / 2, y + hh / 2, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw - 4 * (ir + 4 * e) });
     } },
     { h: 26, fn: (y, hh, e) => txt(g, warm.slice(warm.indexOf('!') + 2), area.x + area.w / 2, y + hh / 2, 19 * e, { f: FB, w: '900', col: TOMATO_D, maxW: iw }) },
-    { h: 25, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, 17 * e, { f: FB, w: '900', col: INK, maxW: iw }) },
+    { h: 25, fn: (y, hh, e) => txt(g, why, area.x + area.w / 2, y + hh / 2, Math.max(16, 17 * e), { f: FB, w: '900', col: INK, maxW: iw }) },
     { h: 8 },
-    { h: 54, fn: (y, hh, e) => {
-      // ui2: in a narrow side column a 50e-tall pill leaves its label ~bw - h px, so cap the height by the width
-      const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length, bh = Math.min(50 * e, Math.max(36, bw * 0.5));
-      btns.forEach((b, i) => pill(g, { ...b, x: area.x + pad + i * (bw + gap), y: y + (50 * e - bh) / 2, w: bw, h: bh, d: e, icon: bw > 120 * e ? b.icon : null }));
-    } },
   ];
+  if (btns.length) list.push({ h: 58, fn: (y, hh, e) => {
+    // fix r2: boosters get their own row (Retry sits under them) so each pill keeps room for "Hint · 40 yarn";
+    //   a pill too narrow for that one line says the price on a second line instead
+    const gap = 8 * e, bw = (iw - gap * (btns.length - 1)) / btns.length, bh = Math.min(54 * e, Math.max(44, bw * 0.55));
+    btns.forEach((b, i) => {
+      const p = { ...b, x: area.x + pad + i * (bw + gap), y: y + (hh - bh) / 2, w: bw, h: bh, d: e };
+      if (b.buy) {
+        const one = tw(g, b.buy, Math.max(16, bh * 0.36), FT) + bh * 0.9 <= bw;
+        if (one) { p.label = b.buy; p.sub = null; p.icon = null; } else p.icon = null;
+      } else if (bw < 120 * e) p.icon = null;
+      pill(g, p);
+    });
+  } });
+  list.push({ h: 54, fn: (y, hh, e) => {
+    const bw = Math.min(iw, 230 * e), bh = Math.min(50 * e, hh);
+    pill(g, { ...retry, x: area.x + area.w / 2 - bw / 2, y: y + (hh - bh) / 2, w: bw, h: bh, d: e });
+  } });
   let lay = rows(list, d, area.h - 2 * pad);
   // ui2: on short columns (compact landscape) drop the "why" line before the copy shrinks under ~12px; the ✕ marks
   //   on the board still say it
@@ -2865,27 +3175,33 @@ function drawGiftCard(g, S, c) {
   dim(g, S, 0.45);
   const d = U.du, W = S.W, H = S.H, data = c.data || {};
   const pw = Math.min(W - 24 * d, 340 * d), px = (W - pw) / 2, pad = 18 * d, iw = pw - 2 * pad;
-  let title, sub, rewards = [];
-  if (c.type === 'gift') { title = 'Star gift!'; sub = `You reached ${data.at || 15} ★`; rewards = [['ball', `+${data.balls || 60}`]]; if (data.booster) rewards.push([data.booster, '+1']); }
-  else if (c.type === 'chest') { title = 'World chest!'; sub = `${(WORLDS[data.world] || {}).name || 'World'} complete`; rewards = [['ball', `+${data.balls || 150}`]]; for (const k of data.boosters || []) rewards.push([k, '+1']); }
-  else {
-    title = 'New booster!'; sub = BDESC[data.k] || ''; rewards = [[data.k || 'undo', `×${data.n || 1} free`]];
-    const x = data.extra;
-    if (x) { // same booster from the star gift: one bigger count instead of the same icon twice
-      if (x.booster === data.k) rewards[0][1] = `×${(data.n || 1) + 1} free`;
-      rewards.push(['ball', `+${x.balls || 60}`]);
-      if (x.booster && x.booster !== data.k) rewards.push([x.booster, '+1']);
-    }
+  // fix 6: one card per win. A 'rewards' card carries every gift / chest / unlock of the win (data.parts); the
+  //   yarn is summed and each booster shows once with its total count. Reasons are plain words at ≥ 16 px.
+  const parts = c.type === 'rewards' ? (data.parts || []) : [{ type: c.type, data }];
+  let balls = 0, unlockK = null;
+  const bcount = {}, why = [];
+  const addB = (k, n) => { if (k) bcount[k] = (bcount[k] || 0) + n; };
+  for (const p of parts) {
+    const q = p.data || {};
+    if (p.type === 'gift') { balls += q.balls || 60; addB(q.booster, 1); why.push(`You reached ${q.at || 15} stars`); }
+    else if (p.type === 'chest') { balls += q.balls || 150; for (const k of q.boosters || []) addB(k, 1); why.push(`${(WORLDS[q.world] || {}).name || 'The world'} is complete`); }
+    else if (p.type === 'unlockBooster') { unlockK = q.k || 'undo'; addB(unlockK, q.n || 1); }
   }
+  const title = parts.length > 1 ? 'Rewards!' : unlockK ? 'New booster!' : parts[0] && parts[0].type === 'chest' ? 'World chest!' : 'Star gift!';
+  const rewards = [];
+  if (unlockK) rewards.push([unlockK, `×${bcount[unlockK]} free`]);
+  if (balls > 0) rewards.push(['ball', `+${balls}`]);
+  for (const k of BK) if (k !== unlockK && bcount[k]) rewards.push([k, `+${bcount[k]}`]);
+  const subs = [];
+  if (unlockK) subs.push(BDESC[unlockK] || '');
+  subs.push(...why);
+  const sz = Math.max(16, 16 * Math.min(d, 1.25));
+  const subW = subs.map(s => wrapMin(g, s, iw, sz, 16, 2, FB, '800'));
   const list = [
     { h: 44, fn: (y, hh, e) => txt(g, title, W / 2, y + hh / 2, 30 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: iw }) },
   ];
-  if (c.type === 'unlockBooster') list.push({ h: 34, fn: (y, hh, e) => txt(g, BNAME[data.k] || '', W / 2, y + hh / 2, 24 * e, { col: TEAL_D, maxW: iw }) });
-  list.push({ h: 44, fn: (y, hh, e) => lines(g, wrapFit(g, sub, iw, hh, 16 * e, 12 * e), W / 2, y + hh / 2) });
-  if (c.type === 'unlockBooster' && data.extra) list.push({ h: 28, fn: (y, hh, e) => {
-    const label = `Plus a star gift for reaching ${data.extra.at || 15} ★`, s2 = Math.max(12, 14 * e);
-    txt(g, label, W / 2, y + hh / 2, fitSize(g, label, iw, s2, FB, '900'), { f: FB, w: '900', col: GOLD_D, maxW: iw });
-  } });
+  if (unlockK) list.push({ h: 34, fn: (y, hh, e) => txt(g, `New: ${BNAME[unlockK] || ''}`, W / 2, y + hh / 2, 24 * e, { col: TEAL_D, maxW: iw }) });
+  subW.forEach((wf, i) => list.push({ h: (wf.lines.length * wf.size * 1.14 + 8) / d, fn: (y, hh) => lines(g, wf, W / 2, y + hh / 2, { col: i === 0 && unlockK ? INK : '#4A4056' }) }));
   list.push({ h: 86, fn: (y, hh, e) => {
     const n = rewards.length, cw = Math.min(90 * e, iw / n), x0 = W / 2 - cw * n / 2;
     rewards.forEach(([ic, label], i) => {
@@ -3057,11 +3373,13 @@ export function key(e, S) {
   if (!S || !e) return false;
   if (e.type && e.type !== 'keydown') return false;
   const k = e.key, scr = S.screen;
+  if (U.how && !(k === 'Escape' || k === 'Esc' || k === 'Enter' || k === ' ' || k === 'Spacebar')) return true; // the card owns the keys
   if (k === 'Escape' || k === 'Esc') {
+    if (U.how) { U.how = null; return true; }
     if (U.card) return U.card.type === 'win' || U.card.type === 'lose' || U.after ? true : (nextCard(), true);
     if (scr === 'win' || scr === 'lose') return true;
     if (scr === 'pause') { api.resume(); return true; }
-    if (DIALOGS.includes(scr)) { if (U.reset) { U.reset = 0; return true; } if (scr === 'shop' && U.shop.confirm) { U.shop.confirm = null; return true; } api.go(U.ret); return true; }
+    if (DIALOGS.includes(scr)) { if (U.resetAsk) { U.resetAsk = null; return true; } if (U.reset) { U.reset = 0; return true; } if (scr === 'shop' && U.shop.confirm) { U.shop.confirm = null; return true; } api.go(U.ret); return true; }
     if (scr === 'play') { api.pause(); return true; }
     if (scr === 'map') { api.go('title'); return true; } // fix 1 (desktop m5): Esc on the map goes back to the title
     return false;

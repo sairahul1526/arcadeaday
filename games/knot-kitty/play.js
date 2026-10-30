@@ -638,6 +638,31 @@ export function applyBooster(kind, S) {
   return true;
 }
 
+/** Fix r2 (lose card Hint): when stuck or doomed a plain Hint has no move to show, so this rewinds to the latest
+ *  earlier state that still has a way out (fewest undos, searching at most 14 back), then shows the hint there.
+ *  Charges one Hint from stock unless `free` (the caller buys first when stock is 0); undos it makes are part of
+ *  the hint and cost nothing. Returns false with nothing charged or changed when no solvable state is found. */
+export function rescueHint(S, free = false) {
+  const sess = S && S.sess;
+  if (!sess || !sess.st || sess.result || sess.boosterArm) return false;
+  const cur = sess.st, H = sess.hist, back = Math.min(H.length, 14);
+  let steps = -1, move = -1;
+  for (let k = 0; k <= back; k++) {
+    const st = k === 0 ? cur : H[H.length - k];
+    const cand = st.basket.length < cur.basket.length ? { ...st, basket: st.basket.concat(Array(cur.basket.length - st.basket.length).fill(-1)) } : st;
+    if (R.isStuck(sess.puz, cand)) continue;
+    const h = k === 0 && !sess.doomed ? hintFor(sess) : R.hintMove(sess.puz, cand, 60000);
+    if (h >= 0) { steps = k; move = h; break; }
+  }
+  if (steps < 0) return false;
+  if (!free && !meta.useBooster('hint')) return false;
+  for (let k = 0; k < steps; k++) undo(S);
+  sess.hint = { id: move, until: S.T + 4 };
+  bus.emit('hint', { id: move });
+  bus.emit('booster', { kind: 'hint' });
+  return true;
+}
+
 /** True while a win is recorded but its card has not been shown yet (strands landing + the kitten-free beat). */
 export function winPending(S) {
   const sess = S && S.sess;
@@ -655,6 +680,7 @@ export function finishWinNow(S) {
   return true;
 }
 
+const WIN_HOLD = 0.6; // fix 9: s the empty board holds (sparkling) after the kitten-free beat, before the win card
 function freeKitten(sess, S) {
   sess.kitten.freeT = S.T;
   sess.kitten.stage = 4; sess.kitten.loops = 0;
@@ -819,7 +845,14 @@ export function update(dt, S) {
   // end states
   if (sess.result) {
     if (sess.kitten.freeT < 0 && !sess.flights.some(f => f.kind === 'strand')) freeKitten(sess, S);
-    if (sess.kitten.freeT >= 0 && T - sess.kitten.freeT >= DUR.kittenFree && !sess.winShown) {
+    // fix 9: after the kitten-free beat the cleared board holds WIN_HOLD s with a twinkle of sparkles before the
+    //   win card covers it (the satisfying empty board is the frame clips and players remember)
+    if (sess.kitten.freeT >= 0 && !sess.holdFx && T - sess.kitten.freeT >= DUR.kittenFree - 0.15) {
+      sess.holdFx = true;
+      const B = sess.B, r = sess.rng;
+      if (B) for (let i = 0; i < 7; i++) burst(sess, 'spark', B.x + B.w * (0.12 + 0.76 * r()), B.y + B.h * (0.12 + 0.7 * r()), 5, 0, S);
+    }
+    if (sess.kitten.freeT >= 0 && T - sess.kitten.freeT >= DUR.kittenFree + WIN_HOLD && !sess.winShown) {
       sess.winShown = true;
       bus.emit('win', { result: sess.result });
       return 'win';

@@ -1,10 +1,13 @@
 // Knot Kitty level data access: campaign levels, Daily Knot (IST date seeded), Bonus Tangles.
 // DECISION: if a level id is missing from the data (only while generation is in progress), getLevel falls back
 //   to the nearest generated level with a console.warn instead of throwing; check.mjs fails on any gap.
+// DECISION (fix2): Bonus Tangles i < BONUS.length play the generated bonus-data.js boards (fresh geometry, ramp order
+//   from about L30 to beyond L60) as they are; later indices fall back to the mirrored / recoloured daily-board remix.
 // DECISION: the daily colour permutation shuffles only the colours the board uses (so the §7.2 palette rules
 //   still hold); perm is a full 0..5 array, identity for unused colours.
 import LEVELS from './levels-data.js';
 import DAILIES from './dailies-data.js';
+import BONUS from './bonus-data.js';
 import { LEVELS as LEVEL_TOTAL, DAILY_START } from './consts.js';
 import { rng, transformLevel } from './rules.js';
 
@@ -70,7 +73,14 @@ export function getDaily(dateKey) {
   return deepFreeze(L);
 }
 
+export const BONUS_COUNT = BONUS.length;
+
 export function getBonus(i) {
+  if (Number.isInteger(i) && i >= 0 && i < BONUS.length) {
+    const L = copy(BONUS[i]);
+    L.id = 0; L.name = 'Bonus Tangle ' + (i + 1); L.bonus = i;
+    return deepFreeze(L);
+  }
   const P = pool();
   const k = ((i % 60) + 60) % 60 % P.length;
   const L = transformLevel(P[k], makeTransform(P[k], rng(hash('bonus' + i))));

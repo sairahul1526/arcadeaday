@@ -404,6 +404,23 @@ cvs.addEventListener('pointerup', onPointer('up'));
 cvs.addEventListener('pointercancel', onPointer('cancel'));
 cvs.addEventListener('lostpointercapture', e => { if (ptr && ptr.id === e.pointerId) { const [x, y] = xy(e); pointer('cancel', x, y, e.pointerId); } });
 cvs.addEventListener('contextmenu', e => e.preventDefault());
+// fix r2 (critic panel r1): the site's "how to play" chip used to scroll to the SEO sheet and leave the game; it now
+//   opens the in-game How to play card (from the map it goes back to the title first). "more games" is untouched.
+//   The chips get more room between them (they read as one pill at 8 px apart); index.html is generated, so the gap
+//   is set here.
+try {
+  const how = document.querySelector('nav.back a[href="#how"]');
+  if (how) how.addEventListener('click', e => {
+    const sc = S.screen;
+    if (sc !== 'title' && sc !== 'map' && sc !== 'allbeaten') return;
+    e.preventDefault();
+    if (sc !== 'title') go('title');
+    if (ui.openHow) ui.openHow();
+  });
+  const st = document.createElement('style');
+  st.textContent = 'nav.back{gap:18px}@media (min-width:900px) and (min-height:600px){nav.back{gap:22px}}';
+  document.head.appendChild(st);
+} catch (e) { /* no DOM */ }
 cvs.addEventListener('wheel', e => {
   if (S.screen === 'play' || S.screen === 'loading') return;
   const [x, y] = xy(e);
@@ -438,6 +455,14 @@ const api = {
   go, startLevel, retry, next,
   undo: () => useBooster('undo'),
   useBooster,
+  rescueHint(free) {
+    const s = S.sess;
+    if (!s || s.result) return false;
+    let ok = false;
+    try { ok = play.rescueHint(S, !!free); } catch (e) { report(e); }
+    if (ok && S.screen === 'lose' && !s.stuck) { S.screen = 'play'; emitScreen(); }
+    return ok;
+  },
   canUseBooster,
   pause, resume,
   pointer, tapAt,

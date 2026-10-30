@@ -675,5 +675,18 @@
     ],
     "bytes": 16142,
     "at": "2026-10-30T09:06:16.874Z"
+  },
+  "paw-sleepy": {
+    "prompt": "Game prop: one fluffy orange tabby kitten front paw with a short chubby forearm, resting flat and relaxed as if its owner is fast asleep, seen from directly above. The forearm comes in from the bottom-left corner and the round paw rests at the top-right, with three soft pink toe beans peeking out, soft stripes on the fur, fluffy tufts at the edges. Same fur colours, plum outline and painted style as the reference kitten. Isolated single object on a plain white background, no body, no face, no shadow, no text.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "bce55758ff2b5bd6fa961d03ce9c1c7d",
+      "61bb753718de110571ae9c88f3627996"
+    ],
+    "bytes": 8352,
+    "at": "2026-10-30T10:33:30.935Z"
   }
 }

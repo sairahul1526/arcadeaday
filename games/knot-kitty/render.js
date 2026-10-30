@@ -52,6 +52,9 @@ const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const ease = p => p * p * (3 - 2 * p);
 const easeOut = p => 1 - (1 - p) * (1 - p);
+// Win hold (play.js: the win card shows DUR.kittenFree + 0.6 s after the kitten is freed). The happy hops and the
+// board-clear twinkle are timed from freeT so they land INSIDE that hold, not before it (critic r1 #7).
+const HOP0 = 1.42, HOPD = 0.62, TW0 = 1.22, TWD = 1.05;
 const easeOutBack = p => { const c = 1.7; const q = p - 1; return 1 + q * q * ((c + 1) * q + c); };
 const hexA = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mixCache = new Map();
@@ -87,28 +90,41 @@ export function mkCanvas(w, h) {
 /** Deterministic hash noise in [0,1). */
 export const hash = (a, b = 0) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
+// The display face (Lilita One) sets tight; titles and banners read cramped at 30+ px. Canvas letterSpacing
+// (Chrome 99+, Safari 17+) loosens it by 3 % of the size; where unsupported the property is absent and text draws
+// exactly as before. o.track overrides the ratio (0 = off).
+const HAS_LS = typeof CanvasRenderingContext2D !== 'undefined' && 'letterSpacing' in CanvasRenderingContext2D.prototype;
 export function text(g, s, x, y, size, o = {}) {
-  g.font = `${o.weight || ''} ${size}px ${o.font || FONT_T}`;
+  const font = o.font || FONT_T;
+  g.font = `${o.weight || ''} ${size}px ${font}`;
   g.textAlign = o.align || 'center';
   g.textBaseline = o.base || 'middle';
+  const tr = o.track != null ? o.track : font === FONT_T && size >= 14 ? 0.03 : 0;
+  const ls = HAS_LS && tr > 0;
+  if (ls) g.letterSpacing = `${(size * tr).toFixed(2)}px`;
   if (o.stroke) { g.lineJoin = 'round'; g.lineWidth = o.strokeW || size * 0.2; g.strokeStyle = o.stroke; g.strokeText(s, x, y); }
   g.fillStyle = o.color || CREAM;
   g.fillText(s, x, y);
+  if (ls) g.letterSpacing = '0px';
 }
 
 // ------------------------------------------------------------------ colours
 const colCache = new Map();
-/** Colours for yarn c. dim = covered (22 % toward grey, glyph kept at full contrast). */
+// Covered strands sit "underneath": 25 % toward a dusk plum-grey (darker AND desaturated; the old 22 % toward a light
+// grey only washed colours out, so free and covered read alike on dense boards). Hue survives, so every colour stays
+// apart, and the glyph stickers keep full contrast for colour-blind players.
+const DIMC = '#5A5064', DIMK = 0.25;
+/** Colours for yarn c. dim = covered (25 % toward dusk plum-grey, glyph kept at full contrast). */
 export function yarnColor(c, dim) {
   const k = c * 2 + (dim ? 1 : 0);
   let o = colCache.get(k);
   if (o) return o;
   const base = c === RAINBOW ? YARN[RAINBOW].base : c < 0 ? MYST : YARN[c].base;
-  const body = dim ? mix(base, '#8F8580', 0.22) : base;
+  const body = dim ? mix(base, DIMC, DIMK) : base;
   o = {
     body,
     ply: mix(body, INK, dim ? 0.2 : 0.17),
-    hi: dim ? 'rgba(255,255,255,0)' : mix(base, '#FFFFFF', 0.72, 0.9),
+    hi: dim ? 'rgba(255,255,255,0.3)' : mix(base, '#FFFFFF', 0.74, 0.95),
     casing: INK,
     glyph: mix(base, INK, 0.45),
     base,
@@ -342,8 +358,9 @@ let feltPattern = null; // pattern of the board bake: the felt gap at under-cros
 
 /**
  * drawStrand(g, geoItem, c, sw, opt) opt { dim, lift (0..2), wiggleT (s since wiggle start), mystery,
- * rainbow, glow (0..1 cream glow, free strands), hint (gold rim 0..1), reveal (0..1), gap (default true),
- * dx, dy, noShadow }.
+ * rainbow, glow (0..1: free strand, cream rim + soft drop shadow), hint (gold rim 0..1), reveal (0..1),
+ * gap (default true), dx, dy, noShadow, warn (0..1 tomato halo: this free strand blocks the tapped one),
+ * bad (0..1 tomato under-glow: the tapped, blocked strand) }.
  */
 export function drawStrand(g, gi, c, sw, opt = {}) {
   const lift = opt.lift || 0;
@@ -351,7 +368,7 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
   if (opt.wiggleT != null && opt.wiggleT < DUR.wiggle) {
     const a = opt.wiggleT, p0 = gi.pts[0], p1 = gi.pts[gi.pts.length - 1];
     const l = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
-    const amp = Math.sin(a * 55) * sw * 0.45 * (1 - a / DUR.wiggle);
+    const amp = Math.sin(a * 55) * sw * 0.55 * (1 - a / DUR.wiggle);
     dx += (-(p1[1] - p0[1]) / l) * amp; dy += ((p1[0] - p0[0]) / l) * amp;
   }
   const myst = !!opt.mystery;
@@ -377,15 +394,37 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
     g.stroke(gi.path);
     g.restore();
   }
-  // (1) contact shadow, doubled when lifted
-  if (!opt.noShadow) {
-    const k = 1 + lift;
+  // (1) shadow. Free strands (glow): a cream rim that casts a soft blurred drop shadow, so they read as lifted off
+  //   the felt. shadowBlur / shadowOffset ignore the transform, hence the device scale ds. The resting free strand
+  //   is a cached sprite (strandSprite), so the blur costs nothing per frame; only pressed / hinted / wiggling
+  //   strands draw it live (a handful at most). Everything else: a tight hard contact shadow (covered strands
+  //   hug the felt).
+  if (opt.glow && !opt.noShadow) {
+    const m = g.getTransform(), ds = Math.hypot(m.a, m.b) || 1;
     g.save();
-    g.translate(1.5 * k, 2.5 * k);
-    g.strokeStyle = `rgba(43,36,64,${0.3 - lift * 0.04})`;
-    g.lineWidth = sw + 3 + lift;
+    g.shadowColor = 'rgba(43,36,64,0.46)';
+    g.shadowBlur = sw * (0.8 + 0.15 * lift) * ds;
+    g.shadowOffsetX = sw * 0.1 * ds;
+    g.shadowOffsetY = sw * (0.26 + 0.12 * lift) * ds;
+    g.strokeStyle = `rgba(255,248,236,${0.96 * opt.glow})`;
+    g.lineWidth = sw + 7;
     g.stroke(gi.path);
     g.restore();
+  } else if (!opt.noShadow) {
+    const k = 1 + lift, d = opt.dim ? 0.7 : 1;
+    g.save();
+    g.translate(1.5 * k * d, 2.5 * k * d);
+    g.strokeStyle = `rgba(43,36,64,${0.3 - lift * 0.04})`;
+    g.lineWidth = sw + (opt.dim ? 2 : 3) + lift;
+    g.stroke(gi.path);
+    g.restore();
+  }
+  if (opt.warn) {
+    g.strokeStyle = alpha(INK, 0.9 * opt.warn); g.lineWidth = sw + 17; g.stroke(gi.path);
+    g.strokeStyle = alpha(TOMATO, opt.warn); g.lineWidth = sw + 12.5; g.stroke(gi.path);
+  }
+  if (opt.bad) {
+    g.strokeStyle = alpha(TOMATO, 0.85 * opt.bad); g.lineWidth = sw + 9; g.stroke(gi.path);
   }
   if (opt.hint) {
     g.strokeStyle = alpha(GOLD, 0.55 + 0.45 * opt.hint);
@@ -395,11 +434,6 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
   if (opt.flash) {
     g.strokeStyle = `rgba(255,255,255,${opt.flash})`;
     g.lineWidth = sw + 10;
-    g.stroke(gi.path);
-  }
-  if (opt.glow) {
-    g.strokeStyle = `rgba(255,244,228,${0.5 * opt.glow})`;
-    g.lineWidth = sw + 6;
     g.stroke(gi.path);
   }
   // (2) casing
@@ -412,7 +446,7 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
     g.lineCap = 'butt';
     g.lineWidth = sw;
     for (let k = 0; k < 6; k++) {
-      g.strokeStyle = opt.dim ? mix(RAIN[k], '#8F8580', 0.22) : RAIN[k];
+      g.strokeStyle = opt.dim ? mix(RAIN[k], DIMC, DIMK) : RAIN[k];
       g.setLineDash([seg, seg * 5]);
       g.lineDashOffset = -k * seg;
       g.stroke(gi.path);
@@ -443,12 +477,10 @@ export function drawStrand(g, gi, c, sw, opt = {}) {
   g.stroke(gi.ply);
   g.restore();
   g.lineCap = 'round';
-  // (5) highlight on the light side (free strands only)
-  if (!opt.dim) {
-    g.strokeStyle = col.hi;
-    g.lineWidth = Math.max(0.8, sw * 0.18);
-    g.stroke(gi.hi);
-  }
+  // (5) highlight on the light side: bright and broad on free strands, a faint hairline on covered ones
+  g.strokeStyle = col.hi;
+  g.lineWidth = opt.dim ? Math.max(0.6, sw * 0.08) : Math.max(0.9, sw * 0.21);
+  g.stroke(gi.hi);
   // (6) glyphs, (6b) mystery marks
   if (myst) {
     g.fillStyle = mix(MYST, INK, 0.5);
@@ -488,10 +520,11 @@ function strandPeg(g, gi, k, c, sw, r, dim, dx, dy, myst) {
     const lr = r + sw * 0.32;
     g.lineWidth = sw * 0.42 + 2.5; g.strokeStyle = INK;
     g.beginPath(); g.arc(x, y, lr, 0, TAU); g.stroke();
-    g.lineWidth = sw * 0.42; g.strokeStyle = c === RAINBOW && !myst ? RAIN[k % 6] : col.body;
+    g.lineWidth = sw * 0.42; g.strokeStyle = c === RAINBOW && !myst ? (dim ? mix(RAIN[k % 6], DIMC, DIMK) : RAIN[k % 6]) : col.body;
     g.stroke();
   }
   drawPeg(g, x, y, r);
+  if (dim) { g.fillStyle = 'rgba(43,36,64,0.2)'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); } // shaded: underneath
 }
 /** Extent (CSS px from the peg centre) of strandPeg's drawing. */
 const pegExt = (end, r, sw) => Math.max(end ? r + sw * 0.53 + 1.25 : 0, r * 1.4 + 1) + 2;
@@ -819,33 +852,58 @@ export function drawKeyCharm(g, x, y, s, k = 0, rot = 0) {
   g.fillStyle = INK; lockShape(g, k, 0, 0, bow * 0.42); g.fill();
   g.restore();
 }
-function drawPaw(g, x, y, s, n, t, lift = 0, twitch = 0) {
+// Painted sleepy paw (art/paw-sleepy.webp, kie.ai): 256² sprite, paw blob centre PAW_A, forearm leaving through the
+// bottom-left corner at angle PAW_ARM (image space). The sprite is rotated (mirrored for the right edge, so toes
+// stay up) until the forearm points at the nearest felt edge, then clipped to the felt: the arm comes from under
+// the frame and never overhangs it. Unlocking slides it back out under the frame.
+const PAW_A = [165 / 256, 125 / 256], PAW_ARM = Math.atan2(115, -140), PAW_LEN = Math.hypot(140, 115) / 256;
+function drawSleepyPaw(g, x, y, u, n, t, lift, twitch, ad, edgeD, fb) {
+  const im = img('paw-sleepy');
+  const flip = Math.cos(ad) > 0.5;
+  let W = u * 1.4;
+  if (edgeD > PAW_LEN * W * 0.92) W = Math.min(u * 1.8, edgeD / (PAW_LEN * 0.92)); // arm reaches under the frame
+  // a peg hard against the frame would clip the paw itself: slide the paw inward until the whole paw shows (it
+  // still covers the peg: paw radius ≈ 0.35 W)
+  const inset = Math.max(0, 0.36 * W - edgeD);
+  const out = ease(lift) * PAW_LEN * W * 1.5 - inset;
+  const ox = Math.cos(ad) * out, oy = Math.sin(ad) * out;
   g.save();
-  g.translate(x, y - lift * s * 1.2);
-  g.globalAlpha = 1 - lift;
-  g.rotate(-0.5 + Math.sin(twitch * 40) * 0.12 * (twitch > 0 ? 1 : 0));
-  const breathe = 1 + Math.sin(t * 1.6) * 0.03;
-  g.scale(breathe, breathe);
-  // fluffy forearm coming in from the side
-  g.fillStyle = '#F29B4B'; g.strokeStyle = INK; g.lineWidth = Math.max(1.4, s * 0.08);
-  g.beginPath(); g.ellipse(-s * 0.7, -s * 0.05, s * 0.75, s * 0.42, 0, 0, TAU); g.fill(); g.stroke();
-  g.beginPath(); g.ellipse(0, 0, s * 0.5, s * 0.42, 0, 0, TAU); g.fill(); g.stroke();
-  g.strokeStyle = '#C96B26'; g.lineWidth = s * 0.07;
-  for (const k of [-1.0, -0.7]) { g.beginPath(); g.moveTo(k * s, -s * 0.35); g.lineTo(k * s + s * 0.1, s * 0.3); g.stroke(); }
-  g.fillStyle = '#F7A9A0';
-  for (const k of [-1, 0, 1]) { g.beginPath(); g.ellipse(s * 0.24, k * s * 0.2, s * 0.09, s * 0.07, 0, 0, TAU); g.fill(); }
+  g.beginPath(); g.rect(fb.fx, fb.fy, fb.fw, fb.fh); g.clip();
+  g.globalAlpha = 1 - lift * lift;
+  if (im) {
+    const m = g.getTransform(), ds = Math.hypot(m.a, m.b) || 1;
+    g.translate(x + ox, y + oy);
+    const arm = flip ? Math.PI - PAW_ARM : PAW_ARM;
+    g.rotate(ad - arm + (twitch > 0 ? Math.sin(twitch * 40) * 0.1 : 0));
+    if (flip) g.scale(-1, 1);
+    const br = 1 + Math.sin(t * 1.6) * 0.025;
+    g.scale(br, br);
+    g.shadowColor = 'rgba(43,36,64,0.35)'; g.shadowBlur = 6 * ds; g.shadowOffsetY = 3 * ds;
+    g.drawImage(im, -PAW_A[0] * W, -PAW_A[1] * W, W, W);
+  } else {
+    // art still loading: the old code-drawn paw, clipped to the felt
+    g.translate(x + ox, y + oy);
+    g.rotate(ad - Math.PI + (twitch > 0 ? Math.sin(twitch * 40) * 0.12 : 0));
+    const s = u * 0.55;
+    g.fillStyle = '#F29B4B'; g.strokeStyle = INK; g.lineWidth = Math.max(1.4, s * 0.08);
+    g.beginPath(); g.ellipse(-s * 0.7, 0, s * 0.75, s * 0.42, 0, 0, TAU); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(0, 0, s * 0.5, s * 0.42, 0, 0, TAU); g.fill(); g.stroke();
+  }
   g.restore();
   if (lift < 1 && n > 0) {
-    // number bubble
-    const bx = x + s * 0.55, by = y - s * 0.75, br = s * 0.38 * (1 + Math.max(0, twitch > 0 ? Math.sin(twitch * 25) * 0.25 : 0));
-    g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = Math.max(1.4, s * 0.08);
+    // number bubble on the board side of the paw, kept inside the felt
+    const br = Math.max(9, u * 0.21) * (1 + Math.max(0, twitch > 0 ? Math.sin(twitch * 25) * 0.25 : 0));
+    let bx = x - Math.cos(ad) * (W * 0.42 + inset) + W * 0.2, by = y - Math.sin(ad) * (W * 0.42 + inset) - W * 0.45;
+    bx = clamp(bx, fb.fx + br + 3, fb.fx + fb.fw - br - 3); by = clamp(by, fb.fy + br + 3, fb.fy + fb.fh - br - 3);
+    g.save();
+    g.globalAlpha = 1 - lift;
+    g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = Math.max(1.6, br * 0.16);
     g.beginPath(); g.arc(bx, by, br, 0, TAU); g.fill(); g.stroke();
     text(g, String(n), bx, by + br * 0.06, br * 1.25, { color: INK });
-    // zz
-    const z = (t * 0.6) % 1;
-    g.globalAlpha = 1 - z;
-    text(g, 'z', x - s * 0.2 + z * s * 0.4, y - s * 0.6 - z * s * 0.6, s * 0.38, { color: CREAM, stroke: INK, strokeW: s * 0.08 });
-    g.globalAlpha = 1;
+    const z = (t * 0.6) % 1, zx = clamp(bx - br * 1.3 - z * br * 0.5, fb.fx + br * 0.5, fb.fx + fb.fw - br * 0.5);
+    g.globalAlpha = (1 - z) * (1 - lift);
+    text(g, 'z', zx, by - br * 0.4 - z * br, br * 0.9, { color: CREAM, stroke: INK, strokeW: Math.max(2, br * 0.2) });
+    g.restore();
   }
 }
 
@@ -1563,6 +1621,7 @@ export function drawKitten(g, x, y, s, o) {
     if (im) { drawKittenArt(g, x, y, s, o, id, im); return; }
     if (isBossKit(id) && o.bossScale !== false) s = Math.max(s, Math.min(s * 1.4, o.maxH || Infinity)); // art still loading
   }
+  if (o.capH) s = Math.min(s, o.capH);
   const coat = coatOf(o.breed || 0, o.coat || 0, o.golden);
   const stage = o.freeT >= 0 && t >= o.freeT ? 4 : (o.stage || 0);
   const loops = stage >= 4 ? 0 : o.loops != null ? o.loops : 4 - stage;
@@ -1590,6 +1649,7 @@ export function drawKitten(g, x, y, s, o) {
     else if (a < 0.75) { const p = (a - 0.15) / 0.6; dy = -4 * p * (1 - p) * 80; rot = ease(p) * TAU; arms = 'up'; mouth = 'open'; }
     else if (a < 0.95) { const p = (a - 0.75) / 0.2; sy = 1 - Math.sin(p * Math.PI) * 0.22; sx = 1 + Math.sin(p * Math.PI) * 0.18; }
     else if (a < 1.35) { rot = Math.sin((a - 0.95) * 50) * 0.12 * (1 - (a - 0.95) / 0.4); eyes = 'closed'; }
+    else if (a >= HOP0 && a < HOP0 + HOPD) { const q = (((a - HOP0) / HOPD) * 2) % 1; dy = -Math.sin(q * Math.PI) * 14; arms = 'up'; mouth = 'open'; }
     else { dy = -Math.max(0, Math.sin(t * 2.2)) * 2; }
   }
   if (flinch > 0) { sy *= 1 - flinch * 0.12; sx *= 1 + flinch * 0.1; eyes = 'shut'; rot += Math.sin(t * 60) * 0.05 * flinch; }
@@ -1627,7 +1687,7 @@ export function drawKitten(g, x, y, s, o) {
 function drawKittenArt(g, x, y, s0, o, id, im) {
   const t = o.t || 0;
   const boss = isBossKit(id);
-  const s = Math.max(s0, Math.min(s0 * (boss && o.bossScale !== false ? 1.4 : 1), o.maxH || Infinity));
+  const s = Math.min(Math.max(s0, Math.min(s0 * (boss && o.bossScale !== false ? 1.4 : 1), o.maxH || Infinity)), o.capH || Infinity);
   const stage = o.freeT >= 0 && t >= o.freeT ? 4 : (o.stage || 0);
   const loops = stage >= 4 ? 0 : o.loops != null ? o.loops : 4 - stage;
   const cols = o.loopColors && o.loopColors.length ? o.loopColors : [0, 1, 2, 3];
@@ -1651,6 +1711,11 @@ function drawKittenArt(g, x, y, s0, o, id, im) {
     else if (a < 0.75) { const p = (a - 0.15) / 0.6; dy = -4 * p * (1 - p) * 80; rot = ease(p) * TAU; }
     else if (a < 0.95) { const p = (a - 0.75) / 0.2; sy = 1 - Math.sin(p * Math.PI) * 0.22; sx = 1 + Math.sin(p * Math.PI) * 0.18; }
     else if (a < 1.35) rot = Math.sin((a - 0.95) * 50) * 0.12 * (1 - (a - 0.95) / 0.4);
+    else if (a >= HOP0 && a < HOP0 + HOPD) { // critic r1 #7: two happy hops inside the 0.6 s win hold (1.6..2.2 s)
+      const p = (a - HOP0) / HOPD, q = (p * 2) % 1;
+      dy = -Math.sin(q * Math.PI) * s * 0.11 / k; sy = 1 + Math.sin(q * Math.PI) * 0.05; sx = 2 - sy;
+      rot = Math.sin(p * TAU) * 0.06;
+    }
     else { dy = -Math.max(0, Math.sin(t * 2.2)) * 2; sy = 1 + Math.sin(t * 2.2) * 0.015; }
   }
   if (flinch > 0) { sy *= 1 - flinch * 0.12; sx *= 1 + flinch * 0.1; rot += Math.sin(t * 60) * 0.05 * flinch; }
@@ -2191,6 +2256,40 @@ export function drawIcon(g, name, x, y, s, col = CREAM) {
 }
 function rrP(p, x, y, w, h, r) { p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r); p.closePath(); }
 
+// Board-clear twinkle (critic r1 #7): the empty felt sparkles through the win hold. play.js's hold 'spark' burst is
+// 2-4 px, pale yellow on cream felt and gone in ~0.5 s, so nobody saw it. These stars are ink-outlined gold (they read
+// on any felt), sized from the board unit, staggered across a ~1 s window that covers the hold, with one soft light
+// sweep across the felt. Cost: ≤ 14 small paths + 1 gradient fill, only for ~1 s after a win.
+function drawClearTwinkle(g, box, a, u, seed) {
+  const p0 = (a - TW0) / TWD;
+  if (p0 <= 0 || p0 >= 1.25) return;
+  const { fx, fy, fw, fh } = box;
+  g.save();
+  g.beginPath(); g.rect(fx, fy, fw, fh); g.clip();
+  if (p0 < 1) { // light sweep, top-left -> bottom-right
+    const sx = fx - fw * 0.6 + (fw * 2.2) * easeOut(p0), w = Math.max(fw, fh) * 0.35;
+    const gr = g.createLinearGradient(sx - w, fy, sx + w, fy + fh * 0.5);
+    gr.addColorStop(0, 'rgba(255,250,225,0)'); gr.addColorStop(0.5, `rgba(255,250,225,${0.42 * Math.sin(p0 * Math.PI)})`); gr.addColorStop(1, 'rgba(255,250,225,0)');
+    g.fillStyle = gr; g.fillRect(fx, fy, fw, fh);
+  }
+  const N = 14, lw = Math.max(1.4, u * 0.045);
+  g.lineJoin = 'round';
+  for (let i = 0; i < N; i++) {
+    const st = hash(i, seed * 7 + 3) * 0.55, p = (p0 - st) / 0.5;
+    if (p <= 0 || p >= 1) continue;
+    const env = Math.sin(p * Math.PI), R = u * (0.2 + 0.2 * hash(i, seed + 11)) * (0.35 + 0.65 * env);
+    const x = fx + fw * (0.08 + 0.84 * hash(i, seed * 3 + 1)), y = fy + fh * (0.08 + 0.84 * hash(i, seed * 5 + 2));
+    const q = R * 0.28;
+    g.save(); g.translate(x, y); g.rotate(p * 0.9 + i); g.globalAlpha = Math.min(1, env * 1.6);
+    g.beginPath(); g.moveTo(0, -R); g.lineTo(q, -q); g.lineTo(R, 0); g.lineTo(q, q); g.lineTo(0, R); g.lineTo(-q, q); g.lineTo(-R, 0); g.lineTo(-q, -q); g.closePath();
+    g.strokeStyle = INK; g.lineWidth = lw * 2; g.stroke();
+    g.fillStyle = i % 3 ? GOLD : '#FFF6C8'; g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.arc(0, 0, R * 0.16, 0, TAU); g.fill();
+    g.restore();
+  }
+  g.restore();
+}
+
 // ------------------------------------------------------------------ particles
 function partCol(c, k = 0) { return typeof c === 'number' ? (c === RAINBOW ? RAIN[k % 6] : YARN[c] ? YARN[c].base : k % 2 ? GOLD : CREAM) : c || CREAM; }
 export function drawParticles(g, parts, scale = 1) {
@@ -2224,10 +2323,44 @@ export function drawParticles(g, parts, scale = 1) {
 
 // ------------------------------------------------------------------ the play view
 let lastT = 0, fullT = -9, blockedT = -9, pawTw = new Map();
+// blocked tap (render side): the tapped strand gets a tomato under-glow while it shakes, and the strand(s) lying on
+// top of it pulse a tomato outline for BLK_DUR so a kid sees WHAT is in the way (the red ring alone only marks a
+// point). play.js's 0.3 s white flash was invisible against the cream rim.
+let blk = null;
+const BLK_DUR = 0.95;
 const fx = new WeakMap(); // per session transient memory
 bus.on('full', () => { fullT = lastT; });
-bus.on('blocked', d => { blockedT = lastT; if (d && d.why === 'paw') pawTw.set(d.id, lastT); });
-bus.on('levelStart', () => { fullT = -9; blockedT = -9; pawTw = new Map(); });
+bus.on('blocked', d => {
+  blockedT = lastT;
+  if (d && d.why === 'paw') pawTw.set(d.id, lastT);
+  blk = d && d.why !== 'full' ? { id: d.id, ids: Array.isArray(d.blockers) ? d.blockers.slice() : [], t0: lastT } : null;
+});
+bus.on('levelStart', () => { fullT = -9; blockedT = -9; pawTw = new Map(); blk = null; });
+/** Blocked-tap pulse 0..1 at time T (0 when idle): quick attack, ~2.5 pulses, fades out. */
+function blkPulse(T) {
+  if (!blk) return 0;
+  const a = (T - blk.t0) / BLK_DUR;
+  if (a < 0 || a >= 1) return 0;
+  const env = a < 0.06 ? a / 0.06 : 1 - Math.pow((a - 0.06) / 0.94, 3);
+  return env * (0.8 + 0.2 * Math.cos(a * TAU * 2.5)); // starts at full strength, never dips below ~0.6
+}
+/** Closed outline around a strand at distance d (offset sides + round caps), cached on the geo item. */
+function strandOutline(gi, d) {
+  if (gi._olD === d && gi._ol) return gi._ol;
+  const pts = gi.pts, n = pts.length;
+  const L = offsetPoly(pts, d), R = offsetPoly(pts, -d);
+  const p = new Path2D();
+  p.moveTo(L[0][0], L[0][1]);
+  for (let i = 1; i < n; i++) p.lineTo(L[i][0], L[i][1]);
+  const fe = Math.atan2(pts[n - 1][1] - pts[n - 2][1], pts[n - 1][0] - pts[n - 2][0]);
+  p.arc(pts[n - 1][0], pts[n - 1][1], d, fe + Math.PI / 2, fe - Math.PI / 2, true);
+  for (let i = n - 1; i >= 0; i--) p.lineTo(R[i][0], R[i][1]);
+  const f0 = Math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]);
+  p.arc(pts[0][0], pts[0][1], d, f0 - Math.PI / 2, f0 + Math.PI / 2, true);
+  p.closePath();
+  gi._ol = p; gi._olD = d;
+  return p;
+}
 
 // ------------------------------------------------------------------ device-pixel sprites (fix3 perf)
 // DECISION (fix3): every cached layer is a "device sprite": its canvas pixel (0,0) is the integer device pixel
@@ -2396,9 +2529,10 @@ export function drawPlay(g, S) {
     } catch (e) { feltPattern = null; }
   }
   const pegR = Math.max(3.5, u * 0.16);
+  const bp = blkPulse(T);
   const drawCovered = (gg, i, dx = 0, dy = 0, wt = null) => {
     const gi = geo[i], c = puz.strands[i].c, my = isMyst(sess, i);
-    drawStrand(gg, gi, c, sw, { dim: true, mystery: my, wiggleT: wt, dx, dy });
+    drawStrand(gg, gi, c, sw, { dim: true, mystery: my, wiggleT: wt, dx, dy, bad: wt != null && blk && blk.id === i ? bp : 0 });
     drawStrandPegs(gg, gi, c, sw, pegR, true, 0, 0, my);
   };
   const removedPegs = cg => { for (let i = 0; i < puz.n; i++) if ((ss.removed >>> i) & 1 && geo[i]) for (const q of geo[i].pegs) drawPeg(cg, q[0], q[1], pegR * 0.9); };
@@ -2439,18 +2573,38 @@ export function drawPlay(g, S) {
     const f0 = sess.flash && sess.flash.get(i);
     const flash = f0 != null && T - f0 < 0.3 ? 1 - (T - f0) / 0.3 : 0;
     const wti = w0 != null && T - w0 < DUR.wiggle ? T - w0 : null;
+    const warn = bp && blk.ids.includes(i) ? bp : 0;
+    const bad = bp && blk.id === i && wti != null ? bp : 0;
     const fe = freeSprites(geo, i, c, sw, pegR, my, dpr, bkey);
-    // a resting free strand only bobs: its baked sprite moves; press / hint / flash / reveal / wiggle draw live
-    if (!pressed && !hint && !flash && wti == null && (rv == null || rv >= 1)) {
+    // a resting free strand only bobs: its baked sprite moves; press / hint / flash / reveal / wiggle / blocker
+    // pulse draw live
+    if (!pressed && !hint && !flash && !warn && wti == null && (rv == null || rv >= 1)) {
       if (!fe.st) fe.st = strandSprite(gi, c, sw, my, dpr);
       blit(g, fe.st, 0, dy);
-    } else drawStrand(g, gi, c, sw, { lift: pressed ? 2 : 1, glow: 1, hint, flash, mystery: my, reveal: rv, dy, wiggleT: wti });
+    } else drawStrand(g, gi, c, sw, { lift: pressed || warn ? 2 : 1, glow: 1, hint, flash: warn ? 0 : flash, mystery: my, reveal: rv, dy: dy - warn * 2, wiggleT: wti, warn, bad });
     for (const ps of fe.pegs) blit(g, ps);
     if (rv != null && rv < 1) {
       const m = pointAt(gi.pts, gi.at, gi.len / 2);
       g.strokeStyle = `rgba(255,255,255,${1 - rv})`; g.lineWidth = 2;
       g.beginPath(); g.arc(m.x, m.y + dy, sw * (1 + rv * 3), 0, TAU); g.stroke();
     }
+  }
+
+  // ---- blocked tap: covered blockers (strands on top of the tapped one that are themselves covered) get a pulsing
+  //   tomato outline drawn above everything; free blockers already pulse a halo in the loop above
+  if (bp && blk.ids.length) {
+    g.save();
+    g.lineJoin = 'round';
+    for (const i of blk.ids) {
+      const gi = geo[i];
+      if (!gi || !gi.pts || gi.pts.length < 2 || ((ss.removed >>> i) & 1) || ss.free.includes(i)) continue;
+      const ol = strandOutline(gi, sw / 2 + 4.5);
+      g.globalAlpha = bp;
+      g.fillStyle = 'rgba(232,70,58,0.18)'; g.fill(ol);
+      g.strokeStyle = INK; g.lineWidth = 5.5; g.stroke(ol);
+      g.strokeStyle = TOMATO; g.lineWidth = 3.4; g.stroke(ol);
+    }
+    g.restore();
   }
 
   // ---- contract 2: queued (pending) strands pulse: gold rings on both end pegs + queue number badge
@@ -2490,12 +2644,17 @@ export function drawPlay(g, S) {
   const lc = [];
   for (const s of puz.strands) if (s.c >= 0 && s.c < 6 && !lc.includes(s.c)) lc.push(s.c);
   const flinch = Math.max(kit.flinch && kit.flinch <= 1 ? kit.flinch : 0, T - blockedT < 0.25 ? 1 - (T - blockedT) / 0.25 : 0);
+  const kitRoom = Math.max(18, box.kit.y - (box.oy + box.oh) - Math.max(3, u * 0.12));
   drawKitten(g, box.kit.x, box.kit.y, box.kit.s, {
     stage: kit.stage, loops: kit.loops, flinch, freeT: kit.freeT, golden: kit.golden, t: T,
     breed: id > 0 ? (id - 1) % 6 : 0, coat: id > 0 ? Math.floor((id - 1) / 6) : 0, loopColors: lc.slice(0, 4), memKey: sess,
-    // illustrated sprite: id picks the breed / boss art; maxH keeps a 1.4× boss from covering the bottom strands
-    id: kitArtId(sess), maxH: Math.max(box.kit.s, box.kit.y - (box.oy + box.oh - 0.3 * box.u)),
+    // illustrated sprite: id picks the breed / boss art. capH = the gap between the ledge and the board frame's
+    // bottom edge: the kitten (boss 1.4× included) never rises into the frame or over the bottom strands. The old
+    // maxH let it reach 0.3 u INTO the frame and never shrank a layout size taller than the gap (critic r1:
+    // heads over the frame on phone / tablet, the boss over the bottom-left corner at 1440 / 1920).
+    id: kitArtId(sess), maxH: kitRoom, capH: kitRoom,
   });
+  if (kit.freeT >= 0 && T >= kit.freeT) drawClearTwinkle(g, box, T - kit.freeT, u, id);
 
   // ---- blocker rings
   if (sess.rings) for (const r of sess.rings) {
@@ -2606,7 +2765,8 @@ function freeSprites(geo, i, c, sw, pegR, my, dpr, bkey) {
 function strandSprite(gi, c, sw, my, dpr) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const p of gi.pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
-  const M = Math.max(sw / 2 + 9, Math.max(sw * 1.02, 11.5) * 0.9 + 3) + 2;
+  // margin: rim (sw + 7) / 2 plus the soft shadow (offset ≈ 0.4 sw, blur reach ≈ 0.95 sw), and the glyph stickers
+  const M = Math.max(sw / 2 + 9, Math.max(sw * 1.02, 11.5) * 0.9 + 3, sw * 1.9 + 6) + 2;
   return devSprite(x0 - M, y0 - M, x1 + M, y1 + M, dpr, sg => drawStrand(sg, gi, c, sw, { lift: 1, glow: 1, mystery: my }));
 }
 
@@ -2667,14 +2827,20 @@ function drawTwists(g, S, sess, ss, mem, u, sw) {
       }
     }
   });
-  // sleepy paws
+  // sleepy paws: the paw reaches in from under the nearest frame edge onto this strand's peg closest to that edge
+  //   (critic r1: the old code-drawn paw sat on the peg nearest the CENTRE with its forearm hanging out over the frame)
+  let fb = null;
   puz.strands.forEach((s, i) => {
     if (!s.paw || gone(i)) return;
     const left = Math.max(0, s.paw - (st.count || 0));
     const gi = geo[i];
-    const cx = sess.B.ox + (puz.cols - 1) * u / 2, cy = sess.B.oy + (puz.rows - 1) * u / 2;
-    let best = gi.pegs[0], bd = Infinity;
-    for (const p of gi.pegs) { const d = Math.hypot(p[0] - cx, p[1] - cy); if (d < bd) { bd = d; best = p; } }
+    if (!fb) fb = boardBox(sess.B, puz.cols, puz.rows);
+    let best = gi.pegs[0], bd = Infinity, ad = Math.PI, bs = Infinity;
+    for (const p of gi.pegs) {
+      // side edges score 0.3 u closer: a paw reaching in from the side shows its striped forearm
+      const e = [[p[0] - fb.fx, Math.PI, 0.3], [fb.fx + fb.fw - p[0], 0, 0.3], [p[1] - fb.fy, -Math.PI / 2, 0], [fb.fy + fb.fh - p[1], Math.PI / 2, 0]];
+      for (const [d, a, k] of e) if (d - k * u < bs) { bs = d - k * u; bd = d; best = p; ad = a; }
+    }
     let lt = mem.paws.get(i);
     if (left === 0 && lt == null) { lt = T; mem.paws.set(i, T); }
     if (left > 0) mem.paws.delete(i);
@@ -2682,7 +2848,7 @@ function drawTwists(g, S, sess, ss, mem, u, sw) {
     if (lift >= 1) return;
     const pf = sess.pawFx && sess.pawFx.filter(f => f.id === i && f.kind === 'twitch').pop();
     const tw = pf ? T - pf.t0 : pawTw.has(i) ? T - pawTw.get(i) : -1;
-    drawPaw(g, best[0], best[1], u * 0.55, left, T + i, lift, tw >= 0 && tw < 0.4 ? tw : 0);
+    drawSleepyPaw(g, best[0], best[1], u, left, T + i, lift, tw >= 0 && tw < 0.4 ? tw : 0, ad, bd, fb);
   });
 }
 
@@ -2733,6 +2899,11 @@ function drawRack(g, S, sess, rs, ui, T) {
       g.fillStyle = CREAM; g.strokeStyle = INK; g.lineWidth = 2;
       rr(g, rs.more.x - r * 1.1, rs.more.y - r * 0.75, r * 2.2, r * 1.5, r * 0.75); g.fill(); g.stroke();
       text(g, '+' + more, rs.more.x, rs.more.y + 1, r * 1.05, { color: INK });
+      // "more" under the chip so it reads "+2 more" (critic r1: a bare "+2" read as a score). ≥ 12 px, NEXT style,
+      // nudged left if it would leave the screen
+      const ms = Math.max(12, 11 * ui), lw = ms * 1.9;
+      const mx = Math.min(rs.more.x, (S.L && S.L.W ? S.L.W : Infinity) - lw / 2 - 3);
+      text(g, 'more', mx, rs.more.y + r * 0.75 + ms * 0.62 + 1, ms, { font: FONT_B, weight: 900, color: CREAM, stroke: INK, strokeW: Math.max(3, 3.5 * ui) });
     }
   }
   // active slots: leaving spool rolls off right; current rolls in from the NEXT shelf

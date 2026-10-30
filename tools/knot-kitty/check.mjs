@@ -1,10 +1,14 @@
 // Knot Kitty level checker. Run from the repo root: node tools/knot-kitty/check.mjs [--quick]
 // Re-solves every level + daily, re-runs bots (100 runs), asserts schema, strand budget, colour rules,
 // twist constraints, geometry gates and par/sol validity. Exits 1 on any failure.
+// fix2: also verifies bonus-data.js (Bonus Tangles): same gates as a daily board, exact solve, par/sol replay, geometry
+//   distinct from every campaign level, daily board and other bonus board (any mirror), >= 30 boards, and getBonus()
+//   serving board i for i < count and the daily remix after it.
 import LEVELS from '../../games/knot-kitty/levels-data.js';
 import DAILIES from '../../games/knot-kitty/dailies-data.js';
+import BONUS from '../../games/knot-kitty/bonus-data.js';
 import { buildPuzzle, initState, canPull, pull, isWon, solve, botStats, transformLevel } from '../../games/knot-kitty/rules.js';
-import { getLevel, getDaily, getBonus, dailyIndex, istDateKey, LEVEL_COUNT } from '../../games/knot-kitty/levels.js';
+import { getLevel, getDaily, getBonus, dailyIndex, istDateKey, LEVEL_COUNT, BONUS_COUNT } from '../../games/knot-kitty/levels.js';
 
 const RAINBOW = 6;
 const errors = [];
@@ -120,8 +124,31 @@ if (DAILIES.length) {
   const b = getBonus(3);
   if (b.name !== 'Bonus Tangle 4') fail('bonus', 'name');
 }
+// bonus tangles (fix2)
+const geoKeys = (L) => { const out = []; for (const mx of [0, 1]) for (const my of [0, 1]) out.push(L.strands.map(s => s.pegs.map(([x, y]) => (mx ? L.cols - 1 - x : x) + ',' + (my ? L.rows - 1 - y : y)).sort().join('|')).sort().join(';')); return out; };
+const seenGeo = new Map();
+for (const L of LEVELS) for (const k of geoKeys(L)) seenGeo.set(k, 'L' + L.id);
+DAILIES.forEach((D, i) => { for (const k of geoKeys(D)) if (!seenGeo.has(k)) seenGeo.set(k, 'D' + i); });
+if (BONUS.length < 30 || BONUS.length > 60) fail('bonus-data', `${BONUS.length} boards, want 30..60`);
+if (BONUS_COUNT !== BONUS.length) fail('bonus-data', 'BONUS_COUNT mismatch');
+BONUS.forEach((B, i) => {
+  const where = 'B' + i;
+  const { puz, bots } = checkLevel(B, where, { daily: true });
+  rows.push([where, puz.n, puz.crossings.length, B.par, bots]);
+  const k0 = geoKeys(B)[0];
+  if (seenGeo.has(k0)) fail(where, 'geometry repeats ' + seenGeo.get(k0));
+  for (const k of geoKeys(B)) if (!seenGeo.has(k)) seenGeo.set(k, where);
+  if (!B.stats || !B.stats.exact) fail(where, 'not exactly solved at generation');
+  if (i && !(B.bonus > BONUS[i - 1].bonus)) fail(where, 'out of ramp order (generator index not increasing)');
+  const g = getBonus(i);
+  if (g.par !== B.par || g.name !== 'Bonus Tangle ' + (i + 1) || g.bonus !== i || JSON.stringify(g.strands) !== JSON.stringify(B.strands)) fail(where, 'getBonus copy wrong');
+});
+{
+  const g = getBonus(BONUS.length), P = DAILIES;
+  if (g.name !== 'Bonus Tangle ' + (BONUS.length + 1) || !P.length || buildPuzzle(g).n !== P[(BONUS.length % 60) % P.length].strands.length) fail('bonus', 'fallback remix after the generated boards');
+}
 const pct = x => (x ? String(Math.round(x.winRate * 100)).padStart(3) : '  –');
 for (const [id, n, x, par, b] of rows) console.log(`${id.padEnd(4)} n ${String(n).padStart(2)} x ${String(x).padStart(2)} par ${par} | rnd ${pct(b.random)} cas ${pct(b.casual)} avg ${pct(b.average)} exp ${pct(b.expert)}`);
-console.log(`\nchecked ${LEVELS.length} levels + ${DAILIES.length} dailies in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+console.log(`\nchecked ${LEVELS.length} levels + ${DAILIES.length} dailies + ${BONUS.length} bonus boards in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (errors.length) { console.error(`\nFAIL (${errors.length}):\n` + errors.join('\n')); process.exit(1); }
 console.log('PASS');
