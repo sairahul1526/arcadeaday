@@ -456,7 +456,12 @@ function iconBtn(g, b) {
   g.restore();
   if (b.dot) { g.beginPath(); g.arc(cx + R0 * 0.72, cy0 - R0 * 0.72, Math.max(4, R0 * 0.24), 0, 7); g.fillStyle = TOMATO; g.fill(); g.lineWidth = Math.max(1, 2 * d); g.strokeStyle = '#fff'; g.stroke(); }
   // ui2: badge digits ≥ 11 px (r ≥ 10); a price chip slides left so it never pokes past the button's box
-  if (b.badge) badge(g, cx + R0 * 0.72, cy0 + R0 * 0.62, Math.max(10.6, R0 * 0.36), b.badge, d, b.x + b.w);
+  // meta v2: b.badgeTop puts it at the top-right (HUD boosters: their label sits under the icon) with digits ≥ 13 px
+  if (b.badge) {
+    const br = b.badgeTop ? Math.max(11.6, R0 * 0.4) : Math.max(10.6, R0 * 0.36);
+    badge(g, cx + R0 * 0.72, b.badgeTop ? cy0 - R0 * 0.6 : cy0 + R0 * 0.62, br, b.badge, d, b.x + b.w + (b.badgeTop ? br * 0.4 : 0));
+  }
+  if (b.cap) iconCap(g, b.cap, cx, b.capY != null ? b.capY : b.y + b.h + 3 * d, b.capW || b.w * 1.6, b.capFs || Math.max(12, 12 * d));
 }
 function slider(g, s) {
   if (U.reg) U.sliders.push(s);
@@ -479,7 +484,19 @@ function toggle(g, b) {
   rr(g, sx, sy, sw, sh, sh / 2); g.fillStyle = on ? TEAL : STITCH; g.fill(); g.lineWidth = Math.max(1.5, 2.2 * d); g.strokeStyle = INK; g.stroke();
   g.beginPath(); g.arc(on ? sx + sw - sh / 2 : sx + sh / 2, sy + sh / 2, sh * 0.36, 0, 7); g.fillStyle = '#fff'; g.fill(); g.stroke();
 }
-function closeX(g, x, y, d, act) { iconBtn(g, { id: 'close', label: 'Close', x: x - 21 * d, y: y - 21 * d, w: 42 * d, h: 42 * d, icon: 'close', act }); }
+// meta v2: the Close X is 44 css px or more (was 42)
+function closeX(g, x, y, d, act) { const r = Math.max(22, 22 * d); iconBtn(g, { id: 'close', label: 'Close', x: x - r, y: y - r, w: 2 * r, h: 2 * r, icon: 'close', act }); }
+/** meta v2: a small caption chip centred at (cx, top y): ink text ≥ 12 px on a cream pill (readable on any scene). */
+function iconCap(g, label, cx, y, maxW, fs) {
+  fs = Math.max(12, fitSize(g, label, maxW - fs * 0.8, fs, FB, '900'));
+  const w = Math.min(maxW, tw(g, label, fs, FB, '900') + fs * 0.8), h = Math.ceil(fs * 1.22);
+  g.save();
+  rr(g, cx - w / 2, y, w, h, h / 2); g.fillStyle = 'rgba(255,249,236,0.94)'; g.fill();
+  g.lineWidth = Math.max(1, fs * 0.08); g.strokeStyle = 'rgba(43,36,64,0.55)'; g.stroke();
+  txt(g, label, cx, y + h / 2 + fs * 0.04, fs, { f: FB, w: '900', col: INK, maxW: w - fs * 0.4 });
+  g.restore();
+  return { x: cx - w / 2, y, w, h };
+}
 
 /** Rows of fixed du heights, shrunk together when space is short. rows: [{ h, fn(y, hPx, e) }] */
 function rows(list, d, availH) {
@@ -1040,8 +1057,8 @@ function giftCard(type, data) {
   data = data || {};
   if (type === 'booster') type = 'unlockBooster';
   if (type === 'stars') type = 'gift';
-  if (!['gift', 'chest', 'unlockBooster'].includes(type)) return null;
-  const key = type + '|' + (data.k || '') + '|' + (data.at || '') + '|' + (data.world || '');
+  if (!['gift', 'chest', 'unlockBooster', 'shield', 'ladder', 'bonusGift', 'setReady', 'set'].includes(type)) return null;
+  const key = type + '|' + (data.k || '') + '|' + (data.at || '') + '|' + (data.world || '') + '|' + (data.w || '') + '|' + (data.gold ? 'g' : '') + '|' + (data.day || '');
   return { type, data, key, t0: U.t, emitted: [] };
 }
 function finishWin(fn) {
@@ -1252,6 +1269,23 @@ function drawLoading(g, S) {
 }
 
 // ---------- title ----------
+// DECISION (meta v2): after all 60 levels the home screens' primary button is the reason to come back: "DAILY KNOT"
+//   while today's daily is open, else "BONUS TANGLE N". The map (and L60 replays) become secondary. Bonus Tangles get
+//   their own entry (title icon, map strip) as soon as the campaign opens them (World 3 boss, see meta.bonusState).
+function goBonus() {
+  const bs = safe(() => M.bonusState(), { open: false, need: 0, next: 0 });
+  if (bs.open) { api.go('play', { kind: 'bonus', id: bs.next }); return true; }
+  if (bs.next > 0 && !bs.open) toast(bs.need ? `Beat level ${bs.need} to open the next Bonus Tangle` : 'More Bonus Tangles soon');
+  else toast(`Beat level ${Math.max(30, bs.need || 30)} to open Bonus Tangles`);
+  return false;
+}
+function homeCta() {
+  if (safe(() => M.cur(), 1) <= LEVELS) return null;
+  const dl = safe(() => M.daily(), { unlocked: false, won: true });
+  if (dl.unlocked && !dl.won) return { id: 'daily', label: 'DAILY KNOT', sub: dl.streak > 0 ? `DAY ${dl.day} OF 7` : 'NEW TODAY', act: () => api.go('daily') };
+  const bs = safe(() => M.bonusState(), { next: 0 });
+  return { id: 'bonus', label: `BONUS TANGLE ${bs.next + 1}`, sub: 'A NEW PUZZLE', act: goBonus };
+}
 function drawTitle(g, S) {
   const d = U.du, W = S.W, inset = layoutOf(S).inset || 0, H = S.H - inset;
   // fix 1 (desktop m6): the web page's fixed nav.back chips already link to more games; no duplicate in the canvas
@@ -1261,10 +1295,16 @@ function drawTitle(g, S) {
   const lv2 = safe(() => LV.getLevel(2), null);
   const playSub = prog > 0 ? (cur > LEVELS ? 'ALL 60 BEATEN' : `LEVEL ${cur}`) : '';
   const playAct = () => { if (prog === 0) api.go('play', { kind: 'level', id: 1 }); else api.go('map'); };
+  const cta = homeCta(), bs = safe(() => M.bonusState(), { any: false, open: false });
+  const setDot = safe(() => M.setsClaimable().length > 0, false);
   const iconsRow = (cx, y, e, maxW) => {
-    const items = [['daily', 'calendar', 'Daily', () => api.go('daily'), dl.unlocked && !dl.won], ['kittens', 'paw', 'Kittens', () => api.go('kittens')],
-      ['shop', 'cart', 'Shop', () => api.go('shop')], ['settings', 'gear', 'Settings', () => api.go('settings')]];
-    const r = 23 * e, gapX = Math.min(28 * e, (maxW - 8 * r) / 3), total = 8 * r + 3 * gapX;
+    const items = [['daily', 'calendar', 'Daily', () => api.go('daily'), dl.unlocked && !dl.won && !(cta && cta.id === 'daily')]];
+    // meta v2: Bonus Tangles get a title icon once the campaign opens them (dot: a new one is ready)
+    if (bs.any) items.push(['bonus', 'star', 'Bonus', goBonus, bs.open && !(cta && cta.id === 'bonus')]);
+    items.push(['kittens', 'paw', 'Kittens', () => api.go('kittens'), setDot],
+      ['shop', 'cart', 'Shop', () => api.go('shop')], ['settings', 'gear', 'Settings', () => api.go('settings')]);
+    const n = items.length;
+    const r = Math.max(Math.min(22, (maxW - (n - 1) * 4) / (2 * n)), Math.min(23 * e, (maxW - (n - 1) * 8 * e) / (2 * n))), gapX = Math.min(28 * e, (maxW - 2 * n * r) / (n - 1)), total = 2 * n * r + (n - 1) * gapX;
     items.forEach(([id, ic, label, act, dot], i) => {
       const x = cx - total / 2 + i * (2 * r + gapX);
       // fix r2: labels sit on a cream felt pill (ink text) so they read over the baked pumpkins at 360x640, and the
@@ -1278,7 +1318,13 @@ function drawTitle(g, S) {
       txt(g, label, x + r, ly, fs, { f: FB, w: '800', col: INK, maxW: lw - 4 });
     });
   };
-  const playBtn = (cx, y, w, e) => pill(g, { id: 'title-play', label: 'PLAY', sub: playSub || null, kind: 'primary', x: cx - w / 2, y, w, h: 72 * e, act: playAct, d: e });
+  const playBtn = (cx, y, w, e) => {
+    if (!cta) { pill(g, { id: 'title-play', label: 'PLAY', sub: playSub || null, kind: 'primary', x: cx - w / 2, y, w, h: 72 * e, act: playAct, d: e }); return; }
+    // after L60: [ DAILY KNOT / BONUS TANGLE N ] [map]; the round Map button opens the level map (replays)
+    const r = Math.max(22, 26 * e), gap = 10 * e, pw = w - 2 * r - gap, x0 = cx - w / 2;
+    pill(g, { id: 'title-play', label: cta.label, sub: cta.sub, kind: 'primary', x: x0, y, w: pw, h: 72 * e, act: cta.act, d: e });
+    iconBtn(g, { id: 'title-map', label: 'Level map', icon: 'map', x: x0 + pw + gap, y: y + 36 * e - r - 3 * e, w: 2 * r, h: 2 * r, act: () => api.go('map'), d: e });
+  };
   const link = (y, e) => {
     if (!canLink) return;
     const s = 13 * e, x = Math.max(12 * e, 10), label = 'more games', w = tw(g, label, s, FB, '800');
@@ -1475,13 +1521,33 @@ function drawMap(g, S) {
     const ly = w === 1 ? nY(mm, mm.yc(1) - 50 * sd) : nY(mm, mm.yc(10 * (w - 1)) + 0.64 * span);
     // fix 2: under a modal (settings / shop / kittens / daily over the map) the labels are hidden: at 1440×900 the
     //   settings card's bottom edge cut the "World 1" strip in half.
-    if (S.screen === 'map' && ly > -30 * d && ly < H + 30 * d) {
+    // meta v2: the label fades under the header / PLAY strip like the nodes (the W1 pill used to be clipped by the
+    //   strip), and an open world shows its Kitten Corner set progress on a chip: [paw 7/10], gold when all 10 are
+    //   3★, a red dot when a set reward waits. Tapping the label opens that world's Kitten Corner page.
+    const la = mapClear(mm, ly - 15 * d, ly + 15 * d, stripY);
+    if (S.screen === 'map' && la > 0 && ly > -30 * d && ly < H + 30 * d) {
       const locked = cur < (w - 1) * PER_WORLD + 1;
       const label = `World ${w} · ${WORLDS[w].name}`;
-      const s = fitSize(g, label, Math.min(W - 40 * d, 300 * d), 15 * d, FT, '', 0.25);
-      const lw = tw(g, label, s) + 28 * d, lh = s * 1.7;
-      rr(g, mm.cx - lw / 2, ly - lh / 2, lw, lh, lh / 2); g.fillStyle = locked ? '#8F8580' : TEAL; g.fill(); g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
-      txt(g, label, mm.cx, ly + s * 0.04, s, { col: '#fff', stroke: INK, sk: 0.22 });
+      const si = locked ? null : safe(() => M.setInfo(w), null);
+      const chip = si ? (si.golden ? `★ ${si.gold3}/10` : `${si.got}/10`) : '';
+      const maxW = Math.min(W - 24 * d, 340 * d);
+      let s = Math.max(12, 15 * d), cs = s, cw = 0;
+      const fit = () => { cw = chip ? tw(g, chip, cs, FB, '900') + cs * 1.9 + 8 * d : 0; return tw(g, label, s) + 28 * d + cw; };
+      while (fit() > maxW && s > 12) { s = Math.max(12, s - 0.5); cs = s; }
+      const lw = Math.min(maxW, fit()), lh = s * 1.7, x0 = mm.cx - lw / 2;
+      g.save(); g.globalAlpha *= la;
+      rr(g, x0, ly - lh / 2, lw, lh, lh / 2); g.fillStyle = locked ? '#8F8580' : TEAL; g.fill(); g.lineWidth = Math.max(1.5, 2.5 * d); g.strokeStyle = INK; g.stroke();
+      txt(g, label, x0 + (lw - cw) / 2, ly + s * 0.04, s, { col: '#fff', stroke: INK, sk: 0.22, maxW: lw - cw - 20 * d });
+      if (chip) {
+        const ch = lh - 8 * d, cx0 = x0 + lw - cw - 4 * d + 4 * d, cy0 = ly - ch / 2;
+        rr(g, cx0, cy0, cw - 4 * d, ch, ch / 2); g.fillStyle = si.golden ? GOLD : CREAM; g.fill(); g.lineWidth = Math.max(1, 1.6 * d); g.strokeStyle = INK; g.stroke();
+        aIcon(g, si.golden ? 'star' : 'paw', cx0 + cs * 0.85, ly, cs * 1.1, si.golden ? GOLD : INK);
+        txt(g, si.golden ? chip.slice(2) : chip, cx0 + cs * 1.6 + (cw - 4 * d - cs * 1.6) / 2 - 2 * d, ly + cs * 0.04, cs, { f: FB, w: '900', col: INK, maxW: cw - cs * 1.9 });
+        if (si.claimable || si.goldClaimable) { g.beginPath(); g.arc(cx0 + cw - 6 * d, cy0 + 2 * d, Math.max(5, 5 * d), 0, 7); g.fillStyle = TOMATO; g.fill(); g.lineWidth = Math.max(1, 2 * d); g.strokeStyle = '#fff'; g.stroke(); }
+      }
+      g.restore();
+      if (la > 0.6 && !locked) reg({ id: 'm-world' + w, label: `World ${w} kittens`, x: x0, y: ly - Math.max(22, lh / 2), w: lw, h: Math.max(44, lh),
+        act: () => { U.kPage = w - 1; api.go('kittens'); } });
     }
   }
   // trophy
@@ -1532,7 +1598,7 @@ function drawMap(g, S) {
   g.fillStyle = CREAM; g.fillRect(0, 0, W, mm.topH);
   g.fillStyle = INK; g.fillRect(0, mm.topH - 3 * d, W, 3 * d);
   g.save(); g.setLineDash([6 * d, 5 * d]); g.strokeStyle = STITCH; g.lineWidth = 1.6 * d; g.beginPath(); g.moveTo(0, mm.topH - 9 * d); g.lineTo(W, mm.topH - 9 * d); g.stroke(); g.restore();
-  const bw = Math.min(W, 560 * d), bx = (W - bw) / 2, cy = (mm.topH - 4 * d) / 2, ir = 21 * d;
+  const bw = Math.min(W, 560 * d), bx = (W - bw) / 2, cy = (mm.topH - 4 * d) / 2, ir = Math.max(22, 22 * d); // ≥ 44 px
   iconBtn(g, { id: 'm-home', label: 'Home', x: bx + 8 * d, y: cy - ir, w: 2 * ir, h: 2 * ir, icon: 'home', act: () => api.go('title') });
   const dl = safe(() => M.daily(), { unlocked: false, won: true });
   iconBtn(g, { id: 'm-daily', label: 'Daily', x: bx + bw - 8 * d - 2 * ir, y: cy - ir, w: 2 * ir, h: 2 * ir, icon: 'calendar', dot: dl.unlocked && !dl.won, act: () => api.go('daily') });
@@ -1561,7 +1627,22 @@ function drawMap(g, S) {
   g.fillStyle = CREAM; g.fillRect(0, stripY, W, H - stripY);
   g.fillStyle = INK; g.fillRect(0, stripY, W, 3 * d);
   g.save(); g.setLineDash([6 * d, 5 * d]); g.strokeStyle = STITCH; g.lineWidth = 1.6 * d; g.beginPath(); g.moveTo(0, stripY + 9 * d); g.lineTo(W, stripY + 9 * d); g.stroke(); g.restore();
-  pill(g, { id: 'map-play', label: `PLAY L${sel}`, kind: 'primary', x: (W - pw) / 2, y: py, w: pw, h: mm.playH, act: () => api.go('play', { kind: 'level', id: sel }) });
+  // meta v2: after L60 the primary is the daily / next bonus tangle and the selected level is a secondary replay; once
+  //   the campaign opens Bonus Tangles (World 3 boss) a secondary BONUS button sits beside PLAY.
+  const cta = homeCta(), bs = safe(() => M.bonusState(), { any: false, open: false });
+  const playLv = () => api.go('play', { kind: 'level', id: sel });
+  if (cta || bs.any) {
+    const tw2 = Math.min(W - 24 * d, 440 * d), gap = 10 * d, x0 = (W - tw2) / 2;
+    const w1 = Math.round((tw2 - gap) * 0.6), w2 = tw2 - gap - w1;
+    if (cta) {
+      pill(g, { id: 'map-play', label: cta.label, kind: 'primary', x: x0, y: py, w: w1, h: mm.playH, act: cta.act });
+      pill(g, { id: 'map-replay', label: `REPLAY L${sel}`, kind: 'secondary', x: x0 + w1 + gap, y: py, w: w2, h: mm.playH, act: playLv });
+    } else {
+      pill(g, { id: 'map-play', label: `PLAY L${sel}`, kind: 'primary', x: x0, y: py, w: w1, h: mm.playH, act: playLv });
+      pill(g, { id: 'map-bonus', label: 'BONUS', sub: bs.open ? `TANGLE ${bs.next + 1}` : `AT LEVEL ${bs.need}`, kind: bs.open ? 'secondary' : 'ghost',
+        x: x0 + w1 + gap, y: py, w: w2, h: mm.playH, act: goBonus, badge: bs.open ? { n: '!' } : null });
+    }
+  } else pill(g, { id: 'map-play', label: `PLAY L${sel}`, kind: 'primary', x: (W - pw) / 2, y: py, w: pw, h: mm.playH, act: playLv });
 }
 
 // ---------- play HUD, tray, callouts, hand ----------
@@ -1588,7 +1669,7 @@ function drawPlayUI(g, S) {
 function drawHUD(g, S, live) {
   const L = layoutOf(S), u = L.u, h = L.hud, sess = S.sess;
   if (!sess) return;
-  const dd = Math.min(46 * u, h.h - 6), cy = h.y + h.h / 2;
+  const dd = Math.max(Math.min(46 * u, h.h - 6), Math.min(44, h.h)), cy = h.y + h.h / 2; // meta r3: ≥ 44 px
   const showBtns = S.screen === 'play' || S.screen === 'pause';
   // polish round 3 (desktop critics: "header floats, pause sits on the curtain rod"): in landscape the HUD row is
   //   one cream plaque (pause | title | retry) so it reads as a single group over any scene art.
@@ -1637,6 +1718,22 @@ function drawHUD(g, S, live) {
     } });
   }
 }
+/** meta v2: the boxes the HUD boosters cover on screen: icon + top-right badge + the name label under it. One owner
+ *  for drawing (boosterRects) and every coach-mark / callout placer that must keep off the booster band. */
+function boosterBoxes(L) {
+  const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
+  if (!keys.length) return [];
+  const rs = safe(() => boosterRects(L, keys), {}) || {}, out = [];
+  for (const k of keys) {
+    const r = rs[k];
+    if (!r) continue;
+    const R0 = r.w / 2, br = Math.max(11.6, R0 * 0.4), bx = r.x + R0 + R0 * 0.72, by = r.y + R0 - R0 * 0.6;
+    const q = { k, x0: Math.min(r.x, bx - br * 1.8), y0: Math.min(r.y, by - br), x1: Math.max(r.x + r.w, bx + br * 1.8), y1: r.y + r.h };
+    if (r.lab) { q.x0 = Math.min(q.x0, r.lab.x); q.x1 = Math.max(q.x1, r.lab.x + r.lab.w); q.y1 = Math.max(q.y1, r.lab.y + r.lab.h); }
+    out.push(q);
+  }
+  return out;
+}
 function drawBoosters(g, S) {
   const L = layoutOf(S), sess = S.sess;
   if (!sess || S.screen === 'win') return;
@@ -1650,7 +1747,9 @@ function drawBoosters(g, S) {
     const hintOn = k === 'hint' && sess.hint && S.T < sess.hint.until;
     const pulse = k === 'undo' && (sess.doomed || U.t < U.undoPulse);
     const flying = U.fly.some(f => f.k === k && U.t < f.t0 + f.dur);
-    iconBtn(g, { id: 'b-' + k, label: BNAME[k], x: r.x, y: r.y, w: r.w, h: r.h, hit: r.hit, icon: k, d: L.u,
+    // meta v2: the name sits under every booster on a cream chip (r.lab from boosterRects, ≥ 13 px), badge top-right
+    iconBtn(g, { id: 'b-' + k, label: BNAME[k], x: r.x, y: r.y, w: r.w, h: r.h, hit: r.hit, icon: k, d: L.u, badgeTop: true,
+      cap: r.lab ? BNAME[k] : null, capY: r.lab && r.lab.y, capW: r.lab && r.lab.w, capFs: L.labFs,
       badge: flying ? null : n > 0 ? { n } : { price: BOOSTERS[k].price }, ring: sess.boosterArm === k || hintOn || (U.bArm && U.bArm.k === k && U.t < U.bArm.until) ? GOLD : pulse ? TOMATO : null,
       act: () => tapBooster(k) });
   }
@@ -1866,11 +1965,10 @@ function tagObstacles(S, L, at) {
     if (mc) add(mc.x0, mc.y0, mc.x1, mc.y1, 2.5);
   }
   if (L.basket && !L.hideBasket && at !== 'basket' && at !== 'par') add(L.basket.x, L.basket.y, L.basket.x + L.basket.w, L.basket.y + L.basket.h, 1.5);
-  const keys = BK.filter(k => safe(() => M.boosterUnlocked(k), false));
-  const br = keys.length ? safe(() => boosterRects(L, keys), {}) : {};
   // fix r2 (critic: the L20 tag sat on the boosters): boosters and the HUD buttons are things the player taps, so
-  //   they weigh more than the kitten; a tag over the board or the HUD title is the cheaper spot
-  for (const k of keys) { const r = br[k]; if (r) add(r.x - 4, r.y - 4, r.x + r.w + 4, r.y + r.h + 4, 7); }
+  //   they weigh more than the kitten; a tag over the board or the HUD title is the cheaper spot.
+  // meta v2: each booster's box (boosterBoxes, the owner shared with drawBoosters) covers its badge and its label too
+  for (const q of boosterBoxes(L)) add(q.x0 - 4, q.y0 - 4, q.x1 + 4, q.y1 + 4, 7);
   for (const id of ['hud-pause', 'hud-retry']) { const b = findBtn(id); if (b) add(b.x, b.y, b.x + b.w, b.y + b.h, 4); }
   return o;
 }
@@ -2234,6 +2332,8 @@ function drawResetAsk(g, S) {
 //   leave the game. It now opens this in-game card (game.js intercepts the chip's click), as does Pause. Three small
 //   painted pictures, one plain line each at ≥ 16 px. It draws over the title / pause screen and owns the input while
 //   open (the screen under it registers no buttons).
+/** QA / test drivers: the buttons drawn last frame (id, rect, label). */
+export const qaBtns = () => U.btns.map(b => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, label: b.label, disabled: !!b.disabled }));
 export function openHow() { if (U.S && (U.S.screen === 'title' || U.S.screen === 'pause')) U.how = { t0: U.t }; }
 const HOW = [
   ['pull', 'Tap the top strand. It winds onto its spool.'],
@@ -2322,6 +2422,11 @@ function shopBuy() {
     if (bal < o.price) { U.shop.confirm = null; U.shakes['shop-main'] = U.t; shopMsg(`Need ${o.price - bal} more`); return; }
     if (safe(() => M.buyOutfit(o.id), false)) { bus.emit('buy', { item: o.id }); c.done = U.t; sfx('gift'); }
     else U.shop.confirm = null;
+  } else if (c.kind === 'shield') {
+    const price = M.SHIELD_PRICE || 150;
+    if (bal < price) { U.shop.confirm = null; U.shakes['l-shield'] = U.t; shopMsg('Not enough yarn balls'); return; }
+    if (safe(() => M.buyShield(), false)) { bus.emit('buy', { item: 'shield' }); c.done = U.t; }
+    else { U.shop.confirm = null; shopMsg("Can't hold more shields"); }
   } else {
     const k = c.id, price = BOOSTERS[k].price;
     if (bal < price) { U.shop.confirm = null; U.shakes['l-' + k] = U.t; shopMsg('Not enough yarn balls'); return; }
@@ -2329,6 +2434,7 @@ function shopBuy() {
     else { U.shop.confirm = null; shopMsg(`Can't buy ${BNAME[k]} right now`); }
   }
 }
+const BSHORT = { undo: 'Takes back your last pull', hint: 'Shows a good next move', slot: 'One more basket space', snip: 'Pull a covered strand' };
 function drawShop(g, S) {
   const d = U.du, W = S.W, H = S.H - dlgInset(S);
   const pw = Math.min(W - 16 * d, 560 * d), ph = Math.min(H - 16 * d, 760 * d), px = (W - pw) / 2, py = (H - ph) / 2;
@@ -2402,7 +2508,9 @@ function drawShop(g, S) {
     // fix 1: rows start right under the tabs (they were centred in the body, which left a ~90 px dead band under
     //   the tabs on tall phones). Each row is a top band (icon, name, Buy) and the plain-words description at
     //   ≥ 16 css px across the full row width below it, so it reads in 2 lines instead of 4 squeezed beside Buy.
-    const gap = 8 * d, rh = Math.min((bh - gap * 3) / 4, 124 * d), top = Math.min(48 * d, rh * 0.45);
+    // meta r3: a compact Streak Shield strip sits under the four booster rows (150 yarn, hold max 2)
+    const shH = Math.min(62 * d, Math.max(50, bh * 0.14));
+    const gap = 8 * d, rh = Math.min((bh - gap * 4 - shH) / 4, 124 * d), top = Math.min(48 * d, rh * 0.45);
     const y0 = by;
     BK.forEach((k, i) => {
       const y = y0 + i * (rh + gap), unl = safe(() => M.boosterUnlocked(k), false), n = safe(() => M.booster(k), 0);
@@ -2414,6 +2522,24 @@ function drawShop(g, S) {
       const bw = Math.min(110 * d, iw * 0.3), tx = ix + 18 * d + 2 * ir, tW = iw - (tx - ix) - bw - 18 * d;
       txt(g, `${BNAME[k]}${unl ? '  ×' + n : ''}`, tx, cyT + d, Math.max(14, Math.min(19 * d, top * 0.42)), { align: 'left', maxW: tW });
       const dTop = y + 6 * d + top + 2 * d, dH = y + rh - 6 * d - dTop, ds = Math.max(16, 16 * Math.min(d, 1.25));
+      if (dH < 18) { // meta r3: short screens (e.g. 844x390) — one band per row: name over a short line, Buy at the right
+        const ir2 = Math.min(rh * 0.36, 20 * d), cy2 = y + rh / 2, bw2 = Math.min(110 * d, iw * 0.3), tx2 = ix + 18 * d + 2 * ir2, tW2 = iw - (tx2 - ix) - bw2 - 18 * d;
+        g.restore(); g.save(); if (!unl) g.globalAlpha = 0.55;
+        rr(g, ix, y, iw, rh, 12 * d); g.fillStyle = '#F6E6CF'; g.fill(); g.lineWidth = 2 * d; g.strokeStyle = INK; g.stroke();
+        g.beginPath(); g.arc(ix + 10 * d + ir2, cy2, ir2, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 2.5 * d; g.stroke();
+        aIcon(g, unl ? k : 'lock', ix + 10 * d + ir2, cy2, ir2 * 1.05);
+        const ns = Math.max(14, Math.min(18 * d, rh * 0.3)), ds2 = Math.max(12, Math.min(13.5 * d, rh * 0.24));
+        txt(g, `${BNAME[k]}${unl ? '  ×' + n : ''}`, tx2, cy2 - ns * 0.5, ns, { align: 'left', maxW: tW2 });
+        txt(g, unl ? BSHORT[k] : `Unlocks at level ${BOOSTERS[k].unlock}`, tx2, cy2 + ds2 * 0.85, ds2, { f: FB, w: '800', align: 'left', col: '#4A4056', maxW: tW2 });
+        g.restore();
+        if (unl) pill(g, { id: 'l-' + k, label: 'Buy', kind: 'secondary', x: ix + iw - 10 * d - bw2, y: cy2 - Math.min(42 * d, rh - 10 * d) / 2, w: bw2, h: Math.min(42 * d, rh - 10 * d), d,
+          badge: { price: BOOSTERS[k].price }, act: () => {
+            U.shop.bsel = k;
+            if (safe(() => M.balance(), 0) < BOOSTERS[k].price) { U.shakes['l-' + k] = U.t; shopMsg('Not enough yarn balls'); return; }
+            shopAsk('booster', k);
+          } });
+        return;
+      }
       const wf = wrapMin(g, unl ? BDESC[k] : `Unlocks at level ${BOOSTERS[k].unlock}`, iw - 26 * d, ds, 16, Math.max(1, Math.floor(dH / (16 * 1.14))), FB, '700');
       const lh = wf.size * 1.14;
       wf.lines.forEach((l2, j) => txt(g, l2, ix + 13 * d, dTop + dH / 2 + (j - (wf.lines.length - 1) / 2) * lh, wf.size, { f: FB, w: '700', align: 'left', col: '#4A4056' }));
@@ -2429,6 +2555,29 @@ function drawShop(g, S) {
           } });
       }
     });
+    { // Streak Shield strip
+      const y = y0 + 4 * (rh + gap), dl = safe(() => M.daily(), { unlocked: false }), unl = !!dl.unlocked, n = safe(() => M.shields(), 0);
+      const max = M.SHIELD_MAX || 2, price = M.SHIELD_PRICE || 150, full = n >= max;
+      g.save(); if (!unl) g.globalAlpha = 0.55;
+      rr(g, ix, y, iw, shH, 12 * d); g.fillStyle = '#E3F5EF'; g.fill(); g.lineWidth = 2 * d; g.strokeStyle = TEAL_D; g.stroke();
+      const ir = Math.min(shH * 0.36, 20 * d), cyT = y + shH / 2;
+      g.beginPath(); g.arc(ix + 10 * d + ir, cyT, ir, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 2.5 * d; g.strokeStyle = INK; g.stroke();
+      if (unl) shieldIcon(g, ix + 10 * d + ir, cyT, ir * 1.35); else aIcon(g, 'lock', ix + 10 * d + ir, cyT, ir * 1.05);
+      const bw = Math.min(110 * d, iw * 0.3), tx = ix + 18 * d + 2 * ir, tW = iw - (tx - ix) - bw - 18 * d;
+      const ns = Math.max(14, Math.min(18 * d, shH * 0.3)), ds2 = Math.max(12, Math.min(13.5 * d, shH * 0.24));
+      txt(g, `Streak Shield${unl ? `  ${n}/${max}` : ''}`, tx, cyT - ns * 0.5, ns, { align: 'left', maxW: tW });
+      txt(g, unl ? 'Saves your daily streak on a missed day' : 'Unlocks with the Daily Knot', tx, cyT + ds2 * 0.85, ds2, { f: FB, w: '800', align: 'left', col: '#4A4056', maxW: tW });
+      g.restore();
+      if (unl) {
+        const bh2 = Math.min(42 * d, shH - 10 * d);
+        pill(g, { id: 'l-shield', label: full ? 'Full' : 'Buy', kind: full ? 'cream' : 'secondary', x: ix + iw - 10 * d - bw, y: cyT - bh2 / 2, w: bw, h: bh2, d,
+          badge: full ? null : { price }, disabled: full, act: () => {
+            if (full) { shopMsg(`You can hold ${max} shields`); return; }
+            if (safe(() => M.balance(), 0) < price) { U.shakes['l-shield'] = U.t; shopMsg('Not enough yarn balls'); return; }
+            shopAsk('shield', 'shield');
+          } });
+      }
+    }
     txt(g, msg || 'Boosters help in any level', px + pw / 2, footY + 26 * d, Math.max(16, 16 * d), { f: FB, w: '800', col: msg ? TOMATO_D : '#5A5066', maxW: iw });
   }
   U.reg = wasReg;
@@ -2438,7 +2587,7 @@ function drawShopConfirm(g, S, px, py, pw, ph, d) {
   const c = U.shop.confirm, done = !!c.done;
   const o = c.kind === 'outfit' ? safe(() => M.outfits(), []).find(q => q.id === c.id) : null;
   if (c.kind === 'outfit' && !o) { U.shop.confirm = null; return; }
-  const name = o ? o.name : BNAME[c.id], price = o ? o.price : BOOSTERS[c.id].price;
+  const sh = c.kind === 'shield', name = o ? o.name : sh ? 'Streak Shield' : BNAME[c.id], price = o ? o.price : sh ? (M.SHIELD_PRICE || 150) : BOOSTERS[c.id].price;
   const bal = safe(() => M.balance(), 0);
   // veil over the shop panel only (the header chip under it stays readable through it)
   rr(g, px, py, pw, ph, 18 * d); g.fillStyle = 'rgba(43,36,64,0.45)'; g.fill();
@@ -2463,7 +2612,7 @@ function drawShopConfirm(g, S, px, py, pw, ph, d) {
   } else {
     const r = Math.min(pH * 0.36, 56 * d);
     g.beginPath(); g.arc(mx, pTop + pH / 2, r, 0, 7); g.fillStyle = CREAM; g.fill(); g.lineWidth = 3 * d; g.strokeStyle = INK; g.stroke();
-    aIcon(g, c.id, mx, pTop + pH / 2, r * 1.1);
+    rIcon(g, c.id, mx, pTop + pH / 2, r * 1.1);
   }
   if (done && t < 1.2) { // a little burst of sparkles round the preview
     for (let i = 0; i < 8; i++) {
@@ -2482,7 +2631,7 @@ function drawShopConfirm(g, S, px, py, pw, ph, d) {
     pill(g, { id: 'sc-cancel', label: 'Cancel', kind: 'cream', x: cx + pad, y: btnY, w: bw, h: btnH, d, act: () => { U.shop.confirm = null; } });
     pill(g, { id: 'sc-buy', label: 'Buy', kind: 'primary', x: cx + pad + bw + 10 * d, y: btnY, w: bw, h: btnH, d, act: shopBuy });
   } else {
-    const n = o ? 0 : safe(() => M.booster(c.id), 0);
+    const n = o ? 0 : sh ? safe(() => M.shields(), 0) : safe(() => M.booster(c.id), 0);
     txt(g, o ? 'Your kitty is wearing it now' : `You have ${n} now`, mx, btnY - 20 * d, 15 * d, { f: FB, w: '800', col: TEAL_D, maxW: iw });
     const bw = Math.min(iw, 220 * d);
     pill(g, { id: 'sc-ok', label: 'Nice!', kind: 'primary', x: mx - bw / 2, y: btnY, w: bw, h: btnH, d, act: () => { U.shop.confirm = null; } });
@@ -2603,7 +2752,7 @@ function drawKittens(g, S) {
   // pager: ‹ World n · name (rescued k/10) ›
   // fix r2 (UI-LAYOUT: "tiles tiny at 1920x1080, the panel is full width but the grid stays small"): the grid is
   //   height-bound, so on a wide panel the pager moves up onto the title row and the tiles get that height back
-  const pr = 21 * d, titleW = tw(g, 'Kitten Corner', 26 * d);
+  const pr = Math.max(22, 21 * d), titleW = tw(g, 'Kitten Corner', 26 * d);
   const upW = iw - 2 * Math.max(titleW + 16 * d, cw + 64 * d), pagerUp = land && upW >= 300 * d;
   const pgW = pagerUp ? Math.min(460 * d, upW) : Math.min(iw, 460 * d), pgX = ix + (iw - pgW) / 2; // arrows hug the title
   const pyc = pagerUp ? hy + 4 * d : hy + 26 * d + pr;
@@ -2622,7 +2771,10 @@ function drawKittens(g, S) {
     txt(g, lab, x0 + 6 * gap + 8 * d, dy + 0.5 * d, ls, { f: FB, w: '900', col: TEAL_D, align: 'left' });
   }
   const fh = 52 * d, fy = py + ph - pad - fh;
-  const gy = pyc + pr + 10 * d, gh = fy - 10 * d - gy;
+  // meta r3: this world's Kitten Set (10 kittens → set reward; all 3★ → Golden set) in a strip above the footer
+  const si = safe(() => M.setInfo(wd), { got: wGot, gold3: 0, claimable: false, goldClaimable: false, claimed: false, goldClaimed: false, golden: false });
+  const stH = 34 * d, stY = fy - 8 * d - stH;
+  const gy = pyc + pr + 10 * d, gh = stY - 8 * d - gy;
   const K = kitLayout(iw, gh, d);
   const turn = U.kTurn && U.t - U.kTurn.t0 < 0.22 ? U.kTurn : null;
   const slide = turn ? (1 - eOut((U.t - turn.t0) / 0.22)) * 40 * d * turn.dir : 0;
@@ -2680,8 +2832,36 @@ function drawKittens(g, S) {
         sfx('purr', 1.1); setTimeoutUI(() => sfx('mew'), 0.15);
       } });
   }
-  const fw = Math.min(iw, 240 * d);
-  pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: fy, w: fw, h: fh, act: () => api.go(U.ret) });
+  { // set strip: two progress bars (Set n/10, Golden n/10)
+    const fs = Math.max(13, Math.min(15 * d, stH * 0.44)), sw = Math.min(iw, 460 * d), sx = ix + (iw - sw) / 2, half = (sw - 10 * d) / 2;
+    const bar = (x, w, label, n, done, col, icon) => {
+      rr(g, x, stY, w, stH, stH / 2); g.fillStyle = done ? '#FFF1C4' : '#F6E6CF'; g.fill(); g.lineWidth = Math.max(1.5, 2 * d); g.strokeStyle = done ? GOLD_D : INK; g.stroke();
+      const f = Math.min(1, n / PER_WORLD);
+      if (f > 0) { g.save(); rr(g, x, stY, w, stH, stH / 2); g.clip(); g.fillStyle = col; g.globalAlpha *= 0.4; g.fillRect(x, stY, w * f, stH); g.restore(); }
+      const ic = stH * 0.62;
+      g.save(); if (icon === 'star') aStar(g, x + stH / 2 + 2 * d, stY + stH / 2, ic * 0.48, n > 0); else aIcon(g, icon, x + stH / 2 + 2 * d, stY + stH / 2, ic); g.restore();
+      txt(g, `${label} ${n}/${PER_WORLD}${done ? ' ✓' : ''}`, x + stH + 4 * d + (w - stH - 10 * d) / 2, stY + stH / 2 + d, fs, { f: FB, w: '900', col: done ? GOLD_D : INK, maxW: w - stH - 10 * d });
+    };
+    bar(sx, half, 'Set', si.got, si.claimed, TEAL, 'paw');
+    bar(sx + half + 10 * d, half, 'Golden', si.gold3, si.goldClaimed, GOLD, 'star');
+  }
+  if (si.goldClaimed || si.golden) goldFrame(g, px, py, pw, ph, d);
+  const claim = si.claimable ? false : si.goldClaimable ? true : null; // null: nothing to claim on this page
+  if (claim !== null) {
+    const r = safe(() => M.setReward(claim), { balls: claim ? 200 : 80, boosters: [] });
+    const cw = Math.min(iw * 0.62, 280 * d), xw = Math.min(iw - cw - 10 * d, 150 * d), x0 = px + pw / 2 - (cw + 10 * d + xw) / 2;
+    pill(g, { id: 'k-claim', label: claim ? 'CLAIM GOLDEN SET' : 'CLAIM SET', sub: `+${r.balls} yarn + ${r.boosters.length > 1 ? r.boosters.length + ' boosters' : 'booster'}`,
+      kind: 'primary', x: x0, y: fy, w: cw, h: fh, act: () => {
+        const got = safe(() => M.claimSet(wd, claim), null);
+        if (!got) return;
+        sfx('gift');
+        showCard('set', { w: wd, gold: claim, balls: got.balls, boosters: got.boosters });
+      } });
+    pill(g, { id: 'k-close', label: 'CLOSE', kind: 'cream', x: x0 + cw + 10 * d, y: fy, w: xw, h: fh, act: () => api.go(U.ret) });
+  } else {
+    const fw = Math.min(iw, 240 * d);
+    pill(g, { id: 'k-close', label: 'CLOSE', kind: 'primary', x: px + pw / 2 - fw / 2, y: fy, w: fw, h: fh, act: () => api.go(U.ret) });
+  }
 }
 const st0 = v => (v | 0) > 0;
 
@@ -2706,25 +2886,44 @@ function drawDaily(g, S) {
   const streak = info.streak || 0;
   const istNow = Date.now() + 5.5 * 3600e3, left = 86400000 - (istNow % 86400000);
   const hh2 = Math.floor(left / 3600e3), mm2 = Math.floor((left % 3600e3) / 60e3);
-  const reward = 15 + 4 * 3 + 4 * Math.min(streak + 1, 7); // meta economy v2: DAILY_A + DAILY_B × 3★ + DAILY_STREAK × streak
+  const reward = info.reward || 0, today = info.day || 1, shields = info.shields | 0, need = info.shieldNeed | 0;
+  const doneUpTo = info.won ? today : today - 1; // ladder days already paid in this 7-day cycle
   const fr = dialogFrame(g, S, 400, (iw, x0) => [
     { h: 44, fn: (y, hh, e) => txt(g, 'Daily Knot', W / 2, y + hh / 2, 28 * e, { maxW: iw - 80 * e }) },
-    { h: 58, fn: (y, hh, e) => {
-      const r = Math.min(17 * e, iw / 7 / 2 - 3 * e), sp = iw / 7;
-      for (let i = 0; i < 7; i++) {
-        const k2 = addDays(key, i - 6), wd = 'SMTWTFS'[new Date(k2 + 'T00:00:00Z').getUTCDay()];
-        const x = x0 + sp * (i + 0.5), cy = y + hh * 0.62;
-        txt(g, wd, x, y + hh * 0.14, Math.max(12, 12 * e), { f: FB, w: '900', col: '#6E6377' });
-        g.beginPath(); g.arc(x, cy, r, 0, 7); g.fillStyle = info.stamps[i] ? TOMATO : '#F6E6CF'; g.fill();
-        g.lineWidth = i === 6 ? 3 * e : 2 * e; g.strokeStyle = i === 6 ? GOLD_D : INK; g.stroke();
-        if (info.stamps[i]) aIcon(g, 'paw', x, cy, r * 1.15, '#fff');
+    { h: 86, fn: (y, hh, e) => {
+      // meta r3: the 7-day streak ladder. Each day pays more; day 7 adds a booster bundle, then the ladder loops.
+      const sp = iw / 7, r = Math.min(18 * e, sp / 2 - 3 * e), cy = y + 18 * e + Math.max(12, 12 * e) + r;
+      g.save(); g.lineWidth = Math.max(2, 4 * e); g.strokeStyle = STITCH; g.beginPath(); g.moveTo(x0 + sp / 2, cy); g.lineTo(x0 + sp * 6.5, cy); g.stroke();
+      if (doneUpTo > 0) { g.strokeStyle = TOMATO; g.beginPath(); g.moveTo(x0 + sp / 2, cy); g.lineTo(x0 + sp * (Math.min(doneUpTo, 7) - 0.5), cy); g.stroke(); }
+      g.restore();
+      const fs = Math.max(12, 12.5 * e);
+      for (let i = 1; i <= 7; i++) {
+        const x = x0 + sp * (i - 0.5), done = i <= doneUpTo, now = i === today && !info.won, big = i === 7, rr0 = big ? r * 1.18 : r;
+        txt(g, big ? 'DAY 7' : `Day ${i}`, x, y + 9 * e, fs, { f: FB, w: '900', col: now ? TOMATO_D : big ? GOLD_D : '#6E6377', maxW: sp - 2 });
+        const pulse = now ? 1 + 0.06 * Math.sin(U.t * 5) : 1;
+        g.save(); g.translate(x, cy); g.scale(pulse, pulse);
+        if (now) { g.beginPath(); g.arc(0, 0, rr0 + 4 * e, 0, 7); g.fillStyle = 'rgba(255,201,60,0.45)'; g.fill(); }
+        g.beginPath(); g.arc(0, 0, rr0, 0, 7); g.fillStyle = done ? TOMATO : big ? GOLD : '#F6E6CF'; g.fill();
+        g.lineWidth = now || big ? 3 * e : 2 * e; g.strokeStyle = now ? TOMATO_D : big ? GOLD_D : INK; g.stroke();
+        if (done) aIcon(g, 'paw', 0, 0, rr0 * 1.15, '#fff');
+        else if (big) giftBox(g, 0, 0, rr0 * 1.15);
+        else { g.globalAlpha *= now ? 1 : 0.75; aIcon(g, 'ball', 0, 0, rr0 * 1.1); }
+        g.restore();
+        const pay = M.dailyPay ? M.dailyPay(i, 3) : 0;
+        txt(g, `+${pay}`, x, cy + rr0 + 4 * e + fs * 0.6, fs, { f: FB, w: '900', col: done ? '#8A7F7A' : big ? GOLD_D : TEAL_D, maxW: sp - 2 });
       }
     } },
     { h: 32, fn: (y, hh, e) => {
+      // streak + the Streak Shields held (they auto-save missed days)
       const label = `${streak} day streak`, s = 18 * e, w2 = tw(g, label, s) + 26 * e;
-      flame(g, W / 2 - w2 / 2 + 9 * e, y + hh / 2, 20 * e, streak > 0);
-      txt(g, label, W / 2 + 13 * e, y + hh / 2 + e, s, { maxW: iw - 30 * e });
+      const sl = `×${shields}`, sw = shields || need ? 22 * e + tw(g, sl, s) + 12 * e : 0;
+      const x = W / 2 - (w2 + sw) / 2;
+      flame(g, x + 9 * e, y + hh / 2, 20 * e, streak > 0);
+      txt(g, label, x + 26 * e, y + hh / 2 + e, s, { maxW: iw - 30 * e - sw, align: 'left' });
+      if (sw) { shieldIcon(g, x + w2 + 12 * e + 10 * e, y + hh / 2, 22 * e); txt(g, sl, x + w2 + 34 * e, y + hh / 2 + e, s, { align: 'left', col: TEAL_D }); }
     } },
+    ...(need || (!streak && !shields) ? [{ h: 24, fn: (y, hh, e) => txt(g, need ? (need <= shields ? `Win today: ${need} Streak Shield${need > 1 ? 's' : ''} saves your streak` : 'You missed a day: the streak starts again')
+      : 'Win daily to climb the 7-day ladder', W / 2, y + hh / 2, Math.max(13, 14 * e), { f: FB, w: '800', col: need && need <= shields ? TEAL_D : '#5A5066', maxW: iw }) }] : []),
     { h: 150, fn: (y, hh, e) => {
       const side = hh - 10 * e, rect = { x: W / 2 - side / 2, y: y + 5 * e, w: side, h: side };
       g.save(); g.globalAlpha = 0.9; aMini(g, rect, U.dailyLv.lv || {}, U.t); g.restore();
@@ -2732,7 +2931,7 @@ function drawDaily(g, S) {
       if (info.won) aStar(g, W / 2, y + hh / 2, 28 * e, true, 0);
       else txt(g, '?', W / 2, y + hh / 2, 54 * e, { col: '#fff', stroke: INK, sk: 0.16 });
     } },
-    { h: 30, fn: (y, hh, e) => txt(g, info.won ? `New knot in ${hh2}h ${mm2}m` : `Win up to ${reward} yarn balls`, W / 2, y + hh / 2, 16 * e, { f: FB, w: '800', maxW: iw }) },
+    { h: 30, fn: (y, hh, e) => txt(g, info.won ? `New knot in ${hh2}h ${mm2}m` : `Win up to ${reward} yarn balls${today === 7 ? ' + boosters' : ''}`, W / 2, y + hh / 2, 16 * e, { f: FB, w: '800', maxW: iw }) },
     { h: 52, fn: (y, hh, e) => {
       const s = 40 * e, label = "Tomorrow's kitten", ts = Math.max(12, 14 * e), w2 = s + 10 * e + tw(g, label, ts, FB, '800');
       const x = W / 2 - Math.min(w2, iw) / 2, c = silhouette((dayNum(key) + 1) % 6, 0, s * 0.9, S.dpr || 1);
@@ -2782,10 +2981,13 @@ function drawAllBeaten(g, S) {
   }
   y += 120 * e + 16 * e;
   const bw = Math.min(W - 32 * e, 300 * e);
-  pill(g, { id: 'ab-daily', label: 'DAILY KNOT', kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 54 * e, d: e, act: () => api.go('daily') });
+  // meta r3: the primary is whatever is new today (an unplayed Daily Knot, else the next Bonus Tangle)
+  const cta = homeCta() || { id: 'bonus', label: 'BONUS TANGLES', act: goBonus }, bsN = safe(() => M.bonusNext(), 0);
+  pill(g, { id: 'ab-' + cta.id, label: cta.label, sub: cta.sub, kind: 'primary', x: W / 2 - bw / 2, y, w: bw, h: 54 * e, d: e, act: cta.act });
   y += 58 * e;
   const hw = (bw - 10 * e) / 2;
-  pill(g, { id: 'ab-bonus', label: 'Bonus Tangles', kind: 'secondary', x: W / 2 - bw / 2, y, w: hw, h: 48 * e, d: e, act: () => api.go('play', { kind: 'bonus', id: safe(() => M.bonusNext(), 0) }) });
+  if (cta.id === 'daily') pill(g, { id: 'ab-bonus', label: `Bonus ${bsN + 1}`, kind: 'secondary', x: W / 2 - bw / 2, y, w: hw, h: 48 * e, d: e, act: goBonus });
+  else pill(g, { id: 'ab-daily', label: 'Daily Knot', kind: 'secondary', x: W / 2 - bw / 2, y, w: hw, h: 48 * e, d: e, act: () => api.go('daily') });
   pill(g, { id: 'ab-map', label: 'MAP', kind: 'secondary', x: W / 2 - bw / 2 + hw + 10 * e, y, w: hw, h: 48 * e, d: e, act: () => api.go('map') });
 }
 
@@ -2797,7 +2999,13 @@ function cardRect(S, type) {
     //   in that space on big screens, so anchoring at callout.y would squeeze the card into the lower half)
     // fix2: cards dock in the column but stay ≤ 900 css px wide (2560+ screens), centred in it
     const cw = Math.min(L.rack.w, 900), cx = L.rack.x + (L.rack.w - cw) / 2;
-    if (type === 'lose') { const y0 = Math.min(L.callout.y, L.rack.y + L.rack.h); return { x: cx, y: y0, w: cw, h: L.basket.y - y0 - m * 0.5 }; }
+    if (type === 'lose') {
+      // meta r3: on short landscape screens (the labelled booster column is taller) the card may also cover the
+      //   basket and booster column when the gap above the basket is under ~90% of the card's natural height; the
+      //   card carries its own Undo / Hint / +1 Slot, so nothing is lost
+      const y0 = Math.min(L.callout.y, L.rack.y + L.rack.h), h0 = L.basket.y - y0 - m * 0.5;
+      return { x: cx, y: y0, w: cw, h: h0 >= 225 * U.du ? h0 : Math.max(h0, sf.y + sf.h - m * 0.5 - y0) };
+    }
     return { x: cx, y: L.rack.y, w: cw, h: sf.y + sf.h - m - L.rack.y };
   }
   const x = sf.x + m, w = sf.w - 2 * m;
@@ -2989,14 +3197,16 @@ function drawWinCard(g, S, c) {
       } else art2(cx, s * 1.15);
     } },
     { h: 6 },
-    { h: 58, fn: (y, hh, e) => {
-      const ir = 23 * e, icons = [['w-replay', 'retry', 'Replay', () => finishWin(() => api.retry())], ['w-map', 'home', 'Map', () => finishWin(() => api.go('map'))]];
+    { h: 78, fn: (y, hh, e) => {
+      const ir = Math.max(22, 23 * e), icons = [['w-replay', 'retry', 'Replay', () => finishWin(() => api.retry())], ['w-map', 'home', 'Map', () => finishWin(() => api.go('map'))]];
       if (P.canShare) { icons.push(['w-share', 'share', 'Share', () => shareWin(sess, res, c)]); if (U.t - c.t0 > 1) prepShare(c, sess, res); }
       const gap = 8 * e, pw = Math.max(80 * e, Math.min(240 * e, iw0 - icons.length * (2 * ir + gap)));
       const total = pw + icons.length * (2 * ir + gap), x0 = area.x + area.w / 2 - total / 2;
-      iconBtn(g, { id: icons[0][0], label: icons[0][2], icon: icons[0][1], x: x0, y: y + 2 * e, w: 2 * ir, h: 2 * ir, act: icons[0][3], d: e });
-      pill(g, { id: 'win-next', label: 'NEXT', kind: 'primary', x: x0 + 2 * ir + gap, y, w: pw, h: 52 * e, d: e, act: () => finishWin(() => api.next()) });
-      for (let i = 1; i < icons.length; i++) iconBtn(g, { id: icons[i][0], label: icons[i][2], icon: icons[i][1], x: x0 + pw + gap + i * (2 * ir + gap), y: y + 2 * e, w: 2 * ir, h: 2 * ir, act: icons[i][3], d: e });
+      // meta r3: every icon carries a word caption (≥ 12 px) under it, so Replay / Map / Share read at a glance
+      const iy = y + Math.max(0, 26 * e - ir), cap = { capY: iy + 2 * ir + 3 * e, capW: 2 * ir + gap, capFs: Math.max(12, 12.5 * e) };
+      iconBtn(g, { id: icons[0][0], label: icons[0][2], icon: icons[0][1], x: x0, y: iy, w: 2 * ir, h: 2 * ir, act: icons[0][3], d: e, cap: icons[0][2], ...cap });
+      { const nh = Math.max(44, 52 * e); pill(g, { id: 'win-next', label: 'NEXT', kind: 'primary', x: x0 + 2 * ir + gap, y: iy + ir - nh / 2, w: pw, h: nh, d: e, act: () => finishWin(() => api.next()) }); }
+      for (let i = 1; i < icons.length; i++) iconBtn(g, { id: icons[i][0], label: icons[i][2], icon: icons[i][1], x: x0 + pw + gap + i * (2 * ir + gap), y: iy, w: 2 * ir, h: 2 * ir, act: icons[i][3], d: e, cap: icons[i][2], ...cap });
     } },
   ];
   const lay = rows(list, d, area.h - 2 * pad);
@@ -3165,10 +3375,10 @@ function drawLoseCard(g, S, c) {
   // polish (grandparent): plain words, big high-contrast ink text (no small grey line)
   const why = marks.length ? 'The ✕ yarn has nowhere to go' : 'No yarn fits a spool or the basket';
   const list = [
-    { h: 38, fn: (y, hh, e) => {
+    { h: 46, fn: (y, hh, e) => {
       // ui2 U8: a round Map button sits at the title's left so the lose card is never a retry-only dead end. It lives
       //   in the title row (not the button row) so the three pills keep their width in narrow side columns.
-      const ir = Math.min(20 * e, hh / 2), bx = area.x + pad * 0.7, mr = Math.max(0, 22 - ir);
+      const ir = Math.max(22, Math.min(22 * e, hh / 2)), bx = area.x + pad * 0.7, mr = Math.max(0, 24 - ir); // meta r3: ≥ 44 px drawn
       iconBtn(g, { id: 'l-map', label: 'Map', icon: 'home', x: bx, y: y + hh / 2 - ir, w: 2 * ir, h: 2 * ir, d: e,
         hit: { x: bx - mr, y: y + hh / 2 - ir - mr, w: 2 * (ir + mr), h: 2 * (ir + mr) },
         act: () => { U.loseDone = true; U.card = null; api.go('map'); } });
@@ -3224,7 +3434,7 @@ function drawGiftCard(g, S, c) {
   // fix 6: one card per win. A 'rewards' card carries every gift / chest / unlock of the win (data.parts); the
   //   yarn is summed and each booster shows once with its total count. Reasons are plain words at ≥ 16 px.
   const parts = c.type === 'rewards' ? (data.parts || []) : [{ type: c.type, data }];
-  let balls = 0, unlockK = null;
+  let balls = 0, unlockK = null, shieldN = 0, setW = 0, gold = false;
   const bcount = {}, why = [];
   const addB = (k, n) => { if (k) bcount[k] = (bcount[k] || 0) + n; };
   for (const p of parts) {
@@ -3232,12 +3442,21 @@ function drawGiftCard(g, S, c) {
     if (p.type === 'gift') { balls += q.balls || 60; addB(q.booster, 1); why.push(`You reached ${q.at || 15} stars`); }
     else if (p.type === 'chest') { balls += q.balls || 150; for (const k of q.boosters || []) addB(k, 1); why.push(`${(WORLDS[q.world] || {}).name || 'The world'} is complete`); }
     else if (p.type === 'unlockBooster') { unlockK = q.k || 'undo'; addB(unlockK, q.n || 1); }
+    else if (p.type === 'shield') { shieldN += q.n | 0 || 1; why.push(q.n > 1 ? `${q.n} Streak Shields kept your streak alive` : 'A Streak Shield kept your streak alive'); }
+    else if (p.type === 'ladder') { for (const k of q.boosters || []) addB(k, 1); why.push('Day 7 of your streak: booster bundle!'); }
+    else if (p.type === 'bonusGift') { addB(q.k, 1); why.push(`${q.at || 5} Bonus Tangles won`); }
+    else if (p.type === 'setReady') { setW = q.w; why.push(`${(WORLDS[q.w] || {}).name || 'World ' + q.w} kitten set ${q.gold ? 'is all 3★' : 'is complete'}. Claim it in Kitten Corner`); }
+    else if (p.type === 'set') { gold = !!q.gold; balls += q.balls | 0; for (const k of q.boosters || []) addB(k, 1); why.push(`All 10 kittens of ${(WORLDS[q.w] || {}).name || 'World ' + q.w}${gold ? ' at 3★' : ''}`); }
   }
-  const title = parts.length > 1 ? 'Rewards!' : unlockK ? 'New booster!' : parts[0] && parts[0].type === 'chest' ? 'World chest!' : 'Star gift!';
+  const one = parts.length === 1 && parts[0].type;
+  const title = parts.length > 1 ? 'Rewards!' : unlockK ? 'New booster!' : one === 'chest' ? 'World chest!' : one === 'shield' ? 'Streak saved!'
+    : one === 'ladder' ? 'Day 7 bonus!' : one === 'bonusGift' ? 'Bonus gift!' : one === 'setReady' ? 'Set complete!' : one === 'set' ? (gold ? 'Golden set!' : 'Kitten set!') : 'Star gift!';
   const rewards = [];
   if (unlockK) rewards.push([unlockK, `×${bcount[unlockK]} free`]);
   if (balls > 0) rewards.push(['ball', `+${balls}`]);
   for (const k of BK) if (k !== unlockK && bcount[k]) rewards.push([k, `+${bcount[k]}`]);
+  if (shieldN) rewards.push(['shield', shieldN > 1 ? `${shieldN} used` : 'used']);
+  if (setW && !rewards.length) rewards.push(['paw', 'claim']);
   const subs = [];
   if (unlockK) subs.push(BDESC[unlockK] || '');
   subs.push(...why);
@@ -3253,8 +3472,8 @@ function drawGiftCard(g, S, c) {
     rewards.forEach(([ic, label], i) => {
       const cx = x0 + cw * (i + 0.5), r = Math.min(26 * e, cw * 0.36), pop = eBack((U.t - c.t0 - 0.2 - i * 0.12) / 0.3);
       g.save(); g.translate(cx, y + r + 4 * e); g.scale(pop, pop);
-      g.beginPath(); g.arc(0, 0, r, 0, 7); g.fillStyle = '#FFF9EC'; g.fill(); g.lineWidth = 2.5 * e; g.strokeStyle = INK; g.stroke();
-      aIcon(g, ic, 0, 0, r * 1.1);
+      g.beginPath(); g.arc(0, 0, r, 0, 7); g.fillStyle = '#FFF9EC'; g.fill(); g.lineWidth = 2.5 * e; g.strokeStyle = gold ? GOLD_D : INK; g.stroke();
+      rIcon(g, ic, 0, 0, r * 1.1);
       g.restore();
       txt(g, label, cx, y + 2 * r + 20 * e, 18 * e, { col: GOLD, stroke: INK, sk: 0.22, maxW: cw - 4 * e });
     });
@@ -3266,10 +3485,49 @@ function drawGiftCard(g, S, c) {
   const rect = { x: px, y: py, w: pw, h: ph };
   g.save();
   cardAnim(g, c, rect);
-  panel(g, px, py, pw, ph, d);
+  if (one === 'set') { // a set claim: a warm halo of rays behind the card (gold-trimmed for the Golden set)
+    const t = U.t - c.t0, cx = W / 2, cy = py + ph * 0.32, R0 = Math.max(pw, ph) * 0.75;
+    g.save(); g.translate(cx, cy); g.rotate(t * 0.25); g.globalAlpha *= gold ? 0.35 : 0.22;
+    for (let k = 0; k < 12; k++) { g.rotate(Math.PI / 6); g.beginPath(); g.moveTo(0, 0); g.lineTo(R0, -R0 * 0.12); g.lineTo(R0, R0 * 0.12); g.closePath(); g.fillStyle = GOLD; g.fill(); }
+    g.restore();
+  }
+  panel(g, px, py, pw, ph, d, gold ? { line: GOLD_D, stitch: GOLD, fill: '#FFF6D8' } : {});
+  if (gold) goldFrame(g, px, py, pw, ph, d);
   lay.run(py + pad * lay.k);
   g.restore();
 }
+/** A gilded double frame (Golden set card, golden Kitten Corner page). */
+function goldFrame(g, x, y, w, h, d) {
+  const r = Math.min(18 * d, w / 2, h / 2);
+  g.save();
+  rr(g, x - 3 * d, y - 3 * d, w + 6 * d, h + 6 * d, r + 3 * d); g.lineWidth = Math.max(2, 4 * d); g.strokeStyle = GOLD; g.stroke();
+  rr(g, x - 6 * d, y - 6 * d, w + 12 * d, h + 12 * d, r + 6 * d); g.lineWidth = Math.max(1, 1.6 * d); g.strokeStyle = GOLD_D; g.stroke();
+  for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) { g.save(); aStar(g, cx, cy, 11 * d, true); g.restore(); }
+  g.restore();
+}
+/** Streak Shield emblem (no art for it): a teal crest with a gold paw-star. */
+function shieldIcon(g, cx, cy, s) {
+  const w = s * 0.8, h = s * 0.92;
+  g.save(); g.translate(cx, cy);
+  g.beginPath(); g.moveTo(0, -h / 2); g.quadraticCurveTo(w * 0.32, -h * 0.36, w / 2, -h * 0.4); g.quadraticCurveTo(w / 2, h * 0.18, 0, h / 2);
+  g.quadraticCurveTo(-w / 2, h * 0.18, -w / 2, -h * 0.4); g.quadraticCurveTo(-w * 0.32, -h * 0.36, 0, -h / 2); g.closePath();
+  g.fillStyle = TEAL; g.fill(); g.lineWidth = Math.max(1.2, s * 0.07); g.strokeStyle = INK; g.stroke();
+  g.beginPath(); g.moveTo(0, -h * 0.34); g.quadraticCurveTo(w * 0.24, -h * 0.26, w * 0.34, -h * 0.28); g.quadraticCurveTo(w * 0.32, h * 0.1, 0, h * 0.34); g.closePath();
+  g.fillStyle = 'rgba(255,255,255,0.28)'; g.fill();
+  aStar(g, 0, -h * 0.02, s * 0.22, true);
+  g.restore();
+}
+/** A small wrapped present (day 7 of the streak ladder: the booster bundle). */
+function giftBox(g, x, y, s) {
+  const w = s * 0.8, h = s * 0.56, lw = Math.max(1.2, s * 0.06);
+  g.save(); g.translate(x, y + s * 0.08); g.lineWidth = lw; g.strokeStyle = INK;
+  g.fillStyle = TOMATO; g.fillRect(-w / 2, -h / 2, w, h); g.strokeRect(-w / 2, -h / 2, w, h);
+  g.fillStyle = TOMATO_D; g.fillRect(-w * 0.56, -h / 2 - s * 0.14, w * 1.12, s * 0.16); g.strokeRect(-w * 0.56, -h / 2 - s * 0.14, w * 1.12, s * 0.16);
+  g.fillStyle = CREAM; g.fillRect(-s * 0.07, -h / 2 - s * 0.14, s * 0.14, h + s * 0.14); g.strokeRect(-s * 0.07, -h / 2 - s * 0.14, s * 0.14, h + s * 0.14);
+  for (const k of [-1, 1]) { g.beginPath(); g.ellipse(k * s * 0.13, -h / 2 - s * 0.22, s * 0.13, s * 0.08, k * 0.5, 0, 7); g.fillStyle = CREAM; g.fill(); g.stroke(); }
+  g.restore();
+}
+const rIcon = (g, ic, x, y, s) => (ic === 'shield' ? shieldIcon(g, x, y, s) : ic === 'gift' ? giftBox(g, x, y, s) : aIcon(g, ic, x, y, s));
 function drawToast(g, S) {
   const d = U.du, t = U.t - U.toast.t0, a = Math.min(1, t / 0.15, (2 - t) / 0.3);
   if (a <= 0) return;
