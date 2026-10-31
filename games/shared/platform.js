@@ -19,7 +19,7 @@ const MAX_SAVE = 500 * 1024; // Playables limit on saveData size (bytes, roughly
 // Analytics endpoint (same-origin path, e.g. '/api/ev'). Empty = P.event is a no-op. Web only.
 const ANALYTICS_URL = '';
 // Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|playgama|poki or window.__PORTAL set by the portal build.
-const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'poki'];
+const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'playgama', 'poki'];
 const portalName = (() => {
   if (Y) return '';
   let n = '';

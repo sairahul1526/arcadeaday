@@ -456,8 +456,11 @@ export function comboCap(kind = 'level', id = 0) {
 
 let attempt = null; // { kind, id } of the last started attempt (module memory: tells a bonus replay from a new one)
 export function recordAttempt(kind, id) {
-  attempt = { kind, id };
-  if (!D()) return;
+  // QA r1: spam-tapping a play button started the same attempt once per tap; a repeat of the same kind/id within
+  //   1.5 s is the same session start and counts once
+  const now = Date.now(), dup = attempt && attempt.kind === kind && attempt.id === id && now - (attempt.at || 0) < 1500;
+  attempt = { kind, id, at: now };
+  if (!D() || dup) return;
   D().stats.plays++;
   save();
 }

@@ -892,7 +892,7 @@ function drawSleepyPaw(g, x, y, u, n, t, lift, twitch, ad, edgeD, fb) {
   g.restore();
   if (lift < 1 && n > 0) {
     // number bubble on the board side of the paw, kept inside the felt
-    const br = Math.max(9, u * 0.21) * (1 + Math.max(0, twitch > 0 ? Math.sin(twitch * 25) * 0.25 : 0));
+    const br = Math.max(10.6, u * 0.21) * (1 + Math.max(0, twitch > 0 ? Math.sin(twitch * 25) * 0.25 : 0));
     let bx = x - Math.cos(ad) * (W * 0.42 + inset) + W * 0.2, by = y - Math.sin(ad) * (W * 0.42 + inset) - W * 0.45;
     bx = clamp(bx, fb.fx + br + 3, fb.fx + fb.fw - br - 3); by = clamp(by, fb.fy + br + 3, fb.fy + fb.fh - br - 3);
     g.save();
@@ -902,7 +902,7 @@ function drawSleepyPaw(g, x, y, u, n, t, lift, twitch, ad, edgeD, fb) {
     text(g, String(n), bx, by + br * 0.06, br * 1.25, { color: INK });
     const z = (t * 0.6) % 1, zx = clamp(bx - br * 1.3 - z * br * 0.5, fb.fx + br * 0.5, fb.fx + fb.fw - br * 0.5);
     g.globalAlpha = (1 - z) * (1 - lift);
-    text(g, 'z', zx, by - br * 0.4 - z * br, br * 0.9, { color: CREAM, stroke: INK, strokeW: Math.max(2, br * 0.2) });
+    text(g, 'z', zx, by - br * 0.4 - z * br, Math.max(12, br * 0.9), { color: CREAM, stroke: INK, strokeW: Math.max(2, br * 0.2) });
     g.restore();
   }
 }
@@ -2645,7 +2645,7 @@ export function drawPlay(g, S) {
         g.strokeStyle = INK; g.lineWidth = Math.max(3, sw * 0.32); g.beginPath(); g.arc(e[0], e[1], R, 0, TAU); g.stroke();
         g.strokeStyle = GOLD; g.lineWidth = Math.max(2, sw * 0.2); g.stroke();
       }
-      const m = pointAt(gi.pts, gi.at, gi.len / 2), br = Math.max(9, sw * 0.62) * (1 + 0.08 * ph);
+      const m = pointAt(gi.pts, gi.at, gi.len / 2), br = Math.max(10.6, sw * 0.62) * (1 + 0.08 * ph);
       g.fillStyle = GOLD; g.strokeStyle = INK; g.lineWidth = Math.max(1.6, br * 0.16);
       g.beginPath(); g.arc(m.x, m.y - sw * 0.9, br, 0, TAU); g.fill(); g.stroke();
       text(g, String(qi), m.x, m.y - sw * 0.9 + br * 0.06, br * 1.25, { color: INK });

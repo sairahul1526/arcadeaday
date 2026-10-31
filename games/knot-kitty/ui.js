@@ -165,6 +165,16 @@ function lines(g, wf, x, cy, o = {}) {
   const lh = wf.size * 1.14, y0 = cy - (wf.lines.length - 1) * lh / 2;
   wf.lines.forEach((l, i) => txt(g, l, x, y0 + i * lh, wf.size, { f: FB, w: '800', ...o }));
 }
+// QA r1: canvas text never under `min` css px. Tries each candidate string in turn on one line at >= min; else wraps
+//   the first to 2 lines (centred on y) at >= min. o as txt (maxW required).
+function txtMin(g, list, x, y, size, min, o) {
+  list = Array.isArray(list) ? list : [list];
+  const f = o.f || FT, w = o.w || '', sk = o.stroke ? (o.sk || 0.2) : 0, z0 = Math.max(size, min);
+  for (const s of list) { const z = fitSize(g, s, o.maxW, z0, f, w, sk); if (z >= min - 0.01) return txt(g, s, x, y, z, { ...o, maxW: 0 }); }
+  const wf = wrapMin(g, list[0], o.maxW, z0, min, 2, f, w);
+  lines(g, wf, x, y, { ...o, maxW: 0 });
+  return wf.size;
+}
 /** Felt-patch panel (§7.7). */
 function panel(g, x, y, w, h, d, o = {}) {
   const r = Math.min(18 * d, w / 2, h / 2);
@@ -405,8 +415,9 @@ function pill(g, b) {
   const stroke = fg === '#fff' ? INK : null;
   if (b.sub) {
     const s1 = fitSize(g, b.label, avail, h * 0.46, FT, '', 0.2), s2 = Math.max(12, fitSize(g, b.sub, avail, Math.max(12, h * 0.2), FB, '900'));
-    txt(g, b.label, x + b.w / 2, cy - h * 0.1, s1, { col: fg, stroke, sk: 0.2 });
-    txt(g, b.sub, x + b.w / 2, cy + h * 0.27, s2, { f: FB, w: '900', col: fg === '#fff' ? CREAM : INK });
+    txt(g, b.label, x + b.w / 2, cy - h * 0.12, s1, { col: fg, stroke, sk: 0.2 });
+    // QA r1: the sub-line read washed out (cream on tomato): white with an ink edge on dark pills
+    txt(g, b.sub, x + b.w / 2, cy + h * 0.27, s2, fg === '#fff' ? { f: FB, w: '900', col: '#fff', stroke: INK, sk: 0.26 } : { f: FB, w: '900', col: INK });
   } else {
     const size = fitSize(g, b.label, avail, h * 0.46, FT, '', stroke ? 0.2 : 0);
     const lw = tw(g, b.label, size, FT);
@@ -425,7 +436,7 @@ function badge(g, x, y, r, bd, d, maxR = Infinity) {
     g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = INK; g.fill(); g.lineWidth = Math.max(1, r * 0.16); g.strokeStyle = CREAM; g.stroke();
     txt(g, String(bd.n), x, y + r * 0.06, r * 1.15, { col: '#fff', maxW: r * 1.6 });
   } else if (bd.price != null) {
-    const s = r * 1.05, label = String(bd.price);
+    const s = Math.max(12.5, r * 1.05), label = String(bd.price); r = Math.max(r, s / 1.05); // QA r1: price ≥ 12.5 px
     const w = tw(g, label, s, FT) + s * 1.5;
     if (x + w / 2 > maxR) x = maxR - w / 2;
     rr(g, x - w / 2, y - r * 0.75, w, r * 1.5, r * 0.75); g.fillStyle = GOLD; g.fill(); g.lineWidth = Math.max(1, r * 0.14); g.strokeStyle = GOLD_D; g.stroke();
@@ -1688,15 +1699,18 @@ function drawHUD(g, S, live) {
   }
   const lv = sess.level || {};
   const title = sess.kind === 'level' ? `Level ${sess.id}` : lv.name || (sess.kind === 'daily' ? 'Daily Knot' : 'Bonus Tangle');
-  const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day' : `Bonus tangle ${(sess.id | 0) + 1}`;
+  // QA r1: a bonus level named "Bonus Tangle N" showed it twice; the sub then says what the run pays instead
+  const bSub = `Bonus tangle ${(sess.id | 0) + 1}`;
+  const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day'
+    : String(title).toLowerCase() === bSub.toLowerCase() ? 'A gift every 5 wins' : bSub;
   const maxW = h.w - 2 * (L.m + dd + 8);
   const ts = Math.min(22 * u, h.h * 0.44);
   if (plaque) {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.4, ts, { col: INK, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.max(11, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: TEAL_D, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.max(13, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: TEAL_D, maxW });
   } else {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.max(11, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
+    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.max(13, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
   }
   // fix 10: the first-time mechanic line fades in ~3 s; a small "?" next to the level title (and the title itself)
   //   re-shows it in plain words, one mechanic per tap
@@ -2566,7 +2580,7 @@ function drawShop(g, S) {
       const bw = Math.min(110 * d, iw * 0.3), tx = ix + 18 * d + 2 * ir, tW = iw - (tx - ix) - bw - 18 * d;
       const ns = Math.max(14, Math.min(18 * d, shH * 0.3)), ds2 = Math.max(12, Math.min(13.5 * d, shH * 0.24));
       txt(g, `Streak Shield${unl ? `  ${n}/${max}` : ''}`, tx, cyT - ns * 0.5, ns, { align: 'left', maxW: tW });
-      txt(g, unl ? 'Saves your daily streak on a missed day' : 'Unlocks with the Daily Knot', tx, cyT + ds2 * 0.85, ds2, { f: FB, w: '800', align: 'left', col: '#4A4056', maxW: tW });
+      txtMin(g, unl ? ['Saves your streak on a missed day', 'Saves a missed day'] : ['Unlocks with the Daily Knot', 'Daily Knot unlocks it'], tx, cyT + Math.max(13, ds2) * 0.85, Math.max(13, ds2), 12.5, { f: FB, w: '800', align: 'left', col: '#4A4056', maxW: tW });
       g.restore();
       if (unl) {
         const bh2 = Math.min(42 * d, shH - 10 * d);
@@ -2626,7 +2640,7 @@ function drawShopConfirm(g, S, px, py, pw, ph, d) {
     const w1 = tw(g, lbl, s1 * 1.2) + s1 * 1.6;
     aIcon(g, 'ball', mx - w1 / 2 + s1 * 0.6, ly - 6 * d, s1 * 1.2);
     txt(g, lbl, mx + s1 * 0.75, ly - 6 * d, s1 * 1.2, { maxW: iw });
-    txt(g, after, mx, ly + 18 * d, 14 * d, { f: FB, w: '800', col: '#5A5066', maxW: iw });
+    txtMin(g, [after, `${bal} now · ${bal - price} after`], mx, ly + 18 * d, Math.max(13, 14 * d), 12.5, { f: FB, w: '800', col: '#5A5066', maxW: iw });
     const bw = (iw - 10 * d) / 2;
     pill(g, { id: 'sc-cancel', label: 'Cancel', kind: 'cream', x: cx + pad, y: btnY, w: bw, h: btnH, d, act: () => { U.shop.confirm = null; } });
     pill(g, { id: 'sc-buy', label: 'Buy', kind: 'primary', x: cx + pad + bw + 10 * d, y: btnY, w: bw, h: btnH, d, act: shopBuy });
@@ -2801,8 +2815,9 @@ function drawKittens(g, S) {
     const boss = j === 9, nm = st ? (kName(i) || `Kitten ${i + 1}`) : `Level ${i + 1}`;
     const maxW = c.s * (boss ? 1.25 : 0.98), f0 = clamp(K.ch * 0.62, 12, Math.max(24, 13 * d));
     let label = st === 2 ? '★ ' + nm : nm, fs = fitSize(g, label, maxW, f0, FB, '900');
-    if (fs < 11.5 && label.includes(' ')) { label = (st === 2 ? '★ ' : '') + nm.split(' ').pop(); fs = fitSize(g, label, maxW, f0, FB, '900'); }
-    txt(g, label, c.cx, c.capY, Math.max(11, fs), { f: FB, w: '900', col: st === 2 ? GOLD_D : st ? INK : '#8A7F7A' });
+    if (fs < 12 && label.includes(' ')) { label = (st === 2 ? '★ ' : '') + nm.split(' ').pop(); fs = fitSize(g, label, maxW, f0, FB, '900'); }
+    if (fs < 12 && st === 2) { label = nm.split(' ').pop(); fs = fitSize(g, label, maxW, f0, FB, '900'); } // gold colour still marks it
+    txt(g, label, c.cx, c.capY, Math.max(12, fs), { f: FB, w: '900', col: st === 2 ? GOLD_D : st ? INK : '#8A7F7A' });
   }
   g.restore();
   // polish (kid): tapping a rescued kitten makes it hop, float hearts and purr (its name is already captioned)
@@ -2965,9 +2980,10 @@ function drawAllBeaten(g, S) {
   const fixed = 16 + 50 + 30 + 10 + 120 + 16 + 58 + 54 + 16;
   const k = Math.min(1, H / (fixed * d)), e = d * k;
   let y = Math.max(8 * e, (H - fixed * e) / 2) + 16 * e;
-  txt(g, 'All 60 kittens rescued!', W / 2, y + 25 * e, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: W - 32 * e });
+  // QA r1: a gift card over this screen half-covered the headline; it waits until the card is gone
+  if (!U.card) txt(g, 'All 60 kittens rescued!', W / 2, y + 25 * e, 32 * e, { col: '#fff', stroke: INK, sk: 0.2, maxW: W - 32 * e });
   y += 50 * e;
-  txt(g, 'Play on: Bonus Tangles + the Daily Knot', W / 2, y + 15 * e, 18 * e, { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW: W - 32 * e });
+  if (!U.card) txt(g, 'Play on: Bonus Tangles + the Daily Knot', W / 2, y + 15 * e, 18 * e, { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW: W - 32 * e });
   y += 40 * e;
   // parade
   const ks = safe(() => M.kittens(), Array(LEVELS).fill(1));
@@ -3193,7 +3209,7 @@ function drawWinCard(g, S, c) {
         else portrait(g, kid, cx - s * 0.62, feet - s * 0.45, s * 0.86, res.golden ? 2 : 1, S.dpr || 1);
         art2(cx + s * 0.66, s * 1.05);
         const nm = kName(kid - 1);
-        txt(g, nm ? (res.golden ? `Golden ${nm} joins your Kitten Corner!` : `${nm} is safe in your Kitten Corner`) : (res.golden ? 'A golden kitten! Off to your Kitten Corner' : 'Safe and sound in your Kitten Corner'), cx, y + hh - 9 * e, 14 * e, { f: FB, w: '800', maxW: iw0 });
+        txtMin(g, nm ? (res.golden ? [`Golden ${nm} joins your Kitten Corner!`, `Golden ${nm} joins your Corner!`, `Golden ${nm}!`] : [`${nm} is safe in your Kitten Corner`, `${nm} is safe in your Corner`, `${nm} is safe!`]) : (res.golden ? ['A golden kitten! Off to your Kitten Corner', 'A golden kitten!'] : ['Safe and sound in your Kitten Corner', 'Safe in your Kitten Corner']), cx, y + hh - 9 * e, Math.max(13, 14 * e), 12.5, { f: FB, w: '800', maxW: iw0 });
       } else art2(cx, s * 1.15);
     } },
     { h: 6 },
