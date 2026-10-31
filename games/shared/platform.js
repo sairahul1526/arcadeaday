@@ -18,8 +18,8 @@ const MAX_SAVE = 500 * 1024; // Playables limit on saveData size (bytes, roughly
 
 // Analytics endpoint (same-origin path, e.g. '/api/ev'). Empty = P.event is a no-op. Web only.
 const ANALYTICS_URL = '';
-// Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|poki or window.__PORTAL set by the portal build.
-const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'poki'];
+// Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|playgama|poki or window.__PORTAL set by the portal build.
+const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'playgama', 'poki'];
 const portalName = (() => {
   if (Y) return '';
   let n = '';
@@ -48,7 +48,7 @@ const call = (list, ...a) => list.slice().forEach(cb => { try { cb(...a); } catc
 const P = {
   /** 'yt' inside YouTube Playables, otherwise 'web'. */
   env: Y ? 'yt' : 'web',
-  /** '' on the web and YouTube; 'crazygames' | 'gamedistribution' | 'gamepix' | 'coolmath' | 'poki' when running inside a portal build. */
+  /** '' on the web and YouTube; 'crazygames' | 'gamedistribution' | 'gamepix' | 'coolmath' | 'playgama' | 'poki' when running inside a portal build. */
   portal: portalName,
   /** true when the page was opened with ?qa=1 (QA hooks may be exposed). */
   qa: QA,
@@ -181,6 +181,7 @@ const P = {
     readyDone = true;
     if (Y) try { Y.game.gameReady(); } catch (e) { P.error(e); }
     P.loadingDone();
+    if (portalName === 'playgama') pg(b => b.platform.sendMessage('game_ready'));
   },
 
   /** Analytics. No-op unless ANALYTICS_URL is set and env is 'web'. Never throws, never blocks. */
@@ -237,6 +238,13 @@ const cg = fn => {
   const sdk = window.CrazyGames && window.CrazyGames.SDK;
   if (sdk) cgReady.then(() => { if (sdk.game) sdkCall(() => fn(sdk.game)); });
 };
+// Playgama Bridge: bridge.* is only valid once initialize() has resolved; the initial audio state is applied by hand.
+let pgReady = Promise.resolve();
+const pg = fn => {
+  initPortal();
+  const b = window.bridge;
+  if (b) pgReady.then(() => sdkCall(() => fn(b)));
+};
 function initPortal() {
   if (!portalName || portalInited) return;
   portalInited = true;
@@ -250,6 +258,16 @@ function initPortal() {
     const on = ev => { if (ev && ev.name === 'SDK_GAME_PAUSE') setPaused(true); else if (ev && ev.name === 'SDK_GAME_START') setPaused(false); };
     window.__gdOnEvent = ev => { try { on(ev); } catch {} };
     (window.__gdEvents || []).forEach(window.__gdOnEvent);
+  } else if (portalName === 'playgama') {
+    const b = window.bridge;
+    if (b && b.initialize) try {
+      pgReady = Promise.resolve(b.initialize()).then(() => {
+        const audio = on => { P.audioOn = !!on; call(audioCbs, P.audioOn); };
+        sdkCall(() => { if (b.platform.isAudioEnabled === false) audio(false); });
+        sdkCall(() => b.platform.on(b.EVENT_NAME.AUDIO_STATE_CHANGED, audio));
+        sdkCall(() => b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, p => setPaused(!!p)));
+      }).catch(() => {});
+    } catch {}
   }
 }
 function portalLoading() {

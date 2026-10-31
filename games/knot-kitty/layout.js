@@ -95,7 +95,12 @@ export function computeLayout(W, H) {
   const safe = R(Math.round(si.l + (AW - sw) / 2), Math.round(si.t + (AH - sh) / 2), sw, sh);
   const sx = safe.x, sy = safe.y, sr = safe.x + safe.w, sb = safe.y + safe.h;
 
-  const L = { W, H, u, orient, shape, m, safe, inset, boostDir: 'tray' };
+  // DECISION (meta v2, booster labels): every HUD booster has a text label under it ("Undo", "Hint", "+1 Slot",
+  //   "Snip") at ≥ 13 px (13–14 px on phones, scaling with u on big screens). Each layout mode adds labH to its
+  //   booster band; boosterRects returns the label box (.lab) with each rect so drawing and the coach-mark
+  //   placers share one owner.
+  const labFs = clamp(13 * u, 13, 28), labH = Math.ceil(labFs * 1.22);
+  const L = { W, H, u, orient, shape, m, safe, inset, boostDir: 'tray', labFs, labH };
   const hudH = 52 * u;
   const gap = Math.max(3, 4 * u);
 
@@ -118,15 +123,15 @@ export function computeLayout(W, H) {
     const unitOf = (w, h) => Math.min(w / REF_W, h / REF_H);
     const trayBtn = (trayH, frac) => {
       const bwid = bw * frac - m * 0.5, n = 4;
-      const row = Math.min((bwid - gap * 3) / n, trayH);
-      const grid = Math.min((bwid - gap) / 2, (trayH - gap) / 2);
+      const row = Math.min((bwid - gap * 3) / n, trayH - labH);
+      const grid = Math.min((bwid - gap) / 2, (trayH - gap) / 2 - labH);
       return Math.min(btnCap, Math.max(row, grid));
     };
     const cands = [];
     { // 'tray'
-      let trayH = 76 * u;
+      let trayH = 76 * u + labH;
       const h = boardH(rack0, trayH), need = REF_H * (bw / REF_W);
-      if (h - need > 0) trayH += Math.min(h - need, Math.max(0, 96 - trayH));
+      if (h - need > 0) trayH += Math.min(h - need, Math.max(0, 96 + labH - trayH));
       cands.push({ mode: 'tray', trayH, frac: 0.38, colW: 0, btn: trayBtn(trayH, 0.38) });
     }
     { // 'col'
@@ -134,11 +139,11 @@ export function computeLayout(W, H) {
       const h = boardH(rack0, trayH);
       const spare = bw - REF_W * Math.min(h / REF_H, bw / REF_W);
       const colW = clamp(spare - m * 0.5, 44, Math.max(48, 64 * u));
-      const btn = Math.min(colW, (h - 3 * gap) / 4, btnCap);
+      const btn = Math.min(colW, (h - 3 * gap) / 4 - labH, btnCap);
       cands.push({ mode: 'col', trayH, frac: 0, colW, btn });
     }
     { // 'row'
-      const trayH = Math.max(76 * u, 44);
+      const trayH = Math.max(76 * u, 44) + labH;
       const frac = clamp((4 * 44 + 3 * gap + m * 0.5) / bw, 0.38, 0.62);
       cands.push({ mode: 'row', trayH, frac, colW: 0, btn: trayBtn(trayH, frac) });
     }
@@ -150,16 +155,17 @@ export function computeLayout(W, H) {
     cands.sort((a, b) => b.score - a.score);
     // DECISION (polish band): the bottom band is ONE unit — board → kitten (bigger, centred on its ledge) → a full-width
     //   basket → one even row of four boosters. It wins whenever 8×10 still clears the §7.6 gate (rack may drop to its
-    //   minimum for that) and keeps ≥ 88 % of the best other split's unit; else (320×480: the row costs the gate) the
+    //   minimum for that) and keeps ≥ 83 % (was 85 %, before the booster labels) of the best other split's unit; else (320×480: the row costs the gate) the
     //   old column/tray split stays.
     let C = cands[0];
     {
-      const rowH = Math.max(48, Math.min(60 * u, btnCap + 4, 48 + 14 * u));
+      // the icons give back up to half the label height (never under 44 px) so the band keeps fitting short phones
+      const rowH = Math.max(44, Math.min(60 * u, btnCap + 4, 48 + 14 * u) - labH * 0.5);
       const bkH = Math.max(46, Math.min(66 * u, 50 + 16 * u));
       // fix3 (critic r2, art 2): a real gap between the basket and the booster row (was 4u, read as touching)
-      const bgap = Math.max(8, 10 * u), trayH = bkH + bgap + rowH;
+      const bgap = Math.max(8, 10 * u), trayH = bkH + bgap + rowH + labH;
       const unit = unitOf(bw, boardH(rack0, trayH)), unitMin = unitOf(bw, boardH(rackMin, trayH));
-      if (!tab && unitMin >= GATE && unit >= 0.85 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, bgap, unit };
+      if (!tab && unitMin >= GATE && unit >= 0.83 * C.unit) C = { mode: 'band', trayH, frac: 0, colW: 0, btn: Math.min(rowH - 4, btnCap), rowH, bkH, bgap, unit };
     }
     let rackH = rack0, trayH = C.trayH;
     // leftover height → rack (spools), clamp so 8×10 never drops under the §7.6 gate
@@ -179,7 +185,7 @@ export function computeLayout(W, H) {
     if (C.mode === 'band') {
       L.boostDir = 'row';
       L.basket = R(sx + m, L.tray.y, bw, C.bkH);
-      L.boosters = R(sx + m, L.tray.y + C.bkH + C.bgap, bw, C.rowH);
+      L.boosters = R(sx + m, L.tray.y + C.bkH + C.bgap, bw, C.rowH + labH);
       L.board = R(sx + m, top, bw, bh);
       // the kitten band reserves up to 0.6 unit more (bigger kitten) while the reference board stays ≥ the gate
       // polish round 3 (RENDER ask): the phone kitten may grow to 128u (was 100u) in the spare band height
@@ -227,10 +233,10 @@ export function computeLayout(W, H) {
     const callH = Math.max(40 * u, 30);
     const colTop = big ? top : sy, colBot = big ? top + bh : sb - m;
     L.hud = R(cx, colTop, cw, hudH);
-    let rackH = 120 * u, basketH = 70 * u, boostH = 56 * u;
+    let rackH = 120 * u, basketH = 70 * u, boostH = 56 * u + labH;
     let free = colBot - (colTop + hudH) - rackH - callH - basketH - boostH;
     const grow = (v, to) => { const d = Math.max(0, Math.min(free, to - v)); free -= d; return v + d; };
-    boostH = grow(boostH, Math.max(46, Math.min(64 * u, (cw - gap * 3) / 4)));
+    boostH = grow(boostH, Math.max(46, Math.min(64 * u, (cw - gap * 3) / 4)) + labH);
     rackH = grow(rackH, 170 * u);
     basketH = grow(basketH, 84 * u);
     // the rack keeps a small breath under the HUD; on big screens the callout sits in the middle of whatever is
@@ -349,37 +355,43 @@ export function boosterRects(L, keys = null) {
   const gap = Math.max(3, 4 * L.u);
   const out = {};
   const cap = Math.max(44, 60 * L.u);
+  const labH = L.labH || 0, lgap = labH ? Math.max(1, 2 * L.u) : 0;
+  // the label box under an icon rect r, as wide as its cell (cw) and centred on the icon
+  const lab = (r, cw) => R(r.x + r.w / 2 - cw / 2, r.y + r.h + lgap, cw, labH);
   if (L.boostDir === 'col') {
     // column right of the board: fixed 4-cell pitch, bottom-aligned (near the thumb), so cells never jump as
     // boosters unlock; a lone Undo sits at the bottom.
-    const pitch = Math.min((b.h + gap) / 4, cap + gap * 2.5);
-    const sz = Math.min(b.w, pitch - gap, cap);
+    const pitch = Math.min((b.h + gap) / 4, cap + labH + lgap + gap * 2.5);
+    const sz = Math.min(b.w, pitch - gap - labH - lgap, cap);
     const y0 = b.y + b.h - 4 * pitch + gap;
     list.forEach((k, i) => {
       const j = 4 - list.length + i, y = y0 + j * pitch;
-      out[k] = R(b.x + (b.w - sz) / 2, y + (pitch - gap - sz) / 2, sz, sz);
+      out[k] = R(b.x + (b.w - sz) / 2, y + (pitch - gap - sz - labH - lgap) / 2, sz, sz);
+      out[k].lab = lab(out[k], b.w + gap * 2);
       out[k].hit = R(b.x - gap, y - gap / 2, b.w + 2 * gap, pitch);
     });
     return out;
   }
   // DECISION: pick whichever of "one row" / "2-column grid" gives the bigger buttons for the boosters shown
   //   (a lone Undo on L4 gets the whole tray height instead of a quarter cell); landscape is always one row.
-  const rowCw = (b.w - gap * (n - 1)) / n, rowSz = Math.min(rowCw, b.h);
+  const ih = b.h - labH - lgap; // icon height left in a one-row band
+  const rowCw = (b.w - gap * (n - 1)) / n, rowSz = Math.min(rowCw, ih);
   const gr = Math.ceil(n / 2), gcw = n === 1 ? b.w : (b.w - gap) / 2, gch = (b.h - gap * (gr - 1)) / gr;
-  const gridSz = Math.min(gcw, gch);
+  const gridSz = Math.min(gcw, gch - labH - lgap);
   const fixed = L.orient === 'landscape' || L.boostDir === 'row';
   if (fixed || rowSz >= gridSz) {
     // landscape and the portrait band row keep the fixed 4-cell pitch so buttons don't jump size as boosters unlock;
     // band-row hit cells run down to the safe bottom (thumb side) and never reach up into the basket
     const cw = fixed ? (b.w - gap * 3) / 4 : rowCw;
-    const sz = Math.min(cw, b.h, cap);
+    const sz = Math.min(cw, ih, cap);
     const total = list.length * cw + (list.length - 1) * gap;
     const x0 = b.x + (b.w - total) / 2;
     const sb = L.safe ? L.safe.y + L.safe.h : b.y + b.h;
     const band = L.boostDir === 'row' && L.orient !== 'landscape';
     list.forEach((k, i) => {
       const cx = x0 + i * (cw + gap);
-      out[k] = R(cx + (cw - sz) / 2, b.y + (b.h - sz) / 2, sz, sz);
+      out[k] = R(cx + (cw - sz) / 2, b.y + (b.h - sz - labH - lgap) / 2, sz, sz);
+      out[k].lab = lab(out[k], cw + gap);
       out[k].hit = band ? R(cx - gap / 2, b.y - gap / 2, cw + gap, Math.max(b.h + gap / 2, sb - b.y + gap / 2)) : R(cx - gap / 2, b.y, cw + gap, b.h);
     });
   } else {
@@ -389,7 +401,8 @@ export function boosterRects(L, keys = null) {
       const c = i % 2, rw = gr - 1 - ((i / 2) | 0);
       const x = b.x + c * (gcw + gap), y = b.y + rw * (gch + gap);
       const sz = Math.min(gridSz, cap);
-      out[k] = R(x + (gcw - sz) / 2, y + (gch - sz) / 2, sz, sz);
+      out[k] = R(x + (gcw - sz) / 2, y + (gch - sz - labH - lgap) / 2, sz, sz);
+      out[k].lab = lab(out[k], gcw + gap);
       out[k].hit = R(x - gap / 2, y - gap / 2, gcw + gap, gch + gap);
     });
   }

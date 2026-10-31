@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Portal packages from the clean Playables build (run `node tools/build-playables.mjs <slug>` first).
-//   node tools/build-portal.mjs <slug> [crazygames,gamedistribution,gamepix,coolmath]
+//   node tools/build-portal.mjs <slug> [crazygames,gamedistribution,gamepix,coolmath,playgama]
 // Writes dist/portals/<portal>/<slug>/ and dist/portals/<portal>/<slug>.zip. The YouTube SDK tag is replaced by
 // `window.__PORTAL = '<portal>'` (platform.js turns off share/links and drives the portal adapter) plus the
 // portal's own SDK script where the portal requires one. The game itself makes no ad calls.
@@ -23,6 +23,7 @@ const PORTALS = {
     ` (window.__gdEvents = window.__gdEvents || []).push(e); if (window.__gdOnEvent) window.__gdOnEvent(e); } };</script>\n` +
     `<script src="https://html5.api.gamedistribution.com/main.min.js"></script>`,
   gamepix: `<script src="https://integration.gamepix.com/sdk/v3/gamepix.sdk.js"></script>`,
+  playgama: `<script src="https://bridge.playgama.com/v2/stable/playgama-bridge.js"></script>`,
   coolmath: '', // Coolmath adds its own wrapper on licence; the build only strips links and share
 };
 

@@ -49,7 +49,7 @@
 // DECISION: a throwing frame is reported once per message through P.error (console.warn) and the loop keeps going.
 
 import P from '../shared/platform.js';
-import { STORE, SAVE_V, DPR_CAP, SEASON_END, LEVELS, worldOf, bus } from './consts.js';
+import { STORE, DPR_CAP, SEASON_END, LEVELS, worldOf, bus } from './consts.js';
 import { computeLayout } from './layout.js';
 import * as play from './play.js';
 import * as render from './render.js';
@@ -298,7 +298,7 @@ function next() {
   const s = S.sess;
   if (!s) return go('map');
   if (s.kind === 'daily') return go('daily');
-  if (s.kind === 'bonus') return startLevel('bonus', meta.bonusNext());
+  if (s.kind === 'bonus') return meta.bonusState().open ? startLevel('bonus', meta.bonusNext()) : go('map');
   if (s.id >= LEVELS) return go('allbeaten');
   startLevel('level', s.id + 1);
 }
@@ -556,7 +556,7 @@ async function boot() {
   P.firstFrame();
   startLoop();
   loadArt().catch(() => {}); // the rest of the illustrations, in the background
-  await P.init({ store: STORE, version: SAVE_V, defaults: meta.defaults(), migrate: meta.migrate });
+  await P.init({ store: STORE, version: meta.SAVE_V, defaults: meta.defaults(), migrate: meta.migrate });
   meta.initMeta();
   P.best(meta.score());
   const timeout = new Promise(r => setTimeout(r, 2500));

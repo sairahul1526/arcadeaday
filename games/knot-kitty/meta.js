@@ -51,14 +51,36 @@
 //   gives each of the 60 kittens a fixed, unique name. Bosses (every 10th) get the grand names.
 
 import P from '../shared/platform.js';
-import { LEVELS, PER_WORLD, SAVE_V, BOOSTERS, OUTFITS, MAX_STRANDS, bus } from './consts.js';
+import { LEVELS, PER_WORLD, BOOSTERS, OUTFITS, MAX_STRANDS, RAINBOW, TEACH, bus } from './consts.js';
 import { dailyIndex, istDateKey } from './levels.js';
+import BONUS from './bonus-data.js';
+
+// DECISION (meta v2, 2026-10-31): save schema v2 adds `sets` { claimed, gold } (world bitmasks: the Kitten Corner set
+//   rewards claimed) and `daily.shields` (0..2 Streak Shields). SAVE_V lives here now (consts.js is shared with the
+//   level tools and stays at its old value). v0 and v1 saves migrate with every bit of progress kept.
+//   Merge: set bitmasks OR together (progress); shields are spendable, so they come from the newest write like yarn.
+// DECISION (meta v2): daily streak ladder. The 7-day ladder day = ((streak − 1) mod 7) + 1; a paying daily pays
+//   15 + 4×stars + LADDER[day − 1] (+chain/jumbo/combo) and day 7 also gives 1 of every unlocked booster, then loops.
+//   Streak Shield (shop, 150 yarn, hold 2): when the next paying daily finds a gap of g missed days and g ≤ shields,
+//   g shields are spent and the streak carries on (P.event 'shield_used'). streakOn shows a covered streak as alive.
+// DECISION (meta v2): Bonus Tangles. A first win of the next tangle pays 20 + 6×stars (+extras) and every 5th first
+//   win also gives 1 booster (rotating over the unlocked ones). Progressive unlock: 10 tangles per world boss beaten
+//   from World 3 (L30 → 10, L40 → 20, L50 → 30), every tangle after L60; and the next tangle waits until every
+//   mechanic on its board has been taught (its TEACH level beaten), so a mid-campaign player never meets an untaught one.
+// DECISION (meta v2): Kitten Corner sets, one per world. All 10 kittens rescued → claim 80 yarn + 1 Hint; all 10
+//   levels at 3★ → the Golden set: 200 yarn + 1 of every unlocked booster (P.event 'set_claim').
+export const SAVE_V = 2;
 
 const BK = ['undo', 'hint', 'slot', 'snip'];
 // Economy v2 (polish): see the DECISION above. First win WIN_A + WIN_B×stars (boss ×2), a star-improving replay
 // WIN_B per new star, a plain replay REPLAY_BALLS (+ at most 1 chain/jumbo extra, + at most COMBO_REPLAY combo).
 const GIFT_EVERY = 15, GIFT_BALLS = 15, CHEST_BALLS = 25, START_BALLS = 50, WIN_A = 2, WIN_B = 4, REPLAY_EXTRA = 1;
-const DAILY_A = 15, DAILY_B = 4, DAILY_STREAK = 4, DAILY_AFTER = 13;
+const DAILY_A = 15, DAILY_B = 4, DAILY_AFTER = 13;
+export const LADDER = [4, 8, 12, 16, 20, 28, 50];
+export const SHIELD_PRICE = 150, SHIELD_MAX = 2;
+const BONUS_A = 20, BONUS_B = 6, BONUS_GIFT_EVERY = 5;
+export const SET_BALLS = 80, GOLD_BALLS = 200;
+const WORLDS_N = Math.ceil(LEVELS / PER_WORLD);
 const MAX_BALLS = 9999999, MAX_BOOST = 999, DAILY_KEEP = 14, REPLAY_BALLS = 1, CHAIN_M = 12;
 export const COMBO_CAP = 8, COMBO_REPLAY = 1;
 const CHAIN_MAX = MAX_STRANDS || 28;
@@ -75,6 +97,7 @@ const isBoss = id => id % PER_WORLD === 0;
 const validId = id => Number.isInteger(id) && id >= 1 && id <= LEVELS;
 const D = () => P.data;
 const save = () => { mergeStored(); P.save(); };
+const safe = fn => { try { return fn(); } catch { return undefined; } };
 
 function addDays(key, n) {
   const [y, m, d] = key.split('-').map(Number);
@@ -92,8 +115,9 @@ export function defaults() {
     gifted: { undo: false, hint: false, slot: false, snip: false },
     outfits: ['tabby'], wear: 'tabby',
     kittens: Array(LEVELS).fill(0),
-    daily: { won: [], streak: 0, last: '' },
+    daily: { won: [], streak: 0, last: '', shields: 0 },
     bonus: 0,
+    sets: { claimed: 0, gold: 0 },
     giftsClaimed: 0,
     chests: 0,
     set: { music: 0.7, sfx: 0.9, haptics: true },
@@ -102,7 +126,7 @@ export function defaults() {
   };
 }
 
-/** Normalises any object into a valid v1 save (unknown fields dropped, arrays 60 long, numbers clamped). */
+/** Normalises any object into a valid v2 save (unknown fields dropped, arrays 60 long, numbers clamped). */
 function sanitize(src) {
   const s = isObj(src) ? src : {};
   const o = defaults();
@@ -125,6 +149,12 @@ function sanitize(src) {
     o.daily.won = [...new Set(won)].sort().slice(-DAILY_KEEP);
     o.daily.last = typeof s.daily.last === 'string' && KEY_RE.test(s.daily.last) ? s.daily.last : '';
     o.daily.streak = o.daily.last ? int(s.daily.streak, 0, 99999, 0) : 0;
+    o.daily.shields = int(s.daily.shields, 0, SHIELD_MAX, 0);
+  }
+  if (isObj(s.sets)) {
+    const full = (1 << WORLDS_N) - 1;
+    o.sets.claimed = int(s.sets.claimed, 0, full, 0);
+    o.sets.gold = int(s.sets.gold, 0, full, 0);
   }
   o.bonus = int(s.bonus, 0, 1e7, 0);
   o.giftsClaimed = int(s.giftsClaimed, 0, Math.floor((LEVELS * 3) / GIFT_EVERY), 0);
@@ -139,7 +169,7 @@ function sanitize(src) {
   return o;
 }
 
-/** Upgrades any older or unknown shape to v1. Prototype saves {at:n} / {v:0, at:n}: levels 1..n beaten with 1★. */
+/** Upgrades any older or unknown shape to v2 (v1 → v2 only adds fields: sanitize fills them). Prototype saves {at:n} / {v:0, at:n}: levels 1..n beaten with 1★. */
 export function migrate(old) {
   const s = isObj(old) ? old : {};
   const o = sanitize(s);
@@ -193,8 +223,12 @@ function mergeInto(d, o, theirsNewer) {
   d.bonus = Math.max(d.bonus | 0, t.bonus);
   d.giftsClaimed = Math.max(d.giftsClaimed | 0, t.giftsClaimed);
   d.chests = (d.chests | 0) | t.chests;
+  if (!isObj(d.sets)) d.sets = { claimed: 0, gold: 0 };
+  d.sets.claimed = (d.sets.claimed | 0) | t.sets.claimed;
+  d.sets.gold = (d.sets.gold | 0) | t.sets.gold;
   if (theirsNewer) {
     d.balls = t.balls;
+    d.daily.shields = t.daily.shields;
     for (const k of BK) d.boost[k] = t.boost[k];
     d.set = { ...t.set };
     d.wear = t.wear;
@@ -353,6 +387,10 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
     const o = { combo: 0 };
     res.balls = kind === 'daily' ? payDaily(s, dateKey, extra, cb, o) : payBonus(s, bonusId, extra, cb, o);
     res.combo = o.combo;
+    if (o.shield) res.gifts.push({ kind: 'shield', n: o.shield });
+    if (o.boosters && o.boosters.length) res.gifts.push({ kind: 'ladder', day: o.day, boosters: o.boosters });
+    if (o.booster) res.gifts.push({ kind: 'bonusGift', k: o.booster, at: D().bonus });
+    if (kind === 'daily' && o.day) res.day = o.day;
     res.newBest = P.best(score());
     return res;
   }
@@ -378,6 +416,13 @@ export function recordWin({ kind = 'level', id = 0, stars: st = 1, peak = 0, cap
 
   d.cur = Math.max(d.cur, Math.min(LEVELS + 1, id + 1));
   d.stats.wins++;
+  { // a Kitten Corner set this win just completed (either tier): the UI points the player at the claim
+    const w = Math.ceil(id / PER_WORLD), si = setInfo(w);
+    if ((si.claimable && res.firstWin) || (si.goldClaimable && res.newStars > 0 && s === 3)) {
+      res.setReady = w;
+      res.gifts.push({ kind: 'setReady', w, gold: !!(si.goldClaimable && s === 3 && res.newStars > 0 && !si.claimable) });
+    }
+  }
 
   for (const k of unlockGifts(d.cur)) res.gifts.push({ kind: 'booster', k, n: BOOSTERS[k].gift });
   grantGifts(res.gifts);
@@ -411,8 +456,11 @@ export function comboCap(kind = 'level', id = 0) {
 
 let attempt = null; // { kind, id } of the last started attempt (module memory: tells a bonus replay from a new one)
 export function recordAttempt(kind, id) {
-  attempt = { kind, id };
-  if (!D()) return;
+  // QA r1: spam-tapping a play button started the same attempt once per tap; a repeat of the same kind/id within
+  //   1.5 s is the same session start and counts once
+  const now = Date.now(), dup = attempt && attempt.kind === kind && attempt.id === id && now - (attempt.at || 0) < 1500;
+  attempt = { kind, id, at: now };
+  if (!D() || dup) return;
   D().stats.plays++;
   save();
 }
@@ -455,26 +503,59 @@ export function kittenName(i) {
 }
 
 // ---------- daily knot ----------
-// A key at or before the high-water `last` is a clock set backwards (or today): the streak stands.
-const streakOn = (d, key) => (d.daily.last && (key <= d.daily.last || d.daily.last === addDays(key, -1)) ? d.daily.streak : 0);
+const dayN = key => { const [y, m, d] = key.split('-').map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+const gapDays = (a, b) => Math.round(dayN(b) - dayN(a)); // whole IST days from key a to key b
+/** Missed days between the last daily win and `key` (0 when key is the next day or earlier). */
+const missedBefore = (d, key) => (d.daily.last && key > d.daily.last ? Math.max(0, gapDays(d.daily.last, key) - 1) : 0);
+// A key at or before the high-water `last` is a clock set backwards (or today): the streak stands. A gap of missed days
+//   that the held Streak Shields cover also keeps it alive (they are spent on the next paying daily).
+const streakOn = (d, key) => {
+  if (!d.daily.last) return 0;
+  if (key <= d.daily.last) return d.daily.streak;
+  const miss = missedBefore(d, key);
+  return miss <= (d.daily.shields | 0) ? d.daily.streak : 0;
+};
 const claimed = (d, key) => d.daily.won.includes(key) || (!!d.daily.last && key <= d.daily.last);
+/** Ladder day (1..7) a streak of n days sits on; 0 for no streak. */
+export const ladderDay = n => (n > 0 ? ((n - 1) % 7) + 1 : 0);
+/** Yarn a paying daily pays at ladder day `day` with `st` stars (no chain/jumbo/combo extras). */
+export const dailyPay = (day, st = 3) => DAILY_A + DAILY_B * int(st, 1, 3, 1) + LADDER[int(day, 1, 7, 1) - 1];
 
 export function daily(key = istDateKey()) {
   const d = D();
   const won = !!d && claimed(d, key);
+  const streak = d ? streakOn(d, key) : 0;
+  // the ladder day today's win pays (or paid): the next day when today is still open, else the current one
+  const today = won ? ladderDay(streak) : ladderDay(streak + 1);
   return {
     key,
     i: dailyIndex(key).i,
     won,
-    streak: d ? streakOn(d, key) : 0,
+    streak,
+    day: today,
+    reward: dailyPay(today, 3),
+    shields: d ? d.daily.shields | 0 : 0,
+    // missed days today's win will spend shields on (shown as shield stamps)
+    shieldNeed: d && !won && streak > 0 ? missedBefore(d, key) : 0,
     unlocked: !!d && d.cur > DAILY_AFTER,
     stamps: Array.from({ length: 7 }, (_, j) => !!d && d.daily.won.includes(addDays(key, j - 6))),
   };
 }
 
+/** Streak Shield: SHIELD_PRICE yarn, hold at most SHIELD_MAX. Returns true when bought. */
+export const shields = () => (D() ? D().daily.shields | 0 : 0);
+export function buyShield() {
+  const d = D();
+  if (!d || d.cur <= DAILY_AFTER || (d.daily.shields | 0) >= SHIELD_MAX || !spend(SHIELD_PRICE)) return false;
+  d.daily.shields = (d.daily.shields | 0) + 1;
+  save();
+  return true;
+}
+
 /**
- * Rewards a daily once: 15 + 4×stars + 4×min(streak, 7) (+chain/jumbo/combo). Returns the balls granted. Pays 0 on a replay, on any key
- * at or before the high-water daily.last (clock set backwards), and while the daily is locked.
+ * Rewards a daily once: 15 + 4×stars + LADDER[day] (+chain/jumbo/combo; day 7 adds 1 of each unlocked booster).
+ * Returns the balls granted. Pays 0 on a replay, on any key at or before the high-water daily.last (clock set
+ * backwards), and while the daily is locked.
  */
 export function recordDailyWin(st, key = istDateKey()) { return payDaily(st, key, 0); }
 function payDaily(st, key, extra, combo = 0, out = null) {
@@ -484,18 +565,78 @@ function payDaily(st, key, extra, combo = 0, out = null) {
   const s = int(st, 1, 3, 1);
   d.stats.wins++;
   if (d.cur <= 6 || claimed(d, key)) { save(); return 0; }
-  d.daily.streak = d.daily.last === addDays(key, -1) ? d.daily.streak + 1 : 1;
+  const miss = missedBefore(d, key);
+  if (d.daily.last && miss === 0) d.daily.streak++;
+  else if (d.daily.last && miss <= (d.daily.shields | 0)) {
+    d.daily.shields -= miss;
+    d.daily.streak++;
+    if (out) out.shield = miss;
+    safe(() => P.event && P.event('shield_used', { n: miss, streak: d.daily.streak }));
+  } else d.daily.streak = 1;
   d.daily.last = key;
   d.daily.won = [...new Set([...d.daily.won, key])].sort().slice(-DAILY_KEEP);
-  const b = DAILY_A + DAILY_B * s + DAILY_STREAK * Math.min(d.daily.streak, 7) + extra + combo;
-  if (out) out.combo = combo;
+  const day = ladderDay(d.daily.streak);
+  const b = DAILY_A + DAILY_B * s + LADDER[day - 1] + extra + combo;
+  if (out) { out.combo = combo; out.day = day; }
   d.balls = Math.min(MAX_BALLS, d.balls + b);
+  if (day === 7) {
+    const list = unlockedList();
+    for (const k of list) d.boost[k] = Math.min(MAX_BOOST, d.boost[k] + 1);
+    if (out) out.boosters = list;
+  }
   save();
   return b;
 }
 
+// ---------- bonus tangles ----------
+// Level whose win teaches every mechanic on bonus board i (0 = nothing special; beyond the data: none).
+const TEACH_AT = Object.fromEntries(Object.entries(TEACH).map(([lv, m]) => [m, +lv]));
+const needCache = new Map();
+export function bonusNeed(i) {
+  if (needCache.has(i)) return needCache.get(i);
+  const b = Array.isArray(BONUS) ? BONUS[i] : null;
+  let n = 0;
+  if (b) {
+    const up = m => { n = Math.max(n, TEACH_AT[m] || 0); };
+    if (b.knot || (Array.isArray(b.knots) && b.knots.length)) up('knot');
+    if (b.ice) up('ice');
+    if (Array.isArray(b.queue) && b.queue.some(q => isObj(q))) up('jumbo');
+    for (const st of b.strands || []) {
+      if (st.lock !== undefined || st.key !== undefined) up('lock');
+      if (st.m) up('mystery');
+      if (st.paw) up('paw');
+      if (st.c === RAINBOW) up('rainbow');
+      if (st.jumbo) up('jumbo');
+      if (st.ice) up('ice');
+    }
+  }
+  needCache.set(i, n);
+  return n;
+}
+/** How many new bonus tangles the campaign has opened: 10 per world boss from World 3, all after L60. */
+export function bonusCap() {
+  const d = D();
+  if (!d) return 0;
+  if (d.cur > LEVELS) return Infinity;
+  return PER_WORLD * Math.max(0, Math.floor((d.cur - 1) / PER_WORLD) - 2);
+}
+/**
+ * The bonus tangle state for the title / map: { next (index of the next new tangle), open (it can be played now),
+ * need (level to beat to open it, 0 when open), any (bonus tangles are part of this player's game yet) }.
+ */
+export function bonusState() {
+  const d = D();
+  if (!d) return { next: 0, open: false, need: 0, any: false, cap: 0 };
+  const next = d.bonus, cap = bonusCap(), teach = bonusNeed(next);
+  let need = 0;
+  if (next >= cap) need = PER_WORLD * (Math.floor((d.cur - 1) / PER_WORLD) + 1);
+  else if (d.cur <= teach) need = teach;
+  need = Math.min(LEVELS, Math.max(need, 0));
+  const open = need === 0 || d.cur > LEVELS;
+  return { next, open, need: open ? 0 : need, any: cap > 0 || next > 0, cap };
+}
 export const bonusNext = () => (D() ? D().bonus : 0);
-/** Bonus tangle i won: 2 + 4×stars (+extras) and d.bonus++ only when i is the next one (d.bonus); a replay pays 1. */
+/** Bonus tangle i won: 20 + 6×stars (+extras) and d.bonus++ only when i is the next one (d.bonus); a replay pays 1. */
 export function recordBonusWin(st, i) { return payBonus(st, i, 0); }
 function payBonus(st, i, extra, combo = 0, out = null) {
   const d = D();
@@ -503,10 +644,48 @@ function payBonus(st, i, extra, combo = 0, out = null) {
   if (!Number.isInteger(i)) i = attempt && attempt.kind === 'bonus' && Number.isInteger(attempt.id) ? attempt.id : d.bonus;
   d.stats.wins++;
   let b = REPLAY_BALLS;
-  if (i === d.bonus) { b = WIN_A + WIN_B * int(st, 1, 3, 1) + extra + combo; if (out) out.combo = combo; d.bonus = Math.min(1e7, d.bonus + 1); }
+  if (i === d.bonus) {
+    b = BONUS_A + BONUS_B * int(st, 1, 3, 1) + extra + combo;
+    if (out) out.combo = combo;
+    d.bonus = Math.min(1e7, d.bonus + 1);
+    if (d.bonus % BONUS_GIFT_EVERY === 0) {
+      const list = unlockedList(), k = list.length ? list[(d.bonus / BONUS_GIFT_EVERY - 1) % list.length] : null;
+      if (k) { d.boost[k] = Math.min(MAX_BOOST, d.boost[k] + 1); if (out) out.booster = k; }
+    }
+  }
   d.balls = Math.min(MAX_BALLS, d.balls + b);
   save();
   return b;
+}
+
+// ---------- Kitten Corner sets ----------
+/** World w (1..6) set progress: { w, got, gold3, full, golden, claimed, goldClaimed, claimable, goldClaimable }. */
+export function setInfo(w) {
+  const d = D(), o = { w, got: 0, gold3: 0, full: false, golden: false, claimed: false, goldClaimed: false, claimable: false, goldClaimable: false };
+  if (!d || !(w >= 1 && w <= WORLDS_N)) return o;
+  for (let i = (w - 1) * PER_WORLD; i < w * PER_WORLD; i++) { if (d.kittens[i] > 0) o.got++; if (d.stars[i] >= 3) o.gold3++; }
+  o.full = o.got >= PER_WORLD; o.golden = o.gold3 >= PER_WORLD;
+  o.claimed = !!(d.sets.claimed & (1 << (w - 1))); o.goldClaimed = !!(d.sets.gold & (1 << (w - 1)));
+  o.claimable = o.full && !o.claimed; o.goldClaimable = o.golden && !o.goldClaimed;
+  return o;
+}
+/** Worlds with a set reward waiting (either tier). */
+export const setsClaimable = () => Array.from({ length: WORLDS_N }, (_, i) => setInfo(i + 1)).filter(s => s.claimable || s.goldClaimable).map(s => s.w);
+/** Reward a set claim would pay: { balls, boosters: [k…] }. */
+export function setReward(gold) {
+  return gold ? { balls: GOLD_BALLS, boosters: unlockedList() } : { balls: SET_BALLS, boosters: boosterUnlocked('hint') ? ['hint'] : unlockedList().slice(0, 1) };
+}
+/** Claims world w's set (gold = the Golden set). Returns { balls, boosters, w, gold } or null when not claimable. */
+export function claimSet(w, gold = false) {
+  const d = D(), s = setInfo(w);
+  if (!d || !(gold ? s.goldClaimable : s.claimable)) return null;
+  const r = setReward(gold);
+  d.balls = Math.min(MAX_BALLS, d.balls + r.balls);
+  for (const k of r.boosters) d.boost[k] = Math.min(MAX_BOOST, d.boost[k] + 1);
+  if (gold) d.sets.gold |= 1 << (w - 1); else d.sets.claimed |= 1 << (w - 1);
+  save();
+  safe(() => P.event && P.event('set_claim', { w, gold: !!gold }));
+  return { ...r, w, gold: !!gold };
 }
 
 // ---------- settings / tutorial ----------
