@@ -1704,22 +1704,28 @@ function drawHUD(g, S, live) {
   const sub = sess.kind === 'level' ? (WORLDS[worldOf(sess.id)] || {}).name || '' : sess.kind === 'daily' ? 'New board every day'
     : String(title).toLowerCase() === bSub.toLowerCase() ? 'A gift every 5 wins' : bSub;
   const maxW = h.w - 2 * (L.m + dd + 8);
-  const ts = Math.min(22 * u, h.h * 0.44);
+  const ts = Math.min(22 * u, h.h * 0.44), ss = Math.max(13, Math.min(13 * u, h.h * 0.26)), sy = h.y + h.h * (plaque ? 0.76 : 0.8);
   if (plaque) {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.4, ts, { col: INK, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.76, Math.max(13, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: TEAL_D, maxW });
+    txt(g, sub, h.x + h.w / 2, sy, ss, { f: FB, w: '800', col: TEAL_D, maxW });
   } else {
     txt(g, title, h.x + h.w / 2, h.y + h.h * 0.38, ts, { col: '#fff', stroke: INK, sk: 0.22, maxW });
-    txt(g, sub, h.x + h.w / 2, h.y + h.h * 0.8, Math.max(13, Math.min(13 * u, h.h * 0.26)), { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
+    txt(g, sub, h.x + h.w / 2, sy, ss, { f: FB, w: '800', col: CREAM, stroke: INK, sk: 0.3, maxW });
   }
   // fix 10: the first-time mechanic line fades in ~3 s; a small "?" next to the level title (and the title itself)
   //   re-shows it in plain words, one mechanic per tap
   const mechs = showBtns ? Object.keys(MECH).filter(k => MECH_LINE[k] && safe(() => MECH[k](sess.puz || {}), false)) : [];
   if (mechs.length) {
     // fix3 (critic r2, grandparent 2): the "?" read as ~20 px; now ~28 px across (the tap area was already the whole title)
-    const tW = Math.min(tw(g, title, ts), maxW), rq = Math.max(13, ts * 0.62);
-    const qx = h.x + h.w / 2 + tW / 2 + rq + 5, qy = h.y + h.h * (plaque ? 0.4 : 0.38);
-    const room = qx + rq <= h.x + h.w - (L.m + dd + 4);
+    const tW = Math.min(tw(g, title, ts), maxW), qy = h.y + h.h * (plaque ? 0.4 : 0.38), edge = h.x + h.w - (L.m + dd);
+    // critic 2026-10-31 (curator): on short landscape HUDs the circle reached down over the wider subtitle; clear both
+    //   lines, and on the narrowest phones fall back to a compact circle (glyph still ≥ 14 px) before dropping it
+    let rq = Math.max(13, ts * 0.62), qx = 0, room = false;
+    for (const [r, gap, pad] of [[rq, 5, 4], [11, 3, 2]]) {
+      const sW = qy + r > sy - ss * 0.55 ? Math.min(tw(g, sub, ss, FB, '800'), maxW) : 0;
+      rq = r; qx = h.x + h.w / 2 + Math.max(tW, sW) / 2 + r + gap;
+      if ((room = qx + r <= edge - pad)) break;
+    }
     if (room) {
       g.save(); g.beginPath(); g.arc(qx, qy, rq, 0, 7); g.fillStyle = CREAM; g.fill();
       g.lineWidth = Math.max(1.5, 2 * u); g.strokeStyle = INK; g.stroke(); g.restore();
