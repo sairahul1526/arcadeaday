@@ -39,6 +39,8 @@ for (const p of want) {
   await cp(SRC, dir, { recursive: true });
   const tag = `<script>window.__PORTAL = '${p}';</script>` + (PORTALS[p] ? '\n' + PORTALS[p] : '');
   await writeFile(join(dir, 'index.html'), html0.replace(YT, tag));
+  // Bridge loads ./playgama-bridge-config.json next to index.html; the Playgama console refuses a build without it.
+  if (p === 'playgama') await writeFile(join(dir, 'playgama-bridge-config.json'), JSON.stringify({ platforms: {} }, null, 2) + '\n');
   execFileSync('zip', ['-qr', '-X', zip, '.', '-x', '.DS_Store'], { cwd: dir });
   console.log(`✓ ${p}: ${zip} (${((await stat(zip)).size / 1024).toFixed(0)} KB)`);
 }
