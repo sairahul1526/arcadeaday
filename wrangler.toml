@@ -1,0 +1,11 @@
+# Cloudflare Pages project behind arcadeaday.com. `npx wrangler pages deploy games ...` reads this file:
+# the static site is games/, Pages Functions live in functions/ (only /api/*), D1 holds analytics events.
+# The dashboard had no bindings or env vars before this file (checked 2026-11-02); edit settings here, not there.
+name = "onemoretry-games"
+pages_build_output_dir = "games"
+compatibility_date = "2026-10-06"
+
+[[d1_databases]]
+binding = "EV"
+database_name = "arcadeaday-events"
+database_id = "cf5734f0-09bb-4bd8-8bcf-d212b82e8358"

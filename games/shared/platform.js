@@ -16,8 +16,9 @@ const QA = /[?&]qa=1\b/.test(location.search);
 const SAVE_GAP = 1000; // ms between real writes
 const MAX_SAVE = 500 * 1024; // Playables limit on saveData size (bytes, roughly chars)
 
-// Analytics endpoint (same-origin path, e.g. '/api/ev'). Empty = P.event is a no-op. Web only.
-const ANALYTICS_URL = '';
+// Analytics endpoint (functions/api/ev.js -> D1, read with tools/analytics/report.mjs). Empty = P.event is a no-op.
+const ANALYTICS_URL = '/api/ev';
+const IST = 5.5 * 3600e3;
 // Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|playgama|poki or window.__PORTAL set by the portal build.
 const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'playgama', 'poki'];
 const portalName = (() => {
@@ -27,6 +28,28 @@ const portalName = (() => {
   n = n.toLowerCase();
   return PORTALS.includes(n) ? n : '';
 })();
+// Events go out only from our own site: never from YouTube or a portal build, never with ?qa=1,
+// and on localhost only with ?ev=1 (wrangler pages dev). No cookies; the session id lives for one page load.
+const evOn = (() => {
+  if (Y || portalName || QA || !ANALYTICS_URL) return false;
+  try {
+    const h = location.hostname;
+    if (/^(www\.)?arcadeaday\.com$|\.pages\.dev$/.test(h)) return true;
+    return /^(localhost|127\.0\.0\.1)$/.test(h) && /[?&]ev=1\b/.test(location.search);
+  } catch { return false; }
+})();
+const evGame = evOn ? location.pathname.split('/').filter(Boolean)[0] || '' : '';
+const evSid = evOn ? Math.random().toString(36).slice(2, 10) : '';
+const evTouch = (() => { try { return evOn && matchMedia('(pointer: coarse)').matches ? 1 : 0; } catch { return 0; } })();
+let evAge = null, evShown = false, evT = 0, evMs = 0;
+const evShow = () => { if (evShown) return; evShown = true; evT = Date.now(); };
+// Every hide reports the visible time so far; report.mjs takes the largest per session.
+const evHide = () => {
+  if (!evShown) return;
+  evShown = false;
+  evMs += Date.now() - evT;
+  if (readyDone) P.event('session_end', { secs: Math.round(evMs / 1000) });
+};
 const sdkCall = fn => { try { const r = fn(); if (r && r.catch) r.catch(() => {}); } catch {} };
 let portalInited = false, gameplayOn = false;
 
@@ -102,9 +125,16 @@ const P = {
       try { Y.system.onResume(() => setPaused(false)); } catch (e) { P.error(e); }
     } else {
       // The ONLY place a game may listen to visibility/pagehide, and only on the web.
-      document.addEventListener('visibilitychange', () => setPaused(document.hidden));
-      addEventListener('pagehide', () => { P.flush(); setPaused(true); });
-      addEventListener('pageshow', e => { if (e.persisted) setPaused(false); });
+      document.addEventListener('visibilitychange', () => { setPaused(document.hidden); document.hidden ? evHide() : evShow(); });
+      addEventListener('pagehide', () => { evHide(); P.flush(); setPaused(true); });
+      addEventListener('pageshow', e => { if (e.persisted) { setPaused(false); evShow(); } });
+      if (evOn) {
+        const today = Math.floor((Date.now() + IST) / 864e5);
+        let first = parseInt(ls.get(opts.store + 'first'), 10);
+        if (!(first <= today)) { first = today; ls.set(opts.store + 'first', String(today)); }
+        evAge = today - first;
+        if (!document.hidden) evShow();
+      }
       // Keep the hub's "your best" readable even for saves made before best() existed.
       if (d.best > 0 && !ls.get(opts.store + 'best')) ls.set(opts.store + 'best', String(d.best));
     }
@@ -182,13 +212,22 @@ const P = {
     if (Y) try { Y.game.gameReady(); } catch (e) { P.error(e); }
     P.loadingDone();
     if (portalName === 'playgama') pg(b => b.platform.sendMessage('game_ready'));
+    if (evOn) {
+      let ref = '';
+      try { const r = document.referrer && new URL(document.referrer).hostname; if (r && r !== location.hostname) ref = r; } catch {}
+      P.event('session_start', ref ? { ref } : {});
+    }
   },
 
-  /** Analytics. No-op unless ANALYTICS_URL is set and env is 'web'. Never throws, never blocks. */
+  /**
+   * Analytics: P.event('level_start', { id: 7 }). Pass the level as `id` (stored as its own column) and keep data
+   * small (512 chars). platform.js sends session_start (on ready) and session_end (on every hide) itself.
+   * Only sent from arcadeaday.com and *.pages.dev previews, see evOn. Never throws, never blocks.
+   */
   event(name, data) {
-    if (P.env !== 'web' || !ANALYTICS_URL) return;
+    if (!evOn) return;
     try {
-      const body = JSON.stringify({ e: name, d: data || {}, t: Date.now(), p: portalName });
+      const body = JSON.stringify({ g: evGame, e: name, d: data || {}, s: evSid, a: evAge, m: evTouch });
       if (navigator.sendBeacon) navigator.sendBeacon(ANALYTICS_URL, body);
     } catch {}
   },
