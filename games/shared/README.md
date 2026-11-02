@@ -38,6 +38,7 @@ P.ready();                                        // interactable; always after 
 | `P.link(url)` | navigates (for example `P.link('../')` for "more games"); no-op on yt |
 | `P.lang` | `system.getLanguage()` on yt, `navigator.language` on web |
 | `P.error(e)` | `console.warn` plus `health.logError()` on yt. It never throws, and it is never a console error. |
+| `P.event(name, data)` | Analytics beacon to `/api/ev` (D1; PLAYBOOK §3 Analytics). Sent only from arcadeaday.com, www and `*.pages.dev`, never on yt, in a portal build or under `?qa=1`; on localhost only with `?ev=1`. Pass the level as `data.id`; keep data under 512 chars. `session_start` (on `ready()`) and `session_end` (on every hide) are sent for you. |
 
 When `P.qa` is on, `window.__P = P` as well.
 

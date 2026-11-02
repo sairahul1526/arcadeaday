@@ -116,6 +116,7 @@ The API:
 | `P.canShare`, `P.canLink`, `P.showMute` | `false` on yt |
 | `P.lang` | from `system.getLanguage()`; English-only is fine for now |
 | `P.error(e)` | yt: `health.logError()` |
+| `P.event(name, data)` | analytics beacon to `/api/ev` (see Analytics below); pass the level as `data.id` |
 
 `P.init` must await `ytgame.game.loadData()` and handle an empty string (no save yet).
 
@@ -160,6 +161,17 @@ It prints a PASS/FAIL table and exits non-zero on any MUST failure. Checks:
 - `build-site.mjs` ignores `shared/` and `yt/`.
 - `.gitignore` adds `studio/` and `dist/`.
 - Prove the infra on a tiny fixture game (`tools/fixtures/hello-playable/`) before the day's game depends on it.
+
+### Analytics (live since 2026-11-02)
+- **Path:** `P.event(name, data)` sends a beacon to `/api/ev`. That is `functions/api/ev.js`, a Pages Function that ships with the normal `wrangler pages deploy`. It writes to the D1 database `arcadeaday-events`, table `ev` (`tools/analytics/schema.sql`). The repo-root `wrangler.toml` holds the D1 binding `EV` and is the Pages project's config: edit settings there, never in the dashboard.
+- **Automatic events:** `platform.js` sends `session_start` on `P.ready()`, with the referrer host. On every hide it sends `session_end` with the visible seconds so far.
+- **Game events:** every game sends `level_start`, `level_complete`, `level_fail` and `quit_level`, with the level as `id`, plus `stars` and `secs` where they exist.
+- **Where events go out:** only from arcadeaday.com, www and `*.pages.dev` previews. Never from YouTube, a portal build or `?qa=1`. On localhost only with `?ev=1`, under `wrangler pages dev games` (launch config `pages-dev`).
+- **Privacy:** no cookies, no IPs, no ids that outlive a page load. `age` is days since this device first opened the game, from `localStorage[store+'first']`. Country comes from Cloudflare.
+- **Read it:**
+  - `node tools/analytics/report.mjs [--days 7] [--game slug] [--previews] [--local]` prints sessions, median length, returning share, referrers and the level funnel with its biggest drop-off.
+  - Ad-hoc SQL: `npx wrangler d1 execute arcadeaday-events --remote --command "..."`.
+- **Limits:** the free tier allows 100k D1 writes a day, about 5–10k sessions. If a game breaks out, sample the level events before the limit hits; a failed write never affects the game.
 
 ### Playables CSP
 Emulate it exactly:
@@ -417,7 +429,7 @@ Pillars, in priority order:
 1. **Distribution is the business.** Fewer, better games, each on as many portals as possible. A great game that lives only on arcadeaday.com is unfinished.
 2. **Scout proven hits and remix them.** Keep the proven core mechanic, change the theme, add one twist. Never a 1:1 clone of the current trending hit. Every concept names the store/portal hit, its rating or play-count evidence, the twist, and which portals would want it.
 3. **Quality and engagement.** Portals promote long sessions, replay and return visits. Design for the first 10 seconds, the first 5 minutes and day 2. Family-friendly, so Coolmath-type portals accept it. The GDD states the session-length target, the replay hook, the day-2 reason and the level count.
-4. **Data-driven iteration.** `P.event` fires level_start / level_complete / level_fail / quit_level / session_end. It stays a no-op until a Cloudflare endpoint exists (a user action). Fix where players quit; add levels and seasonal content to games that work.
+4. **Data-driven iteration.** `P.event` fires session_start / session_end (automatic) and level_start / level_complete / level_fail / quit_level into D1 (§3 Analytics, live since 2026-11-02). Every Saturday improve run reads `node tools/analytics/report.mjs` first. Fix where players quit; add levels and seasonal content to games that work.
 5. **Portal relationships.** `studio/portals.md` is the relationship log: submission URLs, requirements, contacts, what was sent, replies, genres asked for, licence status. Pitch licences, and ask portals which genres they want.
 
 **Cadence (the user, 2026-10-30): one game a week.** "think, create, improve, build with the best outputs for a week, from monday to saturday and upload on sunday".
