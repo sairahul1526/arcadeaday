@@ -1,6 +1,6 @@
 # Daily game playbook v2: the studio
 
-Arcade a Day ships **one new game every day**. From Day 10 (2026-10-16), every game must feel like a big studio spent years on it. In the user's words, it should be "really god level good, as if 1000s of game devs worked on it for years".
+Arcade a Day ships **one new game every week** (v3 cadence, §11; Days 1–10 shipped daily). From Day 10 (2026-10-16), every game must feel like a big studio spent years on it. In the user's words, it should be "really god level good, as if 1000s of game devs worked on it for years".
 
 Days 1–9 were one-tap score toys: one mechanic, sparse scenes, overlapping popup text, all built by one agent in one day. v2 runs each day as a studio instead:
 - research
@@ -420,7 +420,15 @@ Pillars, in priority order:
 4. **Data-driven iteration.** `P.event` fires level_start / level_complete / level_fail / quit_level / session_end. It stays a no-op until a Cloudflare endpoint exists (a user action). Fix where players quit; add levels and seasonal content to games that work.
 5. **Portal relationships.** `studio/portals.md` is the relationship log: submission URLs, requirements, contacts, what was sent, replies, genres asked for, licence status. Pitch licences, and ask portals which genres they want.
 
-**Cadence:** one new full game per week (never two per IST day), shipped only through the §4 gate. Every run is a studio day: preflight (read this, `studio/STATE.md`, `studio/portals.md`, games.json) → daily scout into `studio/scout/<date>/SCOUT.md` → advance the current game ≥ 1 stage → on ship days, §7–§10 plus portal packs → on other days, grow one live game (drop-off fix, levels or seasonal content, a portal pack for an older game worth distributing, or a portal email draft).
+**Cadence (the user, 2026-10-30): one game a week.** "think, create, improve, build with the best outputs for a week, from monday to saturday and upload on sunday".
+- **Monday, think:** full scout (YouTube, Reels, Play Store viral, store charts, mega-hit teardown, portals) → ≥ 5 mega-hit-league concepts (≥ 2 built on a recent viral Play game) → §5 scoring → winner → GDD → `wip/<slug>` branch.
+- **Tuesday, create the core:** core loop + juice on the platform layer, level tools and tuning bots, hero art approved, first playable.
+- **Wednesday, create the content:** all art, the full level set tuned by bots, meta (dailies, collection, unlocks), audio, desktop/landscape layouts.
+- **Thursday, build it solid:** portal adapter, analytics, Playables build (playables-check PASS), full QA swarm, every blocker fixed.
+- **Friday, improve:** critic panel r1 → fix round → critic panel r2 → fix round.
+- **Saturday, finish:** polish to the gate (every critic ≥ 8, mean ≥ 9, zero blockers); prepare games.json, README, og, portal packs, SUBMIT.md, pitches, Playables zip, video. Push to `wip/<slug>`, don't deploy.
+- **Sunday, release and upload:** last fix round + panel if needed; ship (§7–§10) only through the full gate, otherwise the game gets one more week; then the Sunday portal uploads for every signed-in portal.
+- Never more than one new game a week, never two on the same IST day. Every run moves the game at least one §4 stage; spare time on Mon–Sat goes to one live-game task (drop-off fix, levels/seasonal content, a portal pack for an older game, or a portal email draft). The old deadline fallback (mean ≥ 8) no longer applies to new games.
 
 **Portal targets and packs** (`dist/portals/<portal>/<slug>.zip` and `dist/portals/<slug>-SUBMIT.md`, with media in `dist/portals/<slug>/media/`):
 - Coolmath (licence pitch: `dist/portals/<slug>-pitch-coolmath.md`)
