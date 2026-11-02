@@ -37,7 +37,7 @@ function q(sql) {
 const sessions = q(`SELECT game, s, MIN(day) AS day, MIN(age) AS age, MAX(mob) AS mob,
   MAX(CASE WHEN e = 'session_end' THEN CAST(json_extract(d, '$.secs') AS INTEGER) END) AS secs,
   MAX(CASE WHEN e = 'session_start' THEN json_extract(d, '$.ref') END) AS ref
-  FROM ev WHERE ${where} AND s IS NOT NULL GROUP BY game, s LIMIT 500000`);
+  FROM ev WHERE ${where} AND s IS NOT NULL GROUP BY game, s HAVING MAX(e = 'session_start') = 1 LIMIT 500000`);
 const levels = q(`SELECT game, lvl, e, COUNT(*) AS n, COUNT(DISTINCT s) AS u FROM ev
   WHERE ${where} AND lvl IS NOT NULL AND e IN ('level_start', 'level_complete', 'level_fail', 'quit_level')
   GROUP BY game, lvl, e`);
