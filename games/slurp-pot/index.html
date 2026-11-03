@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- build:head --><!-- /build:head -->
+<meta name="theme-color" content="#FFF6E3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍲</text></svg>">
+<link rel="stylesheet" href="../shared/fonts.css">
+<style>
+  html, body { margin: 0; background: #FFF6E3; overscroll-behavior: none; }
+  html { scrollbar-width: none; } html::-webkit-scrollbar { display: none; }
+  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; font-family: Nunito, system-ui, -apple-system, sans-serif; color: #3A2418; }
+  /* Two stacked canvases: #c = WebGL scene, #ui = 2D HUD, cards and stick (all pointer input lands on #ui). */
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; background: #FFF6E3; }
+  #stage canvas { display: block; position: absolute; left: 0; top: 0; width: 100%; height: 100%; touch-action: none; outline: none; }
+  #c { z-index: 0; }
+  #ui { z-index: 1; }
+  /* Site chips (web only, injected by the site build) wear the paper look and hide during play and on cards
+     (game.js toggles body.sp-play). visibility, not display, so layout.js keeps measuring the same inset. */
+  nav.back { left: 12px; bottom: 12px; gap: 8px; z-index: 2; transition: opacity .18s ease, visibility .18s; }
+  nav.back a { padding: 8px 14px; background: #FFF6E3; color: #3A2418; border: 2px solid #3A2418; border-radius: 99px;
+    box-shadow: 0 3px 0 #EBD9B8; font: 800 13px/1 Nunito, system-ui, sans-serif; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  nav.back a:hover, nav.back a:focus-visible { background: #fff; color: #3A2418; }
+  body.sp-play nav.back { opacity: 0; visibility: hidden; pointer-events: none; }
+  @media (min-width: 900px) and (min-height: 600px) {
+    nav.back { left: 16px; bottom: 16px; gap: 10px; }
+    nav.back a { padding: 11px 20px; font-size: 16px; box-shadow: 0 4px 0 #EBD9B8; }
+  }
+  @media (min-width: 1800px) and (min-height: 1000px) {
+    nav.back { left: 22px; bottom: 22px; gap: 12px; }
+    nav.back a { padding: 13px 24px; font-size: 19px; border-width: 3px; }
+  }
+</style>
+</head>
+<body>
+<!-- yt:body -->
+<div id="stage"><canvas id="c"></canvas><canvas id="ui"></canvas></div>
+<!-- /yt:body -->
+<!-- build:body --><!-- /build:body -->
+<script type="module" src="game.js"></script>
+</body>
+</html>

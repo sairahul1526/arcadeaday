@@ -1,0 +1,1052 @@
+{
+  "pot-sad": {
+    "prompt": "The same golden cooking pot character from the reference image: identical round pot shape and proportions, the same rich sunflower-gold glossy enamel, the same two chunky loop handles, the same glowing orange stew with green herb flecks, the same soft pink blush under the eyes, no mouth; only the eyes and mood change: droopy half-closed sad sleepy eyes looking down, no tears, the stew glowing dimmer with only a faint wisp of steam, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "4ef2196c5f3aeb5f0164376507f0f5d4",
+      "31ed34e2847de90311920e5b045ce4b1"
+    ],
+    "bytes": 13144,
+    "at": "2026-11-03T07:43:51.423Z"
+  },
+  "pot-wide": {
+    "prompt": "The same golden cooking pot character from the reference image: identical round pot shape and proportions, the same rich sunflower-gold glossy enamel, the same two chunky loop handles, the same glowing orange stew with green herb flecks, the same soft pink blush under the eyes, no mouth; only the eyes and mood change: huge wide round sparkling eyes with big white glints, amazed and hungry, three tiny golden drool sparkle droplets on the front rim just below the eyes, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "4687df3e9db3eddac997a47a30c5a0ab",
+      "af35213c14d0f4e9815de370c87104d0"
+    ],
+    "bytes": 14122,
+    "at": "2026-11-03T07:44:33.862Z"
+  },
+  "pot-happy": {
+    "prompt": "The same golden cooking pot character from the reference image: identical round pot shape and proportions, the same rich sunflower-gold glossy enamel, the same two chunky loop handles, the same glowing orange stew with green herb flecks, the same soft pink blush under the eyes, no mouth; only the eyes and mood change: eyes closed in happy upside-down crescent arcs, the pot tilted a little as if bouncing with joy, a small heart-shaped steam puff rising above the stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "c4838c239c78116c91fe30046301afe8",
+      "fd743a38e39bf419c100ebd7051c0ac2"
+    ],
+    "bytes": 13210,
+    "at": "2026-11-03T07:44:46.691Z"
+  },
+  "ing-strawberry": {
+    "prompt": "A single ripe red strawberry toy with green leaf cap, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "c8816fcf5ae6a6d6dd84843c6490baf1",
+      "7f64bb09b179067731c0e81a203cbf21"
+    ],
+    "bytes": 2252,
+    "at": "2026-11-03T07:45:26.704Z"
+  },
+  "ing-lemon": {
+    "prompt": "A single oval lemon toy, longer than it is wide, with a pointed nub at each end, bright pale lemon yellow (not orange), one small green leaf, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "b73b65c0330df1425e380b409fe6f4f8",
+      "e2072ebf55d2695b1d27b110eabb6b0d"
+    ],
+    "bytes": 1814,
+    "at": "2026-11-03T08:23:12.219Z"
+  },
+  "ing-cheese": {
+    "prompt": "A single yellow cheese wedge toy with round holes, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "800bde0939ed1716f29ac0485a114f8d",
+      "2cf539c017c81c4c2bed0c875d1b5f49"
+    ],
+    "bytes": 2062,
+    "at": "2026-11-03T07:46:22.438Z"
+  },
+  "ing-tomato": {
+    "prompt": "A single round red tomato toy with a green star-shaped stem, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "11c9c4a6ff13913d62fbab0a29f35c36",
+      "410e8b3165a52cf5e569fd1b08de2c52"
+    ],
+    "bytes": 2136,
+    "at": "2026-11-03T07:46:33.419Z"
+  },
+  "ing-corn": {
+    "prompt": "A single corn cob toy with golden kernels and green husk leaves, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "96f8dc7a56b71a10e21dd41f0afc5075",
+      "92e333448eced1bd81f3d89743b9221c"
+    ],
+    "bytes": 3388,
+    "at": "2026-11-03T07:47:35.790Z"
+  },
+  "ing-cupcake": {
+    "prompt": "A single cupcake toy with pink frosting swirl and a cherry on top in a paper cup, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "d4bb134a8c4b0f604a8090d2c82b1acc",
+      "63b6fe620f3aa1d63952ac7af2bc6794"
+    ],
+    "bytes": 3150,
+    "at": "2026-11-03T07:47:39.592Z"
+  },
+  "ing-apple": {
+    "prompt": "A single shiny red apple toy with a brown stem and one leaf, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "da3591978c7235a8525d9912a5d56820",
+      "b229289f36cd264b8d3e0d90106dda2f"
+    ],
+    "bytes": 2434,
+    "at": "2026-11-03T07:47:50.303Z"
+  },
+  "ing-banana": {
+    "prompt": "A single curved yellow banana toy, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "cb49d7c08c2f5c51304c939545d5593c",
+      "3d33fc92062b8977f6180ed67cabbbe7"
+    ],
+    "bytes": 2294,
+    "at": "2026-11-03T07:47:51.589Z"
+  },
+  "boss-hamper": {
+    "prompt": "A woven wicker picnic hamper toy with lid slightly open and a gingham cloth peeking out, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "ddf2fb5816e3cabd25320775ff8a9cc6",
+      "c6ba8c43b5a6268d15fe42117198f3a3"
+    ],
+    "bytes": 10114,
+    "at": "2026-11-03T07:48:33.728Z"
+  },
+  "boss-table": {
+    "prompt": "A wooden picnic table toy with benches and a red gingham cloth, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "366370e58b7bbc1307a9f20c2582ad76",
+      "dcadd2e963e77ff4b2cd3ba75d282fcd"
+    ],
+    "bytes": 8526,
+    "at": "2026-11-03T07:48:33.922Z"
+  },
+  "ing-sandwich": {
+    "prompt": "A single triangle sandwich toy with lettuce, tomato and cheese layers, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "a5392c075e00c9fe0c48d810a003fb53",
+      "c139d03e9396a46c857bea8ea0758eb9"
+    ],
+    "bytes": 2706,
+    "at": "2026-11-03T07:48:48.259Z"
+  },
+  "ing-watermelon": {
+    "prompt": "A single watermelon slice toy, green rind, red flesh, black seeds, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "79238ffca5f415ed45ab508eb26d53b2",
+      "8ba47a1b5f7d9367e40779e4c6613dae"
+    ],
+    "bytes": 2468,
+    "at": "2026-11-03T07:49:28.849Z"
+  },
+  "boss-watermelon": {
+    "prompt": "A whole big striped green watermelon toy, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "5de017e07d3cb1714c6e0a3bdff8e9e6",
+      "ee0f3821a791a5cf05b28e0d3bc50d76"
+    ],
+    "bytes": 4076,
+    "at": "2026-11-03T07:49:46.824Z"
+  },
+  "boss-bigsandwich": {
+    "prompt": "A giant tall stacked club sandwich toy with a toothpick flag without text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "41c869e485280c695f390a5c55e3dc59",
+      "59f77c354ccde902f120a6266ae6307b"
+    ],
+    "bytes": 8184,
+    "at": "2026-11-03T07:49:49.486Z"
+  },
+  "boss-birthdaycake": {
+    "prompt": "A huge three-layer pink birthday cake toy with candles, sprinkles and cream swirls, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "225fc208ce0ae9e86bab563c0b3bef40",
+      "1c3323c73069227b094a568410b5a44c"
+    ],
+    "bytes": 7772,
+    "at": "2026-11-03T07:49:53.672Z"
+  },
+  "icon-coin": {
+    "prompt": "A shiny gold coin embossed with a small ladle shape, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "9f4ee130062a59d36b503c8fd80730a7",
+      "a6434c30493f52d68a1d99f1dbf6dee4"
+    ],
+    "bytes": 2454,
+    "at": "2026-11-03T07:50:33.065Z"
+  },
+  "icon-freeze": {
+    "prompt": "A light blue ice cube with a small clock face frozen inside, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "07021ae25ce74994e3bb748e6188ee97",
+      "73e811270d122def403ade257fed90ca"
+    ],
+    "bytes": 2312,
+    "at": "2026-11-03T07:50:36.394Z"
+  },
+  "icon-magnet": {
+    "prompt": "A red horseshoe magnet with silver tips and tiny sparkles, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "dae673f788cec6a818d48176a5d6cf3b",
+      "fc456b7bd46f697b2b80fa31545b99ec"
+    ],
+    "bytes": 2642,
+    "at": "2026-11-03T07:50:36.748Z"
+  },
+  "icon-padlock": {
+    "prompt": "A chunky golden padlock, closed, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "d266da8757736b22e9b132da02e39c6b",
+      "3a808942714df7c9cc3015fc5ece6090"
+    ],
+    "bytes": 2826,
+    "at": "2026-11-03T07:51:35.131Z"
+  },
+  "icon-chest": {
+    "prompt": "A small wooden treasure chest with gold trim, lid slightly open with golden glow, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "5e45f99f67968853bdf43ae937fdfe27",
+      "87a6c8009e4a36ebc39f9248ee7b7def"
+    ],
+    "bytes": 3718,
+    "at": "2026-11-03T07:52:25.446Z"
+  },
+  "icon-star": {
+    "prompt": "A chunky glossy golden star, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "4709b82f6f69bde76c36b5c241fd743b",
+      "284969211f622f3e9cc7a01fe9276ed0"
+    ],
+    "bytes": 2176,
+    "at": "2026-11-03T07:52:26.168Z"
+  },
+  "icon-megarim": {
+    "prompt": "A golden ring with four small arrows pointing outward, glowing, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "6cbbe76ac18bac1f236ae1c747f211ad",
+      "0cb61e2a8042de9e5defabf392004d21"
+    ],
+    "bytes": 3228,
+    "at": "2026-11-03T07:52:48.527Z"
+  },
+  "icon-ladle": {
+    "prompt": "A golden soup ladle with a star on the handle, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "1ae4b69e5b3cd462dd7c824e7e8b659f",
+      "552861bfa259b36df0528a60002734a9"
+    ],
+    "bytes": 2414,
+    "at": "2026-11-03T07:53:27.619Z"
+  },
+  "icon-chefhat": {
+    "prompt": "A white puffy chef hat, plain white background with a soft grey contact shadow, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "87bbd5e2a506334a23b0a139c7afba0f",
+      "c6fc8497fe16a1259244d44d4ca73e72"
+    ],
+    "bytes": 1816,
+    "at": "2026-11-03T07:53:28.489Z"
+  },
+  "icon-gift": {
+    "prompt": "A gift box wrapped in red paper with a gold ribbon bow, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "b76ed6b7eed12328d7cf318e367b1577",
+      "ff49146d16feb1c02fec58532092182a"
+    ],
+    "bytes": 2872,
+    "at": "2026-11-03T07:53:38.006Z"
+  },
+  "icon-lid": {
+    "prompt": "A shiny golden pot lid with a round knob and a small glowing shield sparkle, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "eac2cdd7897b6220bf9f49051b9826d6",
+      "dfd866ee4b7d891b7e2e1256d155ab87"
+    ],
+    "bytes": 2750,
+    "at": "2026-11-03T07:54:24.320Z"
+  },
+  "icon-clock": {
+    "prompt": "A round cream kitchen timer clock with a gold rim and a single hand, no numbers, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "6b1018e238e6b2750334b29e2eaddb31",
+      "6a072c87932677de4ddc3cf2ed86d5ff"
+    ],
+    "bytes": 2970,
+    "at": "2026-11-03T07:54:36.237Z"
+  },
+  "icon-settings": {
+    "prompt": "Two crossed wooden kitchen spoons in warm honey-coloured wood, plain white background, centered, full object. Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "1093aa9f34e4eeaa645358cccc7dc74a",
+      "ba558e3f0ce8944d381850bd76fefae3"
+    ],
+    "bytes": 3280,
+    "at": "2026-11-03T07:55:26.449Z"
+  },
+  "ui-stamp": {
+    "prompt": "A round red rubber-stamp ink ring with rough grungy edges and an empty centre, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "43fddec6bc9f962651858584fdce7378",
+      "6a4f818181e1a7bbe809100040606cae"
+    ],
+    "bytes": 6818,
+    "at": "2026-11-03T07:57:29.331Z"
+  },
+  "skin-cauldron": {
+    "prompt": "The same cute pot character restyled as a shiny copper cauldron with three stubby feet and a thick rolled lip, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "e2f43e866d935782ff74d971f6ddfdf3",
+      "bb1452792d206696beeb340ba5ca0d48"
+    ],
+    "bytes": 6716,
+    "at": "2026-11-03T07:59:36.511Z"
+  },
+  "skin-ricecooker": {
+    "prompt": "The same cute pot character restyled as a cream rice cooker with a hinged lid open at the back and two tiny green and red button lights on the front, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "35f8e1b926f4fa43bf3813314cad32e4",
+      "712ab14100948d748b9982937b122f52"
+    ],
+    "bytes": 5820,
+    "at": "2026-11-03T07:59:36.944Z"
+  },
+  "skin-steamer": {
+    "prompt": "The same cute pot character restyled as a round bamboo bao steamer basket with lashing bands, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "7acec0169e94ec2c41ab788df626a9cb",
+      "1bdbcc43f5de58a4888d820f32df9249"
+    ],
+    "bytes": 9586,
+    "at": "2026-11-03T08:00:59.542Z"
+  },
+  "skin-dutch": {
+    "prompt": "The same cute pot character restyled as a mint green heavy dutch oven with side knobs and its lid tilted behind, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "9065ca653459f1988fec41860b109b0c",
+      "816423475b84461116c5e49c1d908067"
+    ],
+    "bytes": 6372,
+    "at": "2026-11-03T08:01:05.368Z"
+  },
+  "skin-royal": {
+    "prompt": "The same cute pot character restyled as a mirror-polished royal gold pot with little crown studs around the rim and sparkles, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "1c62b7a0dc9a0f68857d64eceb573513",
+      "645131567e16658cfbf14d885d82328d"
+    ],
+    "bytes": 9352,
+    "at": "2026-11-03T08:01:30.702Z"
+  },
+  "skin-ufo": {
+    "prompt": "The same cute pot character restyled as a silver flying saucer pot with a wide saucer brim and eight small colourful lights around it, open top with no dome and no glass cover so the glowing orange stew is fully visible, same eyes, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "0f7b7912d4521a7ab59f4cbbe7f921fc",
+      "8c066b6492683ff2066a3531c8a12b4b"
+    ],
+    "bytes": 7062,
+    "at": "2026-11-03T08:23:27.287Z"
+  },
+  "skin-teapot": {
+    "prompt": "The same cute pot character restyled as a round teal teapot with cream polka dots, spout and lid knob at the back, open top with glowing orange stew, same eyes, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "53153e27c15f333805af8b13bae618b0",
+      "458bfadb95d47b649d5e482e05edc179"
+    ],
+    "bytes": 6884,
+    "at": "2026-11-03T08:01:47.080Z"
+  },
+  "skin-starladle": {
+    "prompt": "The same cute pot character restyled in deep night blue enamel with small gold stars and a tiny gold ladle hanging on the side, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "d68d035325766d5c0933fee2a2e882e1",
+      "b85b34914c076cca881b72925faac09f"
+    ],
+    "bytes": 8170,
+    "at": "2026-11-03T08:01:48.725Z"
+  },
+  "ing-jamjar": {
+    "prompt": "A single small glass jar of red berry jam toy with a gingham cloth lid, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "7e3bbb49fe44f3dbee3ca8f46d5da057",
+      "f32c9037f5c6e896755b165ac69ea849"
+    ],
+    "bytes": 3210,
+    "at": "2026-11-03T08:02:29.120Z"
+  },
+  "ing-orange": {
+    "prompt": "A single round orange fruit toy with a small leaf, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "be0bfb27713bee9f08e7efdb3374f931",
+      "2f089f5266d5921b102952c8a0024e08"
+    ],
+    "bytes": 2158,
+    "at": "2026-11-03T08:02:29.680Z"
+  },
+  "ing-donut": {
+    "prompt": "A single donut toy with pink icing and rainbow sprinkles, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "d76b84736764ee245803fc2fc9cd69db",
+      "a466ed34573b15532ed77ad6d4686236"
+    ],
+    "bytes": 3176,
+    "at": "2026-11-03T08:02:30.713Z"
+  },
+  "ing-pretzel": {
+    "prompt": "A single soft brown pretzel toy with salt crystals, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "7e7e30d44dd8506f214f029b883074e2",
+      "c76d88c413212c93bf353dec1e789f86"
+    ],
+    "bytes": 3686,
+    "at": "2026-11-03T08:03:28.471Z"
+  },
+  "ing-croissant": {
+    "prompt": "A single golden flaky croissant toy, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "f4c1c73b961246d5d57b429b27a8cc4b",
+      "21ffd606f99165ef4d68f5f9f456f76e"
+    ],
+    "bytes": 2438,
+    "at": "2026-11-03T08:03:34.738Z"
+  },
+  "ing-broccoli": {
+    "prompt": "A single green broccoli floret toy with a short pale green stalk, standing on nothing, no plate, no base, no stand, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "4d54d43fd6df60a1110a9caf0e2eba34",
+      "2c16ec5b6051c27c6b5369528cd01717"
+    ],
+    "bytes": 2954,
+    "at": "2026-11-03T08:22:42.325Z"
+  },
+  "ing-eggplant": {
+    "prompt": "A single glossy purple eggplant toy with a green cap, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "dd5a946e68644627b074e086aee98ab1",
+      "2cb3a40a8f296663f21b1aac5cb8b3cf"
+    ],
+    "bytes": 2238,
+    "at": "2026-11-03T08:03:49.235Z"
+  },
+  "ing-pizzaslice": {
+    "prompt": "A single pizza slice toy with melted cheese and round red pepperoni, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "9e9876316e86fc7ca9e64a3c755dbb13",
+      "7c904d87339e7f6736eb4ba28b3ccba9"
+    ],
+    "bytes": 3806,
+    "at": "2026-11-03T08:04:07.097Z"
+  },
+  "ing-baguette": {
+    "prompt": "A single long golden baguette toy with diagonal score marks, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "be4c61d091c09eb776f8fac53e025b80",
+      "bedf795ee881212e245bfaf640f8e9ce"
+    ],
+    "bytes": 1768,
+    "at": "2026-11-03T08:04:09.420Z"
+  },
+  "ing-pumpkin": {
+    "prompt": "A single round orange pumpkin toy with a curly stem, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "249184aede9724fd6149914a9ef93391",
+      "da66db47e801f2f6b7985a3be7c28c33"
+    ],
+    "bytes": 3088,
+    "at": "2026-11-03T08:05:27.954Z"
+  },
+  "ing-cheesewheel": {
+    "prompt": "A single whole round yellow cheese wheel toy with one small wedge cut out, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "73c83b85b021a8587d6fa5d7b49c53a4",
+      "c465afa0ca4decc7f449c3481d2f071c"
+    ],
+    "bytes": 2380,
+    "at": "2026-11-03T08:05:48.558Z"
+  },
+  "ing-pineapple": {
+    "prompt": "A single pineapple toy with spiky green crown, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "fadd98bc81151e5ab0db5fa8538480cc",
+      "062fe3929128d5ea3565b537354951f2"
+    ],
+    "bytes": 2866,
+    "at": "2026-11-03T08:05:50.905Z"
+  },
+  "ing-hotdog": {
+    "prompt": "A single hot dog toy in a soft bun with a mustard zigzag, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "ee2a84f12f27ec6db1ec9f4406172bb5",
+      "bc99f450f86b75afe03d2a0817c95c94"
+    ],
+    "bytes": 2772,
+    "at": "2026-11-03T08:05:52.877Z"
+  },
+  "ing-fries": {
+    "prompt": "A single red and white paper carton of golden french fries toy, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "71fa9b8db2aaf3cb4a2158034a467d90",
+      "33fc70e6a7c0548345c9063ac17620e4"
+    ],
+    "bytes": 3460,
+    "at": "2026-11-03T08:06:45.629Z"
+  },
+  "ing-burger": {
+    "prompt": "A single cheeseburger toy with sesame bun, lettuce, cheese and tomato, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "b23181cd7135830bbfbf8f53e5a7e0f2",
+      "8fe112c7550840a2c60dd5c7ee69b146"
+    ],
+    "bytes": 3112,
+    "at": "2026-11-03T08:07:11.248Z"
+  },
+  "ing-waffle": {
+    "prompt": "A single square golden waffle toy with a pat of butter and syrup drip, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "8ae8242c5cf3931485f505b2b35e4375",
+      "7a735459f9b438955a3bc60bf0822067"
+    ],
+    "bytes": 3538,
+    "at": "2026-11-03T08:07:33.246Z"
+  },
+  "ing-cottoncandy": {
+    "prompt": "A single fluffy pink cotton candy toy on a paper cone, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "0d519c5ed395f6d94d2186287606c5a3",
+      "7d1b7e34c7a3d590954d04ce774ae565"
+    ],
+    "bytes": 2044,
+    "at": "2026-11-03T08:08:28.087Z"
+  },
+  "ing-coconut": {
+    "prompt": "Half a coconut toy cracked open, brown hairy shell outside and thick bright white flesh inside, seen from a three-quarter angle, no holes, no dots, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "375ed531ba1ec06d4eb1c1964098323c",
+      "a78b6adc46a61084c3aa4b40ffada966"
+    ],
+    "bytes": 2892,
+    "at": "2026-11-03T08:24:46.077Z"
+  },
+  "ing-popcorn": {
+    "prompt": "A single red and white striped popcorn bucket toy overflowing with popcorn, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "bb48746f1a98869f9b011971ecf38e44",
+      "81e27769dad5f93d0127e067b75b05cd"
+    ],
+    "bytes": 3508,
+    "at": "2026-11-03T08:11:09.854Z"
+  },
+  "boss-fruitstall": {
+    "prompt": "A market fruit stall toy with a coral and teal striped awning and crates of fruit, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "0eb06d8bd5cba0c7b0f966e72491de33",
+      "452020bc3e6f7c27fb42d50f5de9253a"
+    ],
+    "bytes": 12364,
+    "at": "2026-11-03T08:11:15.471Z"
+  },
+  "boss-pizza": {
+    "prompt": "A whole giant round pizza toy with pepperoni, olives and melted cheese, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "722dda771c1f6e1b4ea794df8979128c",
+      "89c67af51e4ee546c49d68f5f220f705"
+    ],
+    "bytes": 9658,
+    "at": "2026-11-03T08:12:20.323Z"
+  },
+  "boss-bakeryvan": {
+    "prompt": "A cute cream bakery delivery van toy with a giant croissant on the roof, opaque painted pale blue windows, no seats, no driver, no figures, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "484536a523e2beb9f3a9d0398a8cbdce",
+      "adbdddf3260c110dc2a7e284e76f2eb3"
+    ],
+    "bytes": 6700,
+    "at": "2026-11-03T08:12:21.428Z"
+  },
+  "boss-cheesetower": {
+    "prompt": "A tall wobbly tower of five stacked cheese wheels toy, each wheel smaller than the one below, pale orange-yellow cheese with round holes on the sides, one wedge cut out of the top wheel, a toothpick flag on top, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "a162d9c5efd50589390995a68e0a8e81",
+      "509a236febfe12196ee6d07d33ead6ec"
+    ],
+    "bytes": 5950,
+    "at": "2026-11-03T08:26:29.058Z"
+  },
+  "boss-bakerycart": {
+    "prompt": "A small bakery push cart toy loaded with bread loaves, baguettes and croissants under a scalloped cream-and-red striped canopy, no sign, no board, no lettering anywhere, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "e4d599e9498a67f10b40f4d066e51f57",
+      "d952aafc52fb689f922a0e4eae3a8842"
+    ],
+    "bytes": 12316,
+    "at": "2026-11-03T08:24:44.949Z"
+  },
+  "boss-pizzaoven": {
+    "prompt": "A brick pizza oven market stall toy with a chimney and a warm glowing orange disc in the oven mouth, no flames, no fire, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "855af975bb58126d1666a32a0244b92c",
+      "c29341f11699fec6c18752d7839c0691"
+    ],
+    "bytes": 10328,
+    "at": "2026-11-03T08:14:28.518Z"
+  },
+  "boss-popcorncart": {
+    "prompt": "A red and white striped popcorn cart toy on wheels, overflowing with popcorn, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "22629bb05e72db79060c0154e1a4b279",
+      "ae55f5714512acef7ef7ef1f9f0c7ada"
+    ],
+    "bytes": 11492,
+    "at": "2026-11-03T08:14:54.199Z"
+  },
+  "boss-snackboat": {
+    "prompt": "A small teal snack boat toy with a striped canopy and snacks on deck, opaque painted pale blue cabin windows, no people, no figures, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "9266c4a4902a06eea6b344406a1de679",
+      "856b58275363980ac1891c3a2f05818e"
+    ],
+    "bytes": 10322,
+    "at": "2026-11-03T08:15:00.482Z"
+  },
+  "boss-icecreamkiosk": {
+    "prompt": "A pastel pink ice cream kiosk toy with a giant ice cream cone on the roof, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "2fb1406ae9796456c9d978f0e46a5641",
+      "fd3d23058eab70d1c7ef3cd66cb95b35"
+    ],
+    "bytes": 7782,
+    "at": "2026-11-03T08:15:47.180Z"
+  },
+  "boss-weddingcake": {
+    "prompt": "A tall three-tier cream wedding cake toy with pink roses, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "9de860b5a9dd85d6a6c80068d9d0168b",
+      "93c963aba09f0be05086fb3f46bdfb91"
+    ],
+    "bytes": 6768,
+    "at": "2026-11-03T08:15:49.285Z"
+  },
+  "boss-lighthouse": {
+    "prompt": "A giant jam jar shaped like a lighthouse toy, red and white stripes, glowing lamp top, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "beb0f04b13d8ce2fc2255baa1002542e",
+      "41a476c5271253a4da6e7bcbe598ed3d"
+    ],
+    "bytes": 6276,
+    "at": "2026-11-03T08:15:52.126Z"
+  },
+  "boss-foodtruck": {
+    "prompt": "A cute yellow wind-up food truck toy with a closed serving hatch, a striped awning and a turning gold wind-up key on the back, opaque painted pale blue windows, no seats, no driver, no figures, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "da05948cdf2de16ca9400c6156e1e4da",
+      "fb3e7b65325bbcff60bd9f0a9a89cabc"
+    ],
+    "bytes": 6942,
+    "at": "2026-11-03T08:15:53.659Z"
+  },
+  "map-picnic": {
+    "prompt": "Top-down view of a toy diorama picnic park on a wooden board. The whole board surface is one giant red-and-cream gingham picnic tablecloth (red and cream checks everywhere, the dominant colour of the image), with a few smaller teal and cream blankets on it, a winding sandy path, little baskets, plates and fruit, a little round fountain; green appears only as a few small rounded hedges, sunflowers and small round trees along the edges, NO grass lawn, NO green floor. Empty environment only: NO animals, NO people, NO characters, no text",
+    "aspect": "9:16",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "45905a5896c2e59e3ee25176ce759002"
+    ],
+    "bytes": 31874,
+    "at": "2026-11-03T08:25:34.718Z"
+  },
+  "map-market": {
+    "prompt": "Top-down view of a toy diorama market street on a wooden board: cobblestones, teal and coral striped awnings, fruit crates, brick shopfronts, little parked toy cars with opaque painted windows. Empty environment only: NO animals, NO people, no text",
+    "aspect": "9:16",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "9ad9a36cea08c1c1cd2ac154e28cf3f1"
+    ],
+    "bytes": 74956,
+    "at": "2026-11-03T08:16:36.053Z"
+  },
+  "map-harbour": {
+    "prompt": "Top-down view of a toy diorama harbour pier on a wooden board: plank boardwalk, piers over bright teal water, buoys, small boats, snack kiosks, a red and white lighthouse at the end. Empty environment only: NO animals, NO people, no text",
+    "aspect": "9:16",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "774212d0f33e5d7ac3faf83e46128115"
+    ],
+    "bytes": 56340,
+    "at": "2026-11-03T08:17:14.283Z"
+  },
+  "icon-cookbook": {
+    "prompt": "A thick red cookbook with a gold spoon on the cover, no text, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "d61f3bef1f318bdfa07623db093e7bdc",
+      "5553313f73f268ee797db66ff37d7b7a"
+    ],
+    "bytes": 2354,
+    "at": "2026-11-03T08:17:29.846Z"
+  },
+  "win-feast": {
+    "prompt": "The same golden pot character, eyes happy, with a tiny white chef hat sitting on its rim, surrounded by a small pink frosted cake, a whole pepperoni pizza, a red apple and a strawberry cupcake (all plain toy food without faces), golden and teal confetti, NO labels, NO text, NO numbers, NO candles, NO figurines, plain white background, centered, full composition",
+    "aspect": "4:3",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 768,
+    "tasks": [
+      "c19ae91cab0594428c5d8d7b83429d00",
+      "0e4bc833ea0f846adea8fc32e87f6019"
+    ],
+    "bytes": 37370,
+    "at": "2026-11-03T08:26:27.314Z"
+  },
+  "skin-wok": {
+    "prompt": "The same cute pot character restyled as a wide shallow red wok with one long wooden handle, same eyes, glowing orange stew, plain white background, centered, full object",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 256,
+    "tasks": [
+      "cbe86af38fd214ed736ead8e78115b0c",
+      "ebbcca0574db764a9822c8b12762e793"
+    ],
+    "bytes": 5704,
+    "at": "2026-11-03T08:22:40.612Z"
+  },
+  "ing-lollipop": {
+    "prompt": "A single round swirl lollipop toy, pink and white spiral on a stick, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "a5f24101f05f6a42cc177e0ce7440ecb",
+      "5958032f24c5d2248458407553442f80"
+    ],
+    "bytes": 2656,
+    "at": "2026-11-03T08:23:46.763Z"
+  },
+  "ing-taco": {
+    "prompt": "A single taco toy with yellow shell, lettuce, tomato and cheese, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "91cdfefdb3abb7689bc5ccc63b1d4f21",
+      "aacbafd547a47dff67b8b9ede588b67b"
+    ],
+    "bytes": 2800,
+    "at": "2026-11-03T08:24:40.834Z"
+  },
+  "ui-ticket": {
+    "prompt": "A blank cream paper order ticket with a torn zigzag bottom edge and a small brass clip at the top, empty with no writing, flat front view, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "3:4",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 512,
+    "tasks": [
+      "9763ddbdc9b3f1ba86ad22997d734ee4",
+      "68f299ce44c41a685d52263087c2f555"
+    ],
+    "bytes": 5880,
+    "at": "2026-11-03T08:25:30.193Z"
+  },
+  "ing-icecream": {
+    "prompt": "A single ice cream cone toy with a strawberry scoop and a vanilla scoop, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "80a20420fbda5be4cdc8c89d82c7f345",
+      "e81e036862427e924366dd99cca56a47"
+    ],
+    "bytes": 2576,
+    "at": "2026-11-03T08:25:33.666Z"
+  }
+}

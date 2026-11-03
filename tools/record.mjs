@@ -54,7 +54,9 @@ if (snap) {
     const st = await page.evaluate(n => window.__rec.step(n), Math.max(1, n));
     t = s;
     const f = `videos/snaps/${slug}-${s}.png`;
-    await page.locator('canvas').screenshot({ path: f });
+    // Two-canvas games (WebGL #c + 2D #ui) wrap both in #stage; older games have one canvas.
+    const stage = page.locator('#stage');
+    await ((await stage.count()) ? stage : page.locator('canvas').first()).screenshot({ path: f });
     console.log(f, JSON.stringify(st));
   }
   await browser.close();
