@@ -101,10 +101,11 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   const web = record ? 0 : Math.max(0, +(opts.web ?? webInset(H)) || 0);
   const menu = R(safe.x, safe.y, safe.w, clamp(Math.min(safe.h, H - web - safe.y), 0.82 * safe.h, safe.h));
 
-  // font sizes (CSS px), all floored at 12
+  // font sizes (CSS px), all floored at 12.5 (Wednesday brief: 12.5 px text floor)
   const fs = {
-    hdr: Math.max(12, U(16)), count: Math.max(12, U(14)), serve: Math.max(13, U(16)), callout: Math.max(12.5, U(16)),
-    secs: Math.max(12, U(18)), chain: Math.max(16, U(22)), badge: Math.max(12, U(12)), label: Math.max(12, U(13)),
+    hdr: Math.max(12.5, U(16)), count: Math.max(12.5, U(14)), serve: Math.max(13, U(16)), callout: Math.max(12.5, U(16)),
+    secs: Math.max(12.5, U(18)), chain: Math.max(16, U(22)), badge: Math.max(12.5, U(12)), label: Math.max(12.5, U(13)),
+    caption: Math.max(20, U(27)), bump: Math.max(13, U(15)),
   };
   const btn = Math.max(44, U(44)), bst = Math.max(44, U(52)), tmr = Math.max(46, U(64));
   const inset = U(10), top = safe.y + U(8);
@@ -137,7 +138,9 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     const mh = Math.max(26, U(30));
     hud.meter = R(safe.x + U(10), rowB + U(8), SW - U(20), mh);
     const ch = Math.max(34, U(40));
-    hud.callout = R(safe.x + U(10), hud.meter.y + mh + Math.max(4, U(6)), SW - U(20), ch);
+    let below = hud.meter.y + mh;
+    if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(hud.meter.x, below + Math.max(3, U(4)), hud.meter.w, sh); below = hud.strip.y + sh; }
+    hud.callout = R(safe.x + U(10), below + Math.max(4, U(6)), SW - U(20), ch);
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
     let y0 = sb - 0.4 * SH - colH / 2;
     y0 = clamp(y0, hud.callout.y + ch + U(8), sb - U(12) - colH);
@@ -160,15 +163,29 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     const mx1 = Math.min(sr - U(70), hud.pause.x - U(10));
     hud.meter = R(mx0, top + (btn - mh) / 2, mx1 - mx0, mh);
     const ch = Math.max(34, U(40));
-    const cy = Math.max(hud.meter.y + mh, hud.pause.y + btn) + Math.max(4, U(6));
+    let below = Math.max(hud.meter.y + mh, hud.pause.y + btn);
+    if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(mx0, below + Math.max(3, U(4)), mx1 - mx0, sh); below = hud.strip.y + sh; }
+    const cy = below + Math.max(4, U(6));
     hud.callout = R(mx0, cy, mx1 - mx0, ch);
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
     let y0 = sb - U(12) - colH;
     y0 = Math.max(y0, hud.callout.y + ch + U(8));
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
-    const px = col.x + colW + U(10), py = Math.max(hud.meter.y + mh, hud.pause.y + btn) + Math.max(4, U(6));
+    const px = col.x + colW + U(10), py = below + Math.max(4, U(6));
     play = R(px, py, sr - px, sb - py);
     play.cx = play.x + play.w / 2; play.cy = play.y + 0.6 * play.h;
+  }
+  // DECISION: the Daily bump-counter chip (a daily with a "No bumps" line) sits at the bottom-left of the safe rect:
+  //   the boosters own the right edge, the landscape ticket column is empty below the ticket, and the pot is centred.
+  if (opts.bump) { const bh = Math.max(34, U(38)), bw = Math.max(84, U(96)); hud.bump = R(safe.x + inset, sb - U(12) - bh, bw, bh); }
+  // DECISION: record/og caption band (hook / cap2 / end from the recorder state) at the top of the play rect, full
+  //   width minus 16u, clear of the ticket/meter rows; the callout band is never shown in those modes.
+  if (record || opts.caption) {
+    const chh = Math.max(56, U(78)), cy = play.y + U(10), cx0 = play.x + (aspect === 'landscape' ? U(4) : U(16));
+    let cr = sr - U(16);
+    const b0 = hud.boosters[0];
+    if (b0.y < cy + chh && b0.y + 3 * bst + 2 * Math.max(8, U(10)) > cy) cr = Math.min(cr, b0.x - U(8));
+    hud.caption = R(cx0, cy, cr - cx0, chh);
   }
   // Edge arrows live inside the play rect (never over the HUD rows), 10u from its edges.
   hud.arrowZone = R(play.x + inset, play.y + inset, play.w - 2 * inset, play.h - 2 * inset);
@@ -225,7 +242,7 @@ export function cardLayout(L, name, opts = {}) {
   const pad = Math.max(10, U(16));
   const fs = {
     title: Math.max(22, U(30)), head: Math.max(26, U(40)), btn: Math.max(16, U(22)), btn2: Math.max(14, U(17)),
-    body: Math.max(13, U(16)), small: Math.max(12, U(13)), stat: Math.max(14, U(18)), count: Math.max(12, U(14)),
+    body: Math.max(13, U(16)), small: Math.max(12.5, U(13)), stat: Math.max(14, U(18)), count: Math.max(12.5, U(14)),
     big: Math.max(18, U(26)),
   };
   const primH = Math.max(52, U(60)), secH = Math.max(44, U(46)), retryH = Math.max(56, U(64));
@@ -244,7 +261,7 @@ export function cardLayout(L, name, opts = {}) {
     const pillW = Math.max(84, u * 104);
     B.coins = fb ? null : R(S.x + S.w - P2 - pillW, S.y + P2, pillW, topH);
     B.stars = fb ? null : R(B.coins.x - Math.max(6, u * 8) - pillW, S.y + P2, pillW, topH);
-    const iconB = Math.max(48, u * 58), lab = Math.max(12, u * 13), cellW = Math.max(iconB + 8, lab * 5.2);
+    const iconB = Math.max(48, u * 58), lab = Math.max(12.5, u * 13), cellW = Math.max(iconB + 8, lab * 5.2);
     const n = 6;
     const ids = ['map', 'daily', 'feast', 'cookbook', 'shop', 'settings'];
     if (L.aspect === 'landscape') {
@@ -427,26 +444,187 @@ export function cardLayout(L, name, opts = {}) {
     return out;
   }
 
-  if (name === 'map') {
-    // Simple Wednesday-placeholder map: a grid of level nodes; back top-left.
-    const bk = Math.max(44, U(48));
-    B.back = R(inner.x, inner.y, bk, bk); btn('back', B.back);
-    B.title = R(inner.x + bk + gap, inner.y, inner.w - 2 * (bk + gap), bk);
-    const n = opts.items || 20;
-    const gy = inner.y + bk + gap * 1.5, gh = inner.y + inner.h - gy, labH = fs.small * 1.4;
-    let best = null;
-    for (let cols = 2; cols <= n; cols++) {
-      const rowsN = Math.ceil(n / cols);
-      const nd = Math.min((inner.w - (cols - 1) * gap) / cols, (gh - (rowsN - 1) * gap) / rowsN - labH, U(72));
-      if (!best || nd > best.nd + 0.5) best = { cols, nd };
+  if (name === 'map') return mapLayout(L, out, opts);
+
+  // DECISION: two-column cards (landscape) put the art/preview on the left and the list/buttons on the right;
+  //   portrait stacks them. Spare height always goes to the flex art block first, then the stack is centred.
+  const wide = !!c.wide;
+  const colL = wide ? R(inner.x, inner.y, inner.w * 0.44 - gap / 2, inner.h) : inner;
+  const colR = wide ? R(inner.x + inner.w * 0.44 + gap / 2, inner.y, inner.w * 0.56 - gap / 2, inner.h) : inner;
+  // DECISION: rows marked opt (a name line, a section label, the cookbook title) are dropped, last first, when the
+  //   card is too short for every row's minimum (320x480), instead of squeezing buttons under 44 px.
+  const place = (col, rows0, flex, share = 0.8, cap = 220) => {
+    const rows = rows0.filter(Boolean);
+    const minSum = () => rows.reduce((a, r) => a + (r.min ?? r.h) + (r.gap || 0), 0);
+    while (minSum() > col.h + 0.5 && rows.some(r => r.opt)) rows.splice(rows.map(r => !!r.opt).lastIndexOf(true), 1);
+    let s = stack(col.x, col.y, col.w, col.h, rows);
+    const spare = col.h - (s._end - col.y);
+    const fr = flex && rows.find(r => r.id === flex);
+    if (fr && spare > 4) { fr.h += Math.min(spare * share, U(cap)); s = stack(col.x, col.y, col.w, col.h, rows); }
+    const used = s._end - col.y, d = Math.max(0, (col.h - used) / 2);
+    for (const k in s) if (k !== '_end') { s[k].y += d; B[k] = s[k]; }
+  };
+  const bwP = w => Math.min(w, Math.max(200, U(260))), bwS = w => Math.min(w, Math.max(140, U(170)));
+  const heroCap = (base = 150) => Math.min(300, Math.max(0, colL.w * 0.75 - U(base)) / cu);   // flex cap, in U units
+  const titleRow = { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2 };
+  const pillW = Math.max(84, U(96)), pillH = Math.max(34, U(38));
+  const coinPill = () => {                                 // coin pill at the right end of the title row
+    const t = B.title; B.coins = R(t.x + t.w - pillW, t.y + (t.h - pillH) / 2, pillW, pillH);
+    B.title = R(t.x, t.y, t.w - pillW - gap, t.h);
+  };
+
+  if (name === 'shop') {
+    // Pot skins: preview + name + Wear/Buy (tap twice to buy), a 5 x 2 skin grid, then the booster shelf
+    // (magnet, freeze, mega, lid: tin + count, coin-price button under each).
+    const cg = w => Math.max(2, Math.min(gap, (w - 5 * 44) / 4));
+    const cellOf = w => Math.max(44, Math.min((w - 4 * cg(w)) / 5, U(68)));
+    const gridH = w => 2 * cellOf(w) + cg(w);
+    // DECISION: a booster tile is the round tin itself (the buy button, >= 44 px) with its coin price under it;
+    //   one tap buys one (coins permitting), no confirm: boosters are cheap and stack (skins confirm, see ui.js).
+    const tileW = w => (w - 3 * gap) / 4, iconD = w => Math.max(44, Math.min(tileW(w) * 0.8, U(56)));
+    const priceH = Math.max(fs.small * 1.5, U(22));
+    const shelfH = w => iconD(w) + Math.max(2, U(3)) + priceH;
+    const rowsA = [titleRow,
+      { id: 'preview', h: U(150), min: 64, gap },
+      { id: 'name', h: fs.body * 1.5, min: fs.body * 1.3, gap: gap * 0.5, opt: true },
+      { id: 'buy', h: Math.max(48, U(54)), min: 48, gap: gap * 0.6 }];
+    const rowsB = [
+      { id: 'grid', h: gridH(colR.w), min: gridH(colR.w), gap: wide ? 0 : gap },
+      { id: 'shelfT', h: fs.small * 1.6, min: fs.small * 1.4, gap, opt: true },
+      { id: 'shelf', h: shelfH(colR.w), min: shelfH(colR.w), gap: gap * 0.4 }];
+    const back = { id: 'back', h: secH, min: secH, gap: gap * 1.2 };
+    if (wide) { rowsA.push(back); place(colL, rowsA, 'preview', 0.9, 260); place(colR, rowsB); }
+    else { place(inner, [...rowsA, ...rowsB, back], 'preview', 0.85, 200); }
+    coinPill();
+    B.buy = centreW(B.buy, bwP(B.buy.w)); btn('buy', B.buy, true);
+    B.back = centreW(B.back, bwS(B.back.w)); btn('back', B.back);
+    const g = B.grid, cell = cellOf(g.w), g2 = cg(g.w), gx = g.x + (g.w - (5 * cell + 4 * g2)) / 2;
+    B.skins = [];
+    for (let i = 0; i < 10; i++) {
+      const r = R(gx + (i % 5) * (cell + g2), g.y + Math.floor(i / 5) * (cell + g2), cell, cell);
+      B.skins.push(r); btn('skin' + i, r);
     }
-    const cols = best.cols, node = Math.max(44, best.nd);
-    const gw = cols * node + (cols - 1) * gap, gx = inner.x + (inner.w - gw) / 2;
-    B.nodes = [];
-    for (let i = 0; i < n; i++) {
-      const r = R(gx + (i % cols) * (node + gap), gy + Math.floor(i / cols) * (node + gap + labH), node, node);
-      B.nodes.push(r); btn('lvl' + (i + 1), r);
+    const sh = B.shelf, tw = tileW(sh.w), id = iconD(sh.w);
+    B.tins = [];
+    for (let i = 0; i < 4; i++) {
+      const x = sh.x + i * (tw + gap);
+      const icon = R(x + (tw - id) / 2, sh.y, id, id), price = R(x, sh.y + id + Math.max(2, U(3)), tw, priceH);
+      B.tins.push({ icon, price }); btn('tin' + i, icon);
     }
+    out.containers = ['grid', 'shelf'];
+    return out;
+  }
+
+  if (name === 'cookbook') {
+    // Chapter tabs (Picnic, Market, Harbour, Stamps), a chapter ribbon, a 4 x 5 recipe-card grid (5 x 4 wide).
+    const tabH = Math.max(44, U(46)), ribH = Math.max(40, U(46));
+    const tabs = ['picnic', 'market', 'harbour', 'stamps'];
+    // DECISION: 4 x 5 cards in portrait, 5 x 4 in landscape and on short portrait cards (320x480) so no card is < 44 px.
+    const tall = inner.h >= tabH + Math.max(34, fs.body * 2) + 5 * 44 + 4 * gap + secH + 4 * gap;
+    const cols = wide || !tall ? 5 : 4, rowsN = wide || !tall ? 4 : 5;
+    const gridMin = rowsN * 44 + (rowsN - 1) * gap;
+    if (wide) {
+      const lw = clamp(inner.w * 0.24, 120, U(190));
+      const left = R(inner.x, inner.y, lw, inner.h), right = R(inner.x + lw + gap * 1.5, inner.y, inner.w - lw - gap * 1.5, inner.h);
+      place(left, [{ ...titleRow, opt: true }, { id: 'tabs', h: 4 * tabH + 3 * gap, min: 4 * tabH + 3 * gap, gap }, { id: 'back', h: secH, min: secH, gap: gap * 1.5 }]);
+      place(right, [{ id: 'ribbon', h: ribH, min: ribH }, { id: 'grid', h: U(400), min: gridMin, gap }], 'grid', 1, 600);
+      B.tabs = tabs.map((t, i) => { const r = R(B.tabs.x, B.tabs.y + i * (tabH + gap), B.tabs.w, tabH); btn('tab-' + t, r); return { id: t, r }; });
+    } else {
+      place(inner, [{ ...titleRow, opt: true }, { id: 'tabs', h: tabH, min: tabH, gap }, { id: 'ribbon', h: ribH, min: Math.max(34, fs.body * 2), gap },
+        { id: 'grid', h: U(330), min: gridMin, gap }, { id: 'back', h: secH, min: secH, gap: gap * 1.2 }], 'grid', 1, 300);
+      const tw = (B.tabs.w - 3 * gap) / 4;
+      B.tabs = tabs.map((t, i) => { const r = R(B.tabs.x + i * (tw + gap), B.tabs.y, tw, tabH); btn('tab-' + t, r); return { id: t, r }; });
+    }
+    B.back = centreW(B.back, bwS(B.back.w)); btn('back', B.back);
+    const g = B.grid;
+    const cw = Math.min((g.w - (cols - 1) * gap) / cols, U(120)), chh = Math.min((g.h - (rowsN - 1) * gap) / rowsN, U(130));
+    const gx = g.x + (g.w - (cols * cw + (cols - 1) * gap)) / 2, gy = g.y + (g.h - (rowsN * chh + (rowsN - 1) * gap)) / 2;
+    B.cards = [];
+    for (let i = 0; i < 20; i++) {
+      const r = R(gx + (i % cols) * (cw + gap), gy + Math.floor(i / cols) * (chh + gap), cw, chh);
+      B.cards.push(r); btn('card' + i, r);
+    }
+    // stamps page: 14 stamps in 7 x 2 (portrait 4 x 4 minus 2) inside the same grid rect
+    const sc = wide ? 7 : 4, sr = Math.ceil(14 / sc);
+    const sd = Math.min((g.w - (sc - 1) * gap) / sc, (g.h - (sr - 1) * gap) / sr, U(96));
+    const sx = g.x + (g.w - (sc * sd + (sc - 1) * gap)) / 2, sy = g.y + (g.h - (sr * sd + (sr - 1) * gap)) / 2;
+    B.stamps = [];
+    for (let i = 0; i < 14; i++) B.stamps.push(R(sx + (i % sc) * (sd + gap), sy + Math.floor(i / sc) * (sd + gap), sd, sd));
+    out.containers = ['grid', 'tabs'];
+    return out;
+  }
+
+  if (name === 'daily' || name === 'ladder') {
+    // Daily: receipt (3 star lines), 7-stamp ladder with tomorrow's reward bobbing, the next locked town's silhouette,
+    // Cook / countdown, Back. Ladder (daily end): stamped receipt, ladder with today's stamp landing, coins, Done.
+    const end = name === 'ladder';
+    const lineH = Math.max(30, U(36)), rHead = Math.max(34, U(44));
+    const receiptH = rHead + 3 * lineH + Math.max(8, U(14));
+    const sgap = Math.max(4, U(6));
+    const stampD = w => Math.max(24, Math.min((w - 6 * sgap) / 7, U(54)));
+    const ladderH = w => stampD(w) + Math.max(16, U(22)) + fs.small * 1.5;
+    const head = end ? { id: 'head', h: fs.head * 1.25, min: fs.head * 1.15 } : titleRow;
+    const sub = { id: 'sub', h: fs.small * 1.6, min: fs.small * 1.4, opt: true };
+    const receipt = { id: 'receipt', h: receiptH, min: receiptH, gap };
+    const ladderT = { id: 'ladderT', h: fs.small * 1.6, min: fs.small * 1.4, gap, opt: true };
+    const ladder = { id: 'ladder', h: ladderH(colR.w), min: ladderH(colR.w) };
+    const extra = end ? { id: 'coins', h: Math.max(fs.stat * 1.7, U(40)), min: fs.stat * 1.5, gap } : { id: 'town', h: U(90), min: 0, gap, opt: true };
+    const prim = opts.primary === false ? null : { id: 'primary', h: primH, min: primH, gap: gap * 1.4 };
+    const back = end ? null : { id: 'back', h: secH, min: secH, gap: gap * 1.1 };
+    if (wide) {
+      place(colL, [head, sub, receipt, ...(prim ? [prim] : [])]);
+      place(colR, [ladderT, ladder, extra, ...(back ? [back] : [])], end ? null : 'town', 1, 240);
+    } else {
+      place(inner, [head, sub, receipt, ladderT, ladder, extra, ...(prim ? [prim] : []), ...(back ? [back] : [])], end ? null : 'town', 1, 200);
+    }
+    if (B.primary) { B.primary = centreW(B.primary, bwP(B.primary.w)); btn('primary', B.primary, true); }
+    if (B.back) { B.back = centreW(B.back, bwS(B.back.w)); btn('back', B.back, !B.primary); }
+    if (B.town && B.town.h < 30) delete B.town;
+    const r = B.receipt, rw = Math.min(r.w, Math.max(260, U(340)));
+    B.receipt = centreW(r, rw);
+    B.lines = [0, 1, 2].map(i => R(B.receipt.x, B.receipt.y + rHead + i * lineH, rw, lineH));
+    const ld = B.ladder, sd = stampD(ld.w), lx = ld.x + (ld.w - (7 * sd + 6 * sgap)) / 2;
+    B.steps = [];
+    for (let i = 0; i < 7; i++) B.steps.push(R(lx + i * (sd + sgap), ld.y + Math.max(16, U(22)), sd, sd));
+    return out;
+  }
+
+  if (name === 'feast') {
+    // Feast start: win-feast art, personal best, a town picker (unlocked towns), Start, Back.
+    const nT = clamp(opts.towns | 0 || 1, 1, 3);
+    const rowsA = [titleRow, { id: 'hero', h: U(150), min: 56, gap }];
+    const rowsB = [
+      { id: 'best', h: Math.max(fs.stat * 1.7, U(38)), min: fs.stat * 1.5, gap },
+      ...(nT > 1 ? [{ id: 'towns', h: Math.max(44, U(48)), min: 44, gap }] : []),
+      { id: 'primary', h: primH, min: primH, gap: gap * 1.4 },
+      { id: 'back', h: secH, min: secH, gap: gap * 1.1 }];
+    // DECISION: a wide card's hero grows only to the art's own height (about 0.75 x its width), so the title stays
+    //   right above the art instead of floating at the top of a tall empty column.
+    if (wide) { place(colL, rowsA, 'hero', 1, heroCap()); place(colR, rowsB); }
+    else place(inner, [...rowsA, ...rowsB], 'hero', 0.9, 220);
+    B.primary = centreW(B.primary, bwP(B.primary.w)); btn('primary', B.primary, true);
+    B.back = centreW(B.back, bwS(B.back.w)); btn('back', B.back);
+    if (B.towns) {
+      const t = B.towns, tw = Math.min((t.w - (nT - 1) * gap) / nT, U(130)), tx = t.x + (t.w - (nT * tw + (nT - 1) * gap)) / 2;
+      B.towns = []; for (let i = 0; i < nT; i++) { const r = R(tx + i * (tw + gap), t.y, tw, t.h); B.towns.push(r); btn('town' + i, r); }
+    }
+    out.containers = ['towns'];
+    return out;
+  }
+
+  if (name === 'feastend') {
+    // Feast end card: "Feast over!" (or NEW BEST! ribbon), the big served-tickets count over the feast art,
+    // best + coins, Again, Done.
+    const rowsA = [{ id: 'head', h: fs.head * 1.25, min: fs.head * 1.15 }, { id: 'hero', h: U(160), min: 70, gap }];
+    const rowsB = [
+      { id: 'stats', h: Math.max(fs.stat * 1.7, U(40)), min: fs.stat * 1.5, gap },
+      { id: 'coins', h: Math.max(fs.stat * 1.7, U(40)), min: fs.stat * 1.5, gap: gap * 0.5 },
+      { id: 'primary', h: retryH, min: retryH, gap: gap * 1.4 },
+      { id: 'back', h: secH, min: secH, gap: gap * 1.1 }];
+    if (wide) { place(colL, rowsA, 'hero', 1, heroCap(160)); place(colR, rowsB); }
+    else place(inner, [...rowsA, ...rowsB], 'hero', 0.8, 220);
+    B.primary = centreW(B.primary, bwP(B.primary.w)); btn('primary', B.primary, true);
+    B.back = centreW(B.back, bwS(B.back.w)); btn('back', B.back);
     return out;
   }
 
@@ -457,6 +635,7 @@ export function cardLayout(L, name, opts = {}) {
       { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2, gap },
       { id: 'body', h: fs.body * 3.4, min: fs.body * 2.8, gap },
       ...(opts.primary ? [{ id: 'primary', h: primH, min: primH, gap: gap * 1.5 }] : []),
+      ...(opts.second && !wide ? [{ id: 'second', h: secH + 4, min: secH, gap: gap * 1.1 }] : []),
       ...(opts.noBack ? [] : [{ id: 'back', h: secH, min: secH, gap: gap * 1.2 }]),
     ];
     // DECISION: a card whose primary already closes it (gift: Collect) has no Back button (opts.noBack).
@@ -467,8 +646,82 @@ export function cardLayout(L, name, opts = {}) {
     const used = s._end - inner.y, d = Math.max(0, (inner.h - used) / 2);
     for (const k in s) if (k !== '_end') { s[k].y += d; B[k] = s[k]; }
     const bw = Math.min(inner.w, Math.max(200, U(260)));
-    if (B.primary) { B.primary = centreW(B.primary, bw); btn('primary', B.primary, true); }
+    // DECISION: a wide card with two actions (All-done: Daily + Feast) puts them side by side in the primary row.
+    if (B.primary && opts.second && wide) {
+      const r = B.primary, w2 = Math.min((r.w - gap) / 2, Math.max(180, U(240)));
+      B.primary = R(r.x + r.w / 2 - gap / 2 - w2, r.y, w2, r.h); btn('primary', B.primary, true);
+      B.second = R(r.x + r.w / 2 + gap / 2, r.y, w2, r.h); btn('second', B.second);
+    } else if (B.primary) { B.primary = centreW(B.primary, bw); btn('primary', B.primary, true); }
+    if (B.second && !wide) { B.second = centreW(B.second, Math.min(inner.w, Math.max(180, U(230)))); btn('second', B.second); }
     if (B.back) { B.back = centreW(B.back, Math.min(inner.w, Math.max(140, U(170)))); btn('back', B.back, !opts.primary); }
     return out;
   }
+}
+
+/**
+ * Town map geometry (full screen, not a card).
+ * DECISION: top bar = Back (left), the milestone pill "★ have / need" (centre), coins (right). Portrait/square: the
+ *   Daily / Feast / Cookbook / Shop buttons sit in a bottom bar; landscape: two side columns (Daily + Feast left,
+ *   Cookbook + Shop right) so the scroll viewport keeps the full height. The path lives in a centred content column
+ *   (full width on phones, capped on desktop so the map art is never stretched past ~1.6x).
+ * Node positions are in CONTENT space: x from the column's left edge, y from the top of the content (Harbour's top);
+ *   L1 is at the bottom. Each town = ribbon (bottom, where you enter it) + 20 nodes + the town chest (top).
+ */
+function mapLayout(L, out, opts) {
+  const S = L.menu || L.safe, B = out.blocks, u = L.u;
+  const btn = (id, r, primary = false) => out.buttons.push({ id, r, primary });
+  out.panel = S;
+  const P2 = Math.max(8, u * 12), topH = Math.max(44, u * 46);
+  const side = L.aspect === 'landscape';
+  B.back = R(S.x + P2, S.y + P2, topH, topH); btn('back', B.back);
+  const pillW = Math.max(98, u * 104);   // fits "9999" at the pill font
+  B.coins = R(S.x + S.w - P2 - pillW, S.y + P2, pillW, topH);
+  const midL = B.back.x + topH + P2, midR = B.coins.x - P2;
+  const msW = Math.min(Math.max(150, u * 220), midR - midL);
+  B.milestone = R(clamp(S.x + (S.w - msW) / 2, midL, midR - msW), S.y + P2, msW, topH);
+  const iconB = Math.max(48, u * 54), lab = Math.max(12.5, u * 13), rowH = iconB + lab * 1.45 + 4;
+  const ids = ['daily', 'feast', 'cookbook', 'shop'];
+  const top = S.y + P2 + topH + Math.max(4, u * 6);
+  B.icons = [];
+  let view, sideW = 0;
+  if (!side) {
+    const barH = rowH + P2;
+    view = R(S.x, top, S.w, S.y + S.h - barH - top);
+    const bar = R(S.x, view.y + view.h, S.w, barH);
+    const cw = Math.min(Math.max(iconB + 12, lab * 6.2), (S.w - 2 * P2) / 4), x0 = S.x + (S.w - 4 * cw) / 2;
+    ids.forEach((id, i) => {
+      const cx = x0 + cw * (i + 0.5), r = R(cx - iconB / 2, bar.y + Math.max(2, u * 3), iconB, iconB);
+      B.icons.push({ id, r, lab: R(cx - cw / 2, r.y + iconB + 2, cw, lab * 1.3) }); btn(id, r);
+    });
+  } else {
+    view = R(S.x, top, S.w, S.y + S.h - top);
+    const cw = Math.max(iconB + 12, lab * 6.2);
+    sideW = cw + 2 * P2;
+    const colH = 2 * rowH + P2, y0 = view.y + Math.max(0, (view.h - colH) / 2);
+    ids.forEach((id, i) => {
+      const left = i < 2, cx = left ? S.x + P2 + cw / 2 : S.x + S.w - P2 - cw / 2;
+      const r = R(cx - iconB / 2, y0 + (i % 2) * (rowH + P2), iconB, iconB);
+      B.icons.push({ id, r, lab: R(cx - cw / 2, r.y + iconB + 2, cw, lab * 1.3) }); btn(id, r);
+    });
+  }
+  B.view = view;
+  const colW = side || L.aspect === 'square' ? Math.min(view.w - 2 * sideW, Math.max(340, u * 470)) : view.w;
+  const col = R(view.x + (view.w - colW) / 2, view.y, colW, view.h);
+  const nodeD = Math.max(46, u * 52), starH = Math.max(14, u * 15);
+  const step = Math.max(nodeD + starH + 12, u * 78);
+  const hdrH = Math.max(58, u * 68), chestH = Math.max(64, u * 74);
+  const townH = hdrH + 20 * step + chestH;
+  const amp = Math.max(0, Math.min(colW / 2 - nodeD / 2 - P2 - 4, Math.max(60, u * 112)));
+  const nodes = [];
+  for (let n = 1; n <= 60; n++) {
+    const ti = ((n - 1) / 20) | 0, k = (n - 1) % 20;
+    const bottom = (3 - ti) * townH;
+    nodes.push({ n, town: ti, x: colW / 2 + amp * Math.sin((n - 1) * 0.78 + 0.4), y: bottom - hdrH - step * (k + 0.5) - chestH * 0.08 });
+  }
+  const towns = [0, 1, 2].map(ti => ({ i: ti, y: (2 - ti) * townH, h: townH, ribbon: (3 - ti) * townH - hdrH, chest: (2 - ti) * townH }));
+  out.containers = ['view'];
+  out.map = { col, nodeD, starH, step, hdrH, chestH, townH, contentH: 3 * townH, amp, nodes, towns, sideW };
+  out.fs = Object.assign(out.fs, { label: lab, pill: Math.max(14, u * 17), node: Math.max(14, u * 19), town: Math.max(18, u * 24),
+    lock: Math.max(16, u * 20) });
+  return out;
 }

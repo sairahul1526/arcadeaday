@@ -25,8 +25,7 @@
 // rule on red (#E8574A, lum 0.245). Red cloth hosts the yellow and pink T1 food instead.
 // DECISION: L1 has no timer: T 60 with timed false (keeps T > 0 for any divide in logic/ui).
 // DECISION: T0 may sit on the bare ground in every town (Picnic ground is gingham cloth per D33; see groundOK).
-// DECISION: archetypes PS, MR, CK, PF fall back to RR, CG, BP, BP layouts (with their twists: belts, gulls,
-// truck, car walls) until they are built; L11–L60 are rough placeholders that expand without errors.
+// DECISION (11-04): all ten archetypes are built (MR, CK, PF, PS today) plus FE, the Feast course map (feastCourse).
 
 import { R0, R0_REC, R_MAX, G, K_ING, K_WALL, LEVELS, TOWNS, DAILY_START, ITEM_MAX } from './consts.js';
 import { KINDS, KIND_ID, KIND, kindsForTown, F, SURF, CONTRAST_MIN } from './catalog.js';
@@ -202,6 +201,71 @@ export function getDaily(key, cur, o = {}) {
   cache.set(ck, lvl);
   return lvl;
 }
+// ---------- Feast (§3.12 Feast, D23) ----------
+// DECISION (11-04 Wed, Sim relay): market Feast pens are built of crates (FEAST_WALL), not cars. Car walls (a 1.3,
+// wall.a 1.3 vs 1.0 for picnic hedges / harbour posts) made each pen cost ~1.7x the supply of a picnic pen, so the
+// margin left too little food under the boss: from course 2 the expert stalled (one c2 map stopped at r 1.42 of 1.50)
+// and market served a median 9 tickets vs picnic 17 / harbour 18. Picnic and harbour are unchanged (same maps).
+const FEAST_WALL = { market: 'crate' };
+const FEAST_BOSS = { picnic: ['boss-hamper', 'boss-table', 'boss-bigsandwich', 'boss-watermelon'], market: ['boss-pizza', 'boss-fruitstall', 'boss-bakerycart'],
+  harbour: ['boss-popcorncart', 'boss-icecreamkiosk', 'boss-snackboat'] };
+/**
+ * Feast course `c` (1, 2, …) for `town` and the run `seed`: an expanded level (arch FE, r0 0.30) with 4 tickets of 2
+ * lines; tickets 1–3 have no boss (tickets[k].boss = −1), ticket 4 a mini boss with a = 1.4 + 0.1·(c − 1) (max 2.0).
+ * o.cur = the player's current level (rolling needs L10 beaten, i.e. cur > 10; belts cur > 22; default all).
+ * Escalation (D23): c1 open, needs 2–3; c2 ticket 2's second line in a pen; c3 ticket 3's first line rolling (else a
+ * second pen: ticket 3's second line); c4 ticket 4's first line on a belt (else rolling if the roller is still free,
+ * else a pen); c ≥ 5 needs [2 + (c − 4), 3 + (c − 4)] capped at 6. Same (c, town, seed, cur band) → same level.
+ */
+// DECISION (11-04): ticket k takes 2 distinct ingredients from the k-th quarter of the town's ingredients sorted by
+// size (small first, so ticket 1 fits a fresh pot), the roller kind is swapped in for a rolling line; the course seed
+// is fnv1a('feast|town|seed|c'). The level carries lvl.feast = { course, need: [lo, hi], cur }.
+// DECISION (11-04 Wed): market courses carry spec.wallKind 'crate' (FEAST_WALL above; penAt reads spec.wallKind).
+export function feastCourse(c, town, seed, o = {}) {
+  c = Math.max(1, c | 0);
+  if (TOWNS.indexOf(town) < 0) town = 'picnic';
+  const cur = o.cur != null ? o.cur | 0 : LEVELS;
+  const rolling = cur > 10, belts = cur > 22;
+  const cs = fnv1a('feast|' + town + '|' + (seed >>> 0) + '|' + c) >>> 0;
+  const ck = 'feast|' + cs + '|' + (belts ? 2 : rolling ? 1 : 0);
+  if (cache.has(ck)) return cache.get(ck);
+  const rng = mulberry32(cs ^ 0x2545f491);
+  const lo = c >= 5 ? Math.min(6, c - 2) : 2, hi = c >= 5 ? Math.min(6, c - 1) : 3;
+  const roller = ROLLERS[town];
+  const ings = kindsForTown(town).filter(k => k.ing && (k.id !== roller || !rolling)).sort((p, q) => p.a - q.a || (p.id < q.id ? -1 : 1));
+  const used = new Set(), tickets = [];
+  for (let k = 0; k < 4; k++) {
+    const a = Math.floor((k * ings.length) / 4), b = Math.max(a + 2, Math.floor(((k + 1) * ings.length) / 4));
+    const pool = ings.slice(a, b).filter(q => !used.has(q.id));
+    const lines = [];
+    for (let j = 0; j < 2; j++) {
+      const src = pool.length ? pool : ings.filter(q => !used.has(q.id));
+      const q = src.splice(Math.floor(rng() * src.length), 1)[0];
+      used.add(q.id);
+      lines.push({ kind: q.id, need: lo + Math.floor(rng() * (hi - lo + 1)) });
+    }
+    tickets.push({ lines, boss: null });
+  }
+  let rollUsed = false;
+  if (c >= 2) tickets[1].lines[1].place = 'pen';
+  if (c >= 3) { if (rolling) { tickets[2].lines[0] = { kind: roller, need: tickets[2].lines[0].need, place: 'roll' }; rollUsed = true; } else tickets[2].lines[1].place = 'pen'; }
+  if (c >= 4) {
+    if (belts) tickets[3].lines[0].place = 'belt';
+    else if (rolling && !rollUsed) tickets[3].lines[0] = { kind: roller, need: tickets[3].lines[0].need, place: 'roll' };
+    else tickets[3].lines[1].place = 'pen';
+  }
+  const bl = FEAST_BOSS[town];
+  tickets[3].boss = { kind: bl[(c - 1) % bl.length], a: r3(Math.min(2.0, 1.4 + 0.1 * (c - 1))) };
+  const spec = {
+    n: 0, name: 'Feast', town, arch: 'FE', W: 24, D: 34, seed: cs, r0: R0, T: 45, items: 200, mix: [32, 30, 18, 15, 5], margin: [1.9, 2.3],
+    tickets, twist: {}, feast: true, wallKind: FEAST_WALL[town],
+  };
+  const lvl = genLevel(spec, cs);
+  lvl.feast = { course: c, need: [lo, hi], cur };
+  cache.set(ck, lvl);
+  return lvl;
+}
+
 // Star lines (§3.12): line 1 win; line 2 pool A index (day*7) % len; line 3 pool B index (day*11) % len.
 function dailyLines(lvl, day, key, variant) {
   const count = {};
@@ -229,7 +293,8 @@ export function zoneGraph(level) {
 // ---------- generator ----------
 const WALL_KIND = { picnic: 'hedge', market: 'car', harbour: 'ropepost' };
 const FENCE_KIND = { picnic: 'fence', market: 'car', harbour: 'ropepost' };
-const STACK_KIND = { picnic: 'teacups', market: 'jarstack', harbour: 'wafflestack' };
+// DECISION (11-04, §4.5): each town has two fragile stack kinds, alternating per stack in a level.
+const STACK_KIND = { picnic: ['teacups', 'platepile'], market: ['jarstack', 'eggcrate'], harbour: ['wafflestack', 'platepile'] };
 const DECOR_KIND = { picnic: 'tree', market: 'lamp', harbour: 'buoy' };
 // Tier windows over progress p (0 at spawn, 1 at the boss): items of tier t prefer p in [lo, hi].
 const WIN = [[0, 0.55], [0, 0.75], [0.12, 0.9], [0.32, 1.0], [0.5, 1.0]];
@@ -244,6 +309,7 @@ function ctxFor(spec, seed) {
     items: [], surfaces: [], decor: [], zones: [{ id: 0, x: 0, z: 0, parent: -1, gate: -1, r: 0, prog: 0 }],
     rings: [], bands: [], regions: [], keeps: [], segs: [], spots: [], lanes: [], belts: [],
     roost: null, gullEvery: 0, gulls: 0, truckPath: [], cake: null, bossPos: [], gi: 0, progL: D * 0.8, pal: null,
+    beltFill: [], progFn: null,
   };
 }
 function finalBossA(spec) {
@@ -265,8 +331,9 @@ function zoneAt(c, x, z) {
   for (const b of c.bands) if (z < b.z) zone = b.zone;
   return zone;
 }
+// DECISION (11-04): an archetype may set c.progFn (PS: the spiral parameter) to replace distance-from-spawn progress.
 function progAt(c, x, z) {
-  const p = clamp(hyp(x - c.spawn.x, z - c.spawn.z) / c.progL, 0, 1);
+  const p = c.progFn ? c.progFn(x, z) : clamp(hyp(x - c.spawn.x, z - c.spawn.z) / c.progL, 0, 1);
   const zn = c.zones[zoneAt(c, x, z)];
   return p > zn.prog ? p : zn.prog;
 }
@@ -293,11 +360,26 @@ function groundOK(c, k) {
   for (let i = 0; i < g.length; i++) if (Math.abs(k.lum - g[i].lum) >= CONTRAST_MIN) w += GING_W[i];
   return w >= 0.5 - 1e-9;
 }
+// DECISION (11-04): surfaces no longer overlap, so a road corner or a split blanket is two touching rectangles. An
+// item's contrast is judged on its inner square (half-size 0.6·a, 9 sample points): every surface under a sample
+// point must pass, and when a sample point is on bare ground the ground rule must pass too. On one surface this is
+// Tuesday's rule. It runs on 3-decimal coordinates, exactly as verify.mjs contrastPass sees the expanded level.
 function contrastOK(c, k, x, z) {
   if (k.tier > 1) return true;
-  const s = surfAt(c, x, z, k.a);
-  if (!s) return groundOK(c, k);
-  return Math.abs(k.lum - s.lum) >= CONTRAST_MIN;
+  x = r3(x); z = r3(z);
+  const m = k.a * 0.6;
+  let bare = false;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const px = x + i * m, pz = z + j * m;
+    let hit = false;
+    for (const s of c.surfaces) {
+      if (Math.abs(px - s.x) > s.w / 2 + 1e-6 || Math.abs(pz - s.z) > s.d / 2 + 1e-6) continue;
+      hit = true;
+      if (Math.abs(k.lum - s.lum) < CONTRAST_MIN) return false;
+    }
+    if (!hit) bare = true;
+  }
+  return !bare || groundOK(c, k);
 }
 function segDist(px, pz, s) {
   const vx = s.bx - s.ax, vz = s.bz - s.az, L2 = vx * vx + vz * vz;
@@ -356,23 +438,88 @@ function addItem(c, kindId, x, z, opt = {}) {
   c.items.push(it);
   return c.items.length - 1;
 }
-function addSurf(c, type, x, z, w, d, color) {
+// DECISION (D33 z-fight, 11-04): surfaces never overlap (they all sit at y 0, so two overlapping ones z-fight).
+// A new surface is clipped against every earlier one (the largest side remainder survives, preferring the one that
+// still holds opt.anchor); a priority surface (opt.prio: lane bed, belt bed, spawn pad, ingredient patch) instead
+// splits the earlier non-priority surfaces it overlaps into up to 4 pieces (pieces under SURF_MIN are dropped).
+const SURF_MIN = 0.6;
+const rectOf = s => ({ xa: s.x - s.w / 2, xb: s.x + s.w / 2, za: s.z - s.d / 2, zb: s.z + s.d / 2 });
+const rectHit = (r, q, gap) => r.xa < q.xb + gap - 1e-4 && r.xb > q.xa - gap + 1e-4 && r.za < q.zb + gap - 1e-4 && r.zb > q.za - gap + 1e-4;
+function cutRect(r, q, anchor) {
+  if (!rectHit(r, q, 0)) return r;
+  const cand = [
+    { xa: r.xa, xb: Math.min(r.xb, q.xa), za: r.za, zb: r.zb }, { xa: Math.max(r.xa, q.xb), xb: r.xb, za: r.za, zb: r.zb },
+    { xa: r.xa, xb: r.xb, za: r.za, zb: Math.min(r.zb, q.za) }, { xa: r.xa, xb: r.xb, za: Math.max(r.za, q.zb), zb: r.zb },
+  ];
+  let best = null, bs = -1;
+  for (const e of cand) {
+    const w = e.xb - e.xa, d = e.zb - e.za;
+    if (w < SURF_MIN || d < SURF_MIN) continue;
+    const held = anchor && anchor[0] > e.xa && anchor[0] < e.xb && anchor[1] > e.za && anchor[1] < e.zb ? 1e6 : 0;
+    if (w * d + held > bs + 1e-9) { bs = w * d + held; best = e; }
+  }
+  return best;
+}
+const g2 = v => Math.floor(v * 500 + 0.5) / 500;
+function setRect(o, q) {
+  // edges on a 0.002 grid, so the centre is an exact 3-decimal value and x -> -x mirroring keeps edges shared
+  const xa = g2(q.xa), xb = g2(q.xb), za = g2(q.za), zb = g2(q.zb);
+  o.x = r3((xa + xb) / 2); o.z = r3((za + zb) / 2); o.w = r3(xb - xa); o.d = r3(zb - za);
+}
+/** e minus q as up to 4 disjoint rectangles (full-depth left/right, then the middle strips), each >= SURF_MIN. */
+function splitRect(e, q) {
+  const mx0 = Math.max(e.xa, q.xa), mx1 = Math.min(e.xb, q.xb);
+  const out = [
+    { xa: e.xa, xb: q.xa, za: e.za, zb: e.zb }, { xa: q.xb, xb: e.xb, za: e.za, zb: e.zb },
+    { xa: mx0, xb: mx1, za: e.za, zb: q.za }, { xa: mx0, xb: mx1, za: q.zb, zb: e.zb },
+  ];
+  return out.filter(r => r.xb - r.xa >= SURF_MIN && r.zb - r.za >= SURF_MIN);
+}
+/** Does the rectangle (x, z, w, d), grown by gap, overlap any surface? */
+function surfHit(c, x, z, w, d, gap) {
+  const r = { xa: x - w / 2, xb: x + w / 2, za: z - d / 2, zb: z + d / 2 };
+  for (const s of c.surfaces) if (rectHit(r, rectOf(s), gap)) return true;
+  return false;
+}
+/** Town surface style: { type, s: {color, lum}, col } for addSurf. */
+function surfStyle(c, type, color) {
   const pal = SURF[c.town];
-  let s = null;
-  if (type === 'path') s = pal.path; else if (type === 'rug') s = pal.rug || pal.blanket[0]; else if (type === 'deck') s = pal.deck || pal.blanket[0];
-  else if (type === 'water') s = pal.water || pal.blanket[1];
-  else s = color != null ? (typeof color === 'number' ? pal.blanket[color] : color) : pal.blanket[0];
+  if (type === 'path') return pal.path;
+  if (type === 'rug') return pal.rug || pal.blanket[0];
+  if (type === 'deck') return pal.deck || pal.blanket[0];
+  if (type === 'water') return pal.water || pal.blanket[1];
+  return color != null ? (typeof color === 'number' ? pal.blanket[color] : color) : pal.blanket[0];
+}
+function addSurf(c, type, x, z, w, d, color, opt = {}) {
+  const s = surfStyle(c, type, color);
   // clip to the board
-  const xa = Math.max(c.x0, x - w / 2), xb = Math.min(c.x1, x + w / 2), za = Math.max(c.z0, z - d / 2), zb = Math.min(c.z1, z + d / 2);
-  if (xb - xa < 0.4 || zb - za < 0.4) return null;
-  const o = { type, x: r3((xa + xb) / 2), z: r3((za + zb) / 2), w: r3(xb - xa), d: r3(zb - za), rot: 0, color: s.color, lum: s.lum };
+  let q = { xa: Math.max(c.x0, x - w / 2), xb: Math.min(c.x1, x + w / 2), za: Math.max(c.z0, z - d / 2), zb: Math.min(c.z1, z + d / 2) };
+  if (q.xb - q.xa < 0.4 || q.zb - q.za < 0.4) return null;
+  if (opt.prio) {
+    for (let i = c.surfaces.length - 1; i >= 0; i--) {
+      const e = c.surfaces[i];
+      if (e.prio || !rectHit(q, rectOf(e), 0)) continue;
+      const parts = splitRect(rectOf(e), q).map(r => { const o = Object.assign({}, e); setRect(o, r); return o; });
+      c.surfaces.splice(i, 1, ...parts);
+    }
+  }
+  for (const e of c.surfaces) { if (!q) break; q = cutRect(q, rectOf(e), opt.anchor || [x, z]); }
+  if (!q) return null;
+  const o = { type, x: 0, z: 0, w: 0, d: 0, rot: 0, color: s.color, lum: s.lum, prio: !!opt.prio };
+  setRect(o, q);
   c.surfaces.push(o);
   return o;
 }
-/** Town surface (blanket colour or path) with the best contrast for a kind. */
-function bestSurfFor(c, k) {
+function restyle(c, o, b) { const s = surfStyle(c, b.type, b.col != null ? b.col : null); o.type = b.type; o.color = s.color; o.lum = s.lum; }
+/** Town surface (blanket colours, path, rug, deck) with the best contrast for a kind; `prefer` wins when it passes. */
+// DECISION (11-04): rug and deck join the options (Market's plum rug and Harbour's white deck are the darkest /
+// lightest cloth there); a preferred type (lane and belt beds prefer 'path') is used whenever it passes.
+function bestSurfFor(c, k, prefer) {
   const pal = SURF[c.town];
   const opts = [{ type: 'blanket', s: pal.blanket[0], col: 0 }, { type: 'blanket', s: pal.blanket[1], col: 1 }, { type: 'path', s: pal.path }];
+  if (pal.rug && pal.rug.color !== pal.blanket[0].color) opts.push({ type: 'rug', s: pal.rug });
+  if (pal.deck) opts.push({ type: 'deck', s: pal.deck });
+  if (prefer) { const p = opts.find(o => o.type === prefer); if (p && Math.abs(p.s.lum - k.lum) >= CONTRAST_MIN) return p; }
   let best = opts[0], bd = -1;
   for (const o of opts) { const d = Math.abs(o.s.lum - k.lum); if (d > bd) { bd = d; best = o; } }
   return best;
@@ -434,6 +581,116 @@ function lineWall(c, zw, gx, rG, wallKind, zone, parent) {
   const zn = c.zones[zone]; zn.gate = gi; zn.r = r3(needR(gateA));
   return { z: zw, gateA, wallA, gate: gi, zone, gx };
 }
+// DECISION (11-04, §4.2 margin vs the gate rule): wall pieces count in the margin at K_WALL, and a full-width wall
+// costs ≈ K_WALL·wall.a²·W/(1.16·wall.a) ≈ 0.52·W·wall.a of supply (0.8–1.1 of the margin per late wall at W 26–34),
+// so the three walls of L19/L25/L34/L37/L39/L58 overshot their bands before any junk (walls alone 2.0–2.5). CG and MR
+// keep full-width walls for their earliest gates while all walls stay inside (margin hi − 0.35)·needMass, and turn
+// the later gates into POCKETS: pens against the board boundary (a quarter ring around a far corner, else a half
+// ring on a side edge), which need ¼–½ of a free ring's pieces. End pieces sit like lineWall's (centre 0.3 + 0.5·wall.a
+// from the edge); the gate hole is ringWall's (rPass).
+const POCKET_RESERVE = 0.35;
+function gateSize(rG, kind) { const g = 0.97 * FIT * rG; return { gateA: g, wallA: Math.max(KIND[kind].a, 1.25 * g) }; }
+function lineCost(c, rG, kind) {
+  const { gateA, wallA } = gateSize(rG, kind);
+  const len = c.W - 2 * (0.3 + 0.5 * wallA) - rPassFor(gateA, wallA) - 2 * wallA;
+  return K_WALL * (wallA * wallA * (Math.ceil(len / (1.16 * wallA)) + 3) + gateA * gateA);
+}
+/** Smallest pocket (corner: quarter ring, else half ring) with room for the gate hole and an inner radius ≥ rIn. */
+function pocketGeom(rG, kind, corner, rIn) {
+  const { gateA, wallA } = gateSize(rG, kind);
+  const cnn = 2 * wallA + rPassFor(gateA, wallA), e = 0.3 + 0.5 * wallA;
+  const span = corner ? HPI : PI;
+  for (let R = Math.max(rIn + wallA + 0.3, cnn / 1.8); R < 16; R += 0.25) {
+    const arc = span - 2 * asinp(Math.min(1, e / R)), Phi = 2 * asinp(Math.min(1, cnn / (2 * R)));
+    if (arc - Phi < 0.12) continue;
+    const dMax = 2 * asinp(Math.min(1, (1.16 * wallA) / (2 * R)));
+    const m = Math.max(1, Math.ceil((arc - Phi) / 2 / dMax - 1e-9));
+    return { R, gateA, wallA, corner, cost: K_WALL * (2 * (m + 1) * wallA * wallA + gateA * gateA) };
+  }
+  return null;
+}
+/** Pocket pen: the arc of ring (an.x, an.z, g.R) between angles an.a0..an.a1 that lies inside the board. */
+function pocketWall(c, an, g, kind, zone, parent) {
+  const { R, gateA, wallA } = g;
+  const cnn = 2 * wallA + rPassFor(gateA, wallA), e = 0.3 + 0.5 * wallA;
+  const s0 = an.a0 + asinp(Math.min(1, e / R)), s1 = an.a1 - asinp(Math.min(1, e / R));
+  const th = (s0 + s1) / 2, Phi = 2 * asinp(Math.min(1, cnn / (2 * R)));
+  const dMax = 2 * asinp(Math.min(1, (1.16 * wallA) / (2 * R)));
+  const gi = addItem(c, kind, an.x + R * cosp(th), an.z + R * sinp(th), { a: gateA, role: 'gate', zone: parent, rot: th + HPI, edgeOk: true });
+  for (const [u0, u1] of [[s0, th - Phi / 2], [th + Phi / 2, s1]]) {
+    const m = Math.max(1, Math.ceil((u1 - u0) / dMax - 1e-9));
+    for (let j = 0; j <= m; j++) {
+      const a = u0 + ((u1 - u0) * j) / m;
+      addItem(c, kind, an.x + R * cosp(a), an.z + R * sinp(a), { a: wallA, role: 'wall', zone: parent, rot: a + HPI, edgeOk: true });
+    }
+  }
+  c.rings.push({ x: an.x, z: an.z, R, zone, depth: 1, wallA });
+  const zn = c.zones[zone]; zn.gate = gi; zn.r = r3(needR(gateA));
+  const Ri = R - wallA - 0.3, mid = (an.a0 + an.a1) / 2;
+  const cx = an.x + 0.55 * Ri * cosp(mid), cz = an.z + 0.55 * Ri * sinp(mid);
+  zn.x = r3(cx); zn.z = r3(cz);
+  // interior region: the quarter (corner) or half (edge) square inside the arc; zoneAt drops what lies outside it
+  const rx = g.corner ? an.x + Math.sign(cosp(mid)) * Ri / 2 : an.x + Math.sign(cosp(mid)) * Ri / 2;
+  const rz = g.corner ? an.z + Math.sign(sinp(mid)) * Ri / 2 : an.z;
+  c.regions.push({ t: 'rect', x: rx, z: rz, w: Ri, d: g.corner ? Ri : 2 * Ri, zone, dens: 1.6, mask: [1, 1, 1, 1, 0] });
+  return { x: an.x, z: an.z, R, gateA, wallA, gate: gi, zone, Ri, cx, cz, pocket: true };
+}
+/**
+ * Gate plan for CG / MR: the gate radii (fracs(nw), in order) and how many of them stay full-width walls; the rest
+ * become pockets (DECISION above). Pockets go to the far corners, then to side edges, inside the band beyond the last
+ * full wall (zLast = that wall's z), clear of the bosses.
+ */
+function gatePlan(c, nw, kind, rIn) {
+  const rGs = fracs(nw).map(f => gateR(c, f));
+  const budget = (c.spec.margin[1] - POCKET_RESERVE) * needMassOf(c);
+  let pick = null;
+  for (let nFull = nw; nFull >= 1 && !pick; nFull--) {
+    let cost = 0;
+    const geo = [];
+    for (let i = 0; i < nw; i++) {
+      if (i < nFull) { cost += lineCost(c, rGs[i], kind); continue; }
+      const g = pocketGeom(rGs[i], kind, i - nFull < 2, rIn) || pocketGeom(rGs[i], kind, false, rIn);
+      geo.push(g); cost += g ? g.cost : 1e9;
+    }
+    if (cost <= budget || nFull === 1) pick = { rGs, nFull, geo, cost };
+  }
+  return pick;
+}
+/** Places the pocket gates of a plan beyond the wall at zLast (zone `parent`); returns the pockets placed. */
+function placePockets(c, plan, kind, zLast, wallALast, parent) {
+  const out = [];
+  const bosses = c.bossPos.map(i => c.items[i]);
+  const clearOf = (x, z, ext) => bosses.every(b => hyp(b.x - x, b.z - z) > ext + b.a + 0.5) &&
+    out.every(p => hyp(p.x - x, p.z - z) > ext + p.R + p.wallA + 0.6);
+  const zTop = zLast - wallALast - 0.6;
+  for (let i = 0; i < plan.geo.length; i++) {
+    let g = plan.geo[i];
+    if (!g) continue;
+    const zone = addZone(c, 0, 0, parent, 0.9);
+    const cands = [];
+    const ext = gg => gg.R + gg.wallA;
+    if (g.corner) for (const an of [{ x: c.x0, z: c.z0, a0: 0, a1: HPI }, { x: c.x1, z: c.z0, a0: HPI, a1: PI }]) cands.push([an, g]);
+    const ge = g.corner ? pocketGeom(plan.rGs[plan.nFull + i], kind, false, g.R - g.wallA - 0.3) : g;
+    for (const sd of [-1, 1]) {
+      const zc = Math.min(zTop - ext(ge), (zTop + c.z0) / 2);
+      cands.push([{ x: sd < 0 ? c.x0 : c.x1, z: zc, a0: sd < 0 ? -HPI : HPI, a1: sd < 0 ? HPI : PI + HPI }, ge]);
+    }
+    let done = null;
+    for (const [an, gg] of cands) {
+      if (!gg) continue;
+      const zMax = gg.corner ? an.z + ext(gg) : an.z + ext(gg), zMin = gg.corner ? an.z : an.z - ext(gg);
+      if (zMax > zTop || zMin < c.z0 - 1e-6) continue;
+      const cx = gg.corner ? an.x + Math.sign(cosp((an.a0 + an.a1) / 2)) * ext(gg) / 2 : an.x;
+      const cz = gg.corner ? an.z + ext(gg) / 2 : an.z;
+      if (!clearOf(cx, cz, ext(gg) * (gg.corner ? 0.75 : 1))) continue;
+      done = pocketWall(c, an, gg, kind, zone, parent);
+      break;
+    }
+    if (done) out.push(done);
+    else { c.zones.pop(); }
+  }
+  return out;
+}
 function placeBoss(c, ti, x, z) {
   const b = c.spec.tickets[ti].boss;
   const tw = c.spec.twist || {};
@@ -469,8 +726,9 @@ function boardRegion(c, dens) { c.regions.push({ t: 'rect', x: 0, z: 0, w: c.W, 
 function spawnPad(c) {
   const pal = SURF[c.town];
   const col = pal.blanket[0].lum > pal.blanket[1].lum ? 0 : 1;
-  addSurf(c, 'blanket', c.spawn.x, c.spawn.z, 3.6, 3.6, col);
+  addSurf(c, 'blanket', c.spawn.x, c.spawn.z, 3.6, 3.6, col, { prio: true });
 }
+// DECISION (11-04): a scattered blanket never overlaps another surface (0.3 u gap); a candidate that would is redrawn.
 function scatterBlankets(c, n, zLo, zHi, size, dens) {
   for (let i = 0; i < n; i++) {
     for (let t = 0; t < 20; t++) {
@@ -479,7 +737,7 @@ function scatterBlankets(c, n, zLo, zHi, size, dens) {
       if (zoneAt(c, x, z) !== 0) continue;
       let ok = true;
       for (const g of c.rings) if (hyp(x - g.x, z - g.z) < g.R + g.wallA + Math.max(w, d) / 2) ok = false;
-      if (!ok) continue;
+      if (!ok || surfHit(c, x, z, w, d, 0.3)) continue;
       const s = addSurf(c, ri(c, 3) === 2 ? 'path' : 'blanket', x, z, w, d, ri(c, 2));
       if (s) c.regions.push({ t: 'rect', x: s.x, z: s.z, w: s.w, d: s.d, zone: 0, dens });
       break;
@@ -511,6 +769,7 @@ function buildPens(c, pens, zLo, zHi) {
     const ext = R + wallA;
     // DECISION: pen centres come from 160 random candidates scored by clearance to other pens, bosses and
     // spawn (clearance capped at 6 u) plus a pull toward the side lanes; the best one wins even if cramped.
+    // DECISION (11-04): belts and lane / truck segments count as obstacles too (L26's pen sat across a cross belt).
     let best = null, bs = -1e9;
     const zA = Math.min(zLo + ext, (zLo + zHi) / 2), zB = Math.max(zHi - ext, (zLo + zHi) / 2);
     for (let t = 0; t < 160; t++) {
@@ -519,6 +778,8 @@ function buildPens(c, pens, zLo, zHi) {
       for (const q of placed) s = Math.min(s, hyp(x - q.x, z - q.z) - (ext + q.ext) - 1.8);
       for (const b of c.bossPos) { const o = c.items[b]; s = Math.min(s, hyp(x - o.x, z - o.z) - (ext + o.a) - 1.8); }
       s = Math.min(s, hyp(x - c.spawn.x, z - c.spawn.z) - ext - 4);
+      for (const b of c.belts) s = Math.min(s, beltDist(b, x, z) - ext - 0.6);
+      for (const g of c.segs) s = Math.min(s, segDist(x, z, g) - g.w - ext - 0.6);
       const sc = (s < 0 ? s * 4 : Math.min(s, 6)) + (1.5 * Math.abs(x)) / c.W + 0.3 * c.rng();
       if (sc > bs) { bs = sc; best = { x, z }; }
     }
@@ -547,8 +808,26 @@ function buildPens(c, pens, zLo, zHi) {
   }
   return out;
 }
+/** Distance from (x, z) to belt b's rectangle (w along travel, d across; rot 0 or ±π/2 as levels.js writes them). */
+function beltDist(b, x, z) {
+  const vert = Math.abs(Math.abs(b.rot) - HPI) < 0.1, hw = (vert ? b.d : b.w) / 2, hd = (vert ? b.w : b.d) / 2;
+  return hyp(Math.max(Math.abs(x - b.x) - hw, 0), Math.max(Math.abs(z - b.z) - hd, 0));
+}
 function penFloors(c) {
   // a cloth floor under pen ingredient spots that need contrast is added by ingredient patches (ingPatches)
+}
+// DECISION (11-04, §4.2 placement): a gated archetype (CG, MR) whose recipe marks no pen line puts its last open line
+// behind the first gate (the line keeps place 'open', so its count keeps the open-line spare rule).
+function promoteLine(penL, openL) {
+  if (penL.length) return;
+  for (let j = openL.length - 1; j >= 0; j--) if (openL[j].place === 'open') { penL.push(openL.splice(j, 1)[0]); return; }
+}
+/** Does the rect (x, z, w, d) touch any ring wall's disc (pens, pockets)? */
+function ringHit(c, x, z, w, d) {
+  return c.rings.some(g => {
+    const dx = Math.max(Math.abs(x - g.x) - w / 2, 0), dz = Math.max(Math.abs(z - g.z) - d / 2, 0);
+    return dx * dx + dz * dz < (g.R + g.wallA + 0.2) ** 2;
+  });
 }
 function fracs(n) { return n <= 1 ? [0.42] : n === 2 ? [0.32, 0.55] : n === 3 ? [0.26, 0.42, 0.58] : [0.24, 0.36, 0.48, 0.6]; }
 
@@ -603,7 +882,8 @@ const ARCH_FN = {
     c.items[c.bossPos[c.nT - 1]].zone = zone;
     ringWall(c, 0, zc, Rb, rG, WALL_KIND[c.town], zone, 0, -HPI, 1);
     if (c.nT > 1) placeBoss(c, 0, c.x1 - fb - 1.4, c.z0 + fb + 1.4);
-    if (tw.truck) truck(c, 0, zc, Rb + wallA + 2.0);
+    const tR = Rb + wallA + 2.0;
+    if (tw.truck) truck(c, 0, zc, tR);
     const road = Rb + wallA + 1.7, rw2 = 2.0;
     addSurf(c, 'path', -road, zc, rw2, 2 * road + rw2, null);
     addSurf(c, 'path', road, zc, rw2, 2 * road + rw2, null);
@@ -612,7 +892,13 @@ const ARCH_FN = {
     for (const sf of c.surfaces) c.regions.push({ t: 'rect', x: sf.x, z: sf.z, w: sf.w, d: sf.d, zone: 0, dens: 1.1 });
     boardRegion(c, 0.6);
     c.progL = hyp(sp.x, sp.z - zc) + road * 0.8;
-    const pts = { far: [0, zc - road], left: [-road, zc], right: [road, zc], near: [0, zc + road + 1.4] };
+    // DECISION (11-04, §4.2 placement): the far spot sits at least 0.6·D + 1.6 from spawn (the road's far side when
+    // that is farther), beyond the truck's far side on a truck level (the truck loop runs on the road); place-bound
+    // lines (stack / belt / roll) keep their own geometry before the n ≥ 4 split, and a split line does not use up
+    // the far slot, so the next open line takes it (L47 / L56 had no far or gated line).
+    const fz = tw.truck ? zc - tR - fb - 1.6 : zc - road;
+    const farZ = Math.max(c.z0 + 1.6, Math.min(fz, sp.z - 0.6 * c.D - 1.6));
+    const pts = { far: [0, farZ], left: [-road, zc], right: [road, zc], near: [0, zc + road + 1.4] };
     const order = ['far', 'left', 'right'];
     const penLines = [];
     let k = 0;
@@ -620,10 +906,10 @@ const ARCH_FN = {
       if (L.place === 'pen') { penLines.push(L); continue; }
       const key = L.spot || (k === 1 && linesOf(c).length > 1 && c.spec.n <= 3 ? 'near' : order[k % 3]);
       const n = countOf(c, L);
-      if (n >= 4 && !L.spot && c.spec.n > 3) splitSpots(c, L, [[...pts.left, 0.9], [...pts.right, 0.9], [...pts.far, 0.9]], 0);
-      else if (L.place === 'stack') stackLine(c, L, [pts[key]]);
+      if (L.place === 'stack') stackLine(c, L, [pts[key]]);
       else if (L.place === 'belt') beltLine(c, L, zc + road + 2.6);
       else if (L.place === 'roll') laneLine(c, L, 1);
+      else if (n >= 4 && !L.spot && c.spec.n > 3) { splitSpots(c, L, [[...pts.left, 0.9], [...pts.right, 0.9], [0, zc - road, 0.9]], 0); continue; }
       else spot(c, L, pts[key][0], pts[key][1], 1.0, 0, n);
       k++;
     }
@@ -668,46 +954,55 @@ const ARCH_FN = {
     const s = c.spec, sp = c.spawn, tw = s.twist || {};
     const lines = linesOf(c);
     const penL = lines.filter(L => L.place === 'pen'), openL = lines.filter(L => L.place !== 'pen');
+    promoteLine(penL, openL);
     const nw = Math.max(1, tw.walls || penL.length || 1);
     const bz = bossZ(c, c.bossFinal);
     placeBoss(c, c.nT - 1, 0, bz);
     c.progL = sp.z - bz;
-    const fr = fracs(nw);
     const wk = c.town === 'market' ? 'car' : WALL_KIND[c.town];
+    // DECISION (11-04): the full-width walls are the plan's first nFull gates; the later gates are pockets.
+    const plan = gatePlan(c, nw, wk, 2.4);
+    const nf = plan.nFull;
     const zFar = bz + c.bossFinal + 2.6, zNear = sp.z - 6;
     const walls = [];
     let parent = 0;
-    for (let i = 0; i < nw; i++) {
-      const p = nw === 1 ? 0.62 : 0.38 + (0.34 * i) / (nw - 1);
+    for (let i = 0; i < nf; i++) {
+      const p = nf === 1 ? 0.55 : 0.38 + (0.3 * i) / (nf - 1);
       const zw = clamp(sp.z - p * (sp.z - bz), zFar, zNear);
       const zone = addZone(c, 0, zw - 2, parent, p);
-      walls.push(lineWall(c, zw, rr(c, -c.W * 0.22, c.W * 0.22), gateR(c, fr[i]), wk, zone, parent));
+      walls.push(lineWall(c, zw, rr(c, -c.W * 0.22, c.W * 0.22), plan.rGs[i], wk, zone, parent));
       parent = zone;
     }
     if (c.nT > 1) placeBoss(c, 0, c.x0 + c.spec.tickets[0].boss.a + 1.5, walls[0].z + 3.5);
     // the boss sits beyond the last wall
     c.items[c.bossPos[c.nT - 1]].zone = zoneAt(c, 0, bz);
+    const lw = walls[walls.length - 1];
+    const gates = walls.concat(placePockets(c, plan, wk, lw.z, lw.wallA, parent));
+    const nw2 = walls.length;
     // centre path and band blankets
     addSurf(c, 'path', 0, (sp.z + bz) / 2, 2.6, sp.z - bz, null);
     boardRegion(c, 0.6);
     c.regions.push({ t: 'rect', x: 0, z: (sp.z + bz) / 2, w: 2.6, d: sp.z - bz, zone: 0, dens: 1.0 });
-    for (let i = 0; i <= nw; i++) {
+    for (let i = 0; i <= nw2; i++) {
       const zt = i === 0 ? sp.z - 2 : walls[i - 1].z - walls[i - 1].wallA - 0.6;
-      const zb = i === nw ? bz + c.bossFinal + 1.0 : walls[i].z + walls[i].wallA + 0.6;
+      const zb = i === nw2 ? bz + c.bossFinal + 1.0 : walls[i].z + walls[i].wallA + 0.6;
       if (zt - zb < 2.5) continue;
       const zone = zoneAt(c, 0, (zt + zb) / 2);
       for (const side of [-1, 1]) {
-        const sf = addSurf(c, 'blanket', side * c.W * 0.27, (zt + zb) / 2, c.W * 0.3, Math.min(4.5, (zt - zb) * 0.7), (i + (side > 0 ? 1 : 0)) % 2);
+        const bw = c.W * 0.3, bd = Math.min(4.5, (zt - zb) * 0.7), bx = side * c.W * 0.27, bzc = (zt + zb) / 2;
+        if (ringHit(c, bx, bzc, bw, bd)) continue;
+        const sf = addSurf(c, 'blanket', bx, bzc, bw, bd, (i + (side > 0 ? 1 : 0)) % 2);
         if (sf) c.regions.push({ t: 'rect', x: sf.x, z: sf.z, w: sf.w, d: sf.d, zone, dens: 1.2 });
       }
       if (i > 0) c.regions.push({ t: 'rect', x: 0, z: (zt + zb) / 2, w: c.W, d: zt - zb, zone, dens: 0.6 });
     }
-    // pen lines go beyond gates (last pen line in the last band)
+    // pen lines go beyond gates in order (walls, then pockets); extra lines share the last gate
     penL.forEach((L, k) => {
-      const w = walls[Math.min(walls.length - 1, k)];
-      const zEnd = k + 1 < walls.length ? walls[k + 1].z + walls[k + 1].wallA + 1.2 : bz + c.bossFinal + 1.5;
-      const z = (w.z - w.wallA - 1.0 + zEnd) / 2;
-      spot(c, L, (k % 2 ? 1 : -1) * c.W * 0.25, z, 1.0, w.zone, countOf(c, L));
+      const gi = Math.min(gates.length - 1, k), g = gates[gi];
+      if (g.pocket) { spot(c, L, g.cx, g.cz, Math.min(1.0, 0.3 * g.Ri), g.zone, countOf(c, L)); return; }
+      const zEnd = gi + 1 < walls.length ? walls[gi + 1].z + walls[gi + 1].wallA + 1.2 : bz + c.bossFinal + 1.5;
+      const z = (g.z - g.wallA - 1.0 + zEnd) / 2;
+      spot(c, L, (k % 2 ? 1 : -1) * c.W * 0.25, z, 1.0, g.zone, countOf(c, L));
     });
     openL.forEach((L, k) => {
       const zEnd = walls[0].z + walls[0].wallA + 1.6;
@@ -739,10 +1034,10 @@ const ARCH_FN = {
       const side = i % 2 ? 1 : -1;
       const z = sp.z - p * (sp.z - bz), x = side * c.W * rr(c, 0.18, 0.27);
       const L = i >= far ? lines[i - far] : null;
-      let col = i % 2;
-      if (L && KIND[L.kind].tier <= 1) { const b = bestSurfFor(c, KIND[L.kind]); col = b.col != null ? b.col : col; }
+      let b = { type: 'blanket', col: i % 2 };
+      if (L && KIND[L.kind].tier <= 1) b = bestSurfFor(c, KIND[L.kind]);
       const w = rr(c, 3.8, 5.0), d = rr(c, 3.6, 4.6);
-      isl.push(addSurf(c, 'blanket', x, z, w, d, col));
+      isl.push(addSurf(c, b.type, x, z, w, d, b.col));
       if (L) {
         if (L.place === 'roll') laneLine(c, L, 1);
         else if (L.place === 'stack') stackLine(c, L, [[x, z]]);
@@ -771,10 +1066,7 @@ const ARCH_FN = {
       if (i % 2) addLane(c, c.x0 + 0.8, z, c.x1 - 0.8, z, 1.0 + 0.2 * i);
       else addLane(c, c.x1 - 0.8, z, c.x0 + 0.8, z, 1.0 + 0.2 * i);
     }
-    for (const ln of c.lanes) {
-      const w = Math.abs(ln.bx - ln.ax) + 1.2, d = Math.abs(ln.bz - ln.az) + 1.2;
-      addSurf(c, 'path', (ln.ax + ln.bx) / 2, (ln.az + ln.bz) / 2, w > d ? w : 1.2, w > d ? 1.2 : d, null);
-    }
+    c.lanes.forEach((ln, li) => laneBed(c, li, null));
     boardRegion(c, 0.6);
     scatterBlankets(c, 5, bz + 1, sp.z - 3, 2.4, 1.3);
     const lines = linesOf(c);
@@ -793,10 +1085,384 @@ const ARCH_FN = {
     if (penL.length) buildPens(c, penL.map(L => ({ lines: [L], frac: 0.42, load: 3 })), bz + c.bossFinal + 0.5, sp.z - 0.6 * (sp.z - bz));
   },
 };
-ARCH_FN.PS = ARCH_FN.RR;
-ARCH_FN.MR = ARCH_FN.CG;
-ARCH_FN.CK = ARCH_FN.BP;
-ARCH_FN.PF = ARCH_FN.BP;
+
+/** Non-nested pen (ring wall) at about (x, z) holding `lines`; the gate faces `face` (default the spawn). */
+// DECISION (11-04): archetypes that know where a pen belongs (pier ends, spiral stops, kitchen corners) use penAt;
+// the size rule is buildPens' (inner clear radius ≈ 1.25 + 0.12·load + 1.2·largest ingredient a), and the centre is
+// pulled inside the board so the whole ring fits. DECISION (11-04 Wed): spec.wallKind overrides the town's wall kind
+// (market Feast courses: crates, see FEAST_WALL).
+function penAt(c, lines, x, z, frac, load, face) {
+  const wallK = c.spec.wallKind || WALL_KIND[c.town];
+  const rG = gateR(c, frac);
+  const gateA = 0.97 * FIT * rG, wallA = Math.max(KIND[wallK].a, 1.25 * gateA);
+  let maxA = 0.15;
+  for (const L of lines) maxA = Math.max(maxA, KIND[L.kind].a);
+  const R = clamp(1.25 + 0.12 * load + 1.2 * maxA + wallA, 1.8, 3.8);
+  const ext = R + wallA + 0.4;
+  x = clamp(x, c.x0 + ext, c.x1 - ext); z = clamp(z, c.z0 + ext, c.z1 - ext - 2);
+  // DECISION (11-04, §4.2 spawn density): a pen keeps ext + 1.8 from spawn (pushed straight away from it), so its gate
+  // never sits in the 1.2 u spawn sectors (L29's spiral-end pen put a car gate 1.8 u from spawn: 6/8 sectors).
+  const sp = c.spawn, dS = hyp(x - sp.x, z - sp.z), dMin = ext + 1.8;
+  if (dS < dMin) {
+    const ux = dS > 1e-6 ? (x - sp.x) / dS : 0, uz = dS > 1e-6 ? (z - sp.z) / dS : -1;
+    x = clamp(sp.x + ux * dMin, c.x0 + ext, c.x1 - ext); z = clamp(sp.z + uz * dMin, c.z0 + ext, c.z1 - ext - 2);
+  }
+  const f = face || c.spawn;
+  const th = atan2p(f.z - z, f.x - x);
+  const zone = addZone(c, x, z, 0, Math.min(0.95, frac + 0.1));
+  const st = ringWall(c, x, z, R, rG, wallK, zone, 0, th, 1);
+  st.ext = ext;
+  const inner = R - wallA - 0.15;
+  for (const L of lines) splitSpots(c, L, [[x, z, Math.max(0.5, inner * 0.6)]], zone);
+  c.regions.push({ t: 'disc', x, z, r: Math.max(0.4, inner), zone, dens: lines.length ? 0.9 : 2.2, mask: [1, 1, 1, 0, 0] });
+  return st;
+}
+/** A non-pen line at (x, z) by its place: stack, belt (across the board at z), roll (lanes) or an open spot. */
+function putLine(c, L, x, z, r) {
+  if (L.place === 'stack') stackLine(c, L, [[x, z]]);
+  else if (L.place === 'belt') beltLine(c, L, z, c.belts.length % 2 ? -1.2 : 1.2);
+  else if (L.place === 'roll') laneLine(c, L, Math.max(1, c.lanes.length));
+  else spot(c, L, x, z, r || 1.0, 0, countOf(c, L));
+}
+/** Market-style stall blocks: rug strips at the row centres xs, split into blocks with cross alleys; returns alley z. */
+function stallRows(c, xs, rw, zTop, zBot, avoid) {
+  const alleys = [];
+  const blk = 4.6, gap = 1.8;
+  for (let z = zTop; z - blk > zBot - 0.01; z -= blk + gap) {
+    const za = z - blk;
+    if (avoid.some(w => z > w.z - w.wallA - 0.9 && za < w.z + w.wallA + 0.9)) continue;
+    for (const x of xs) {
+      if (Math.abs(x - c.spawn.x) < rw / 2 + 2.2 && z > c.spawn.z - 5.5) continue;
+      if (ringHit(c, x, z - blk / 2, rw, blk)) continue;
+      const sf = addSurf(c, 'rug', x, z - blk / 2, rw, blk, null);
+      if (sf) c.regions.push({ t: 'rect', x: sf.x, z: sf.z, w: sf.w, d: sf.d, zone: zoneAt(c, sf.x, sf.z), dens: 2.4 });
+    }
+    alleys.push(za - gap / 2);
+  }
+  return alleys;
+}
+/** A belt with no line on it: geometry + bed now, its riders (junk of `tiers`, fitting fitR if set) after the palette. */
+function junkBelt(c, x, z, len, vert, v, n, tiers, fitR) {
+  const bi = c.belts.length, d = 1.4;
+  // DECISION (11-04, Sim contract): a vertical belt runs along z with rot −π/2 (travel (cos rot, −sin rot) = +z,
+  // toward the spawn edge); its bed is the axis-aligned d × len rectangle. Horizontal belts keep rot 0.
+  c.belts.push({ x: r3(x), z: r3(z), w: r3(len), d, rot: vert ? -HPI : 0, v });
+  if (vert) c.segs.push({ ax: x, az: z - len / 2, bx: x, bz: z + len / 2, w: d / 2 + 0.1 });
+  else c.segs.push({ ax: x - len / 2, az: z, bx: x + len / 2, bz: z, w: d / 2 + 0.1 });
+  const bed = addSurf(c, 'path', x, z, vert ? d : len, vert ? len : d, null, { prio: true });
+  if (bed) bed.belt = bi;
+  c.beltFill.push({ bi, n, tiers, fitR });
+  return bi;
+}
+/** Riders for junk belts (after buildPalette): T-tier junk spread evenly along the belt, passing contrast. */
+// DECISION (11-04): belt riders take role 'crumb' so the margin / food / gate passes never swap or move them (a
+// swapped rider would lose its belt); they still count in the supply and the tier totals.
+function fillBelts(c) {
+  for (const f of c.beltFill) {
+    const b = c.belts[f.bi], vert = b.rot !== 0;
+    for (let j = 0; j < f.n; j++) {
+      const u = -b.w / 2 + (b.w * (j + 0.5)) / f.n;
+      const x = vert ? b.x : b.x + u, z = vert ? b.z + u : b.z;
+      let ks = [];
+      for (const t of f.tiers) for (const k of c.pal[t]) if ((!f.fitR || canFit(f.fitR, k.a)) && (k.tier > 1 || contrastOK(c, k, x, z))) ks.push(k);
+      if (!ks.length) continue;
+      const k = ks[ri(c, ks.length)];
+      addItem(c, k.id, x, z, { role: 'crumb', belt: f.bi, zone: 0, edgeOk: true });
+    }
+  }
+}
+/** Spiral progress for PS: s in [0, 1] of the nearest spiral turn (elliptical coordinates around (0, zc)). */
+function spiralS(sp, x, z) {
+  const u = x / sp.ax, v = (z - sp.zc) / sp.az;
+  const rho = hyp(u, v);
+  if (rho <= sp.rIn) return 1;
+  let d0 = sp.th0 - atan2p(v, u);
+  d0 -= TAU * Math.floor(d0 / TAU);
+  let best = 0, bd = 1e9;
+  for (let k = 0; k < 3; k++) {
+    const s = (d0 + k * TAU) / sp.Th;
+    if (s > 1.0001) break;
+    const e = Math.abs(1 - (1 - sp.rIn) * s - rho);
+    if (e < bd) { bd = e; best = s; }
+  }
+  return clamp(best, 0, 1);
+}
+function spiralPt(sp, s) {
+  const th = sp.th0 - s * sp.Th, rho = 1 - (1 - sp.rIn) * s;
+  return [sp.ax * rho * cosp(th), sp.zc + sp.az * rho * sinp(th)];
+}
+
+// DECISION (11-04, §4.1 MR): Market Rows = 2–3 stall rows running spawn → boss (plum rug under dense stall junk) with
+// slate path aisles between them and cross alleys every 6.4 u; the parked-car rows are the late gates (a car lineWall
+// at p 0.70, or p 0.46 / 0.62 / 0.78 for three); open lines sit at alley ends by the board edge (before the first car
+// row), pen lines in the band beyond their car row, as in CG.
+ARCH_FN.MR = function MR(c) {
+  const s = c.spec, sp = c.spawn, tw = s.twist || {};
+  const lines = linesOf(c);
+  const penL = lines.filter(L => L.place === 'pen'), openL = lines.filter(L => L.place !== 'pen');
+  promoteLine(penL, openL);
+  const nw = Math.max(1, tw.walls || penL.length || 1);
+  const bz = bossZ(c, c.bossFinal);
+  placeBoss(c, c.nT - 1, 0, bz);
+  c.progL = sp.z - bz;
+  // DECISION (11-04): car rows are the plan's first nFull gates (gatePlan); the later gates are car-park pockets.
+  const wk = WALL_KIND[c.town];
+  const plan = gatePlan(c, nw, wk, 2.4);
+  const nf = plan.nFull;
+  const zFar = bz + c.bossFinal + 2.6, zNear = sp.z - 7;
+  const walls = [];
+  let parent = 0;
+  for (let i = 0; i < nf; i++) {
+    const p = nf === 1 ? 0.6 : 0.46 + (0.26 * i) / (nf - 1);
+    const zw = clamp(sp.z - p * (sp.z - bz), zFar, zNear);
+    const zone = addZone(c, 0, zw - 2, parent, p);
+    walls.push(lineWall(c, zw, rr(c, -c.W * 0.2, c.W * 0.2), plan.rGs[i], wk, zone, parent));
+    parent = zone;
+  }
+  if (c.nT > 1) placeBoss(c, 0, c.x0 + s.tickets[0].boss.a + 1.5, walls[0].z + 3.5);
+  c.items[c.bossPos[c.nT - 1]].zone = zoneAt(c, 0, bz);
+  const lw = walls[walls.length - 1];
+  const gates = walls.concat(placePockets(c, plan, wk, lw.z, lw.wallA, parent));
+  const nw2 = walls.length;
+  const nR = c.W >= 28 ? 3 : 2;
+  const xs = (nR === 2 ? [-0.21, 0.21] : [-0.29, 0, 0.29]).map(f => f * c.W);
+  const rw = c.W * (nR === 2 ? 0.15 : 0.12);
+  const alleys = stallRows(c, xs, rw, sp.z - 3.4, bz + c.bossFinal + 1.4, walls);
+  // aisles between the rows
+  const ax = nR === 2 ? [0] : [-0.145 * c.W, 0.145 * c.W];
+  for (const x of ax) addSurf(c, 'path', x, (sp.z - 2 + bz) / 2, 1.6, sp.z - 2 - bz, null);
+  boardRegion(c, 0.45);
+  for (let i = 1; i <= nw2; i++) {
+    const zt = walls[i - 1].z - walls[i - 1].wallA - 0.6, zb = i === nw2 ? bz + c.bossFinal + 1.0 : walls[i].z + walls[i].wallA + 0.6;
+    if (zt - zb > 1.5) c.regions.push({ t: 'rect', x: 0, z: (zt + zb) / 2, w: c.W, d: zt - zb, zone: zoneAt(c, 0, (zt + zb) / 2), dens: 0.7 });
+  }
+  penL.forEach((L, k) => {
+    const gi = Math.min(gates.length - 1, k), g = gates[gi];
+    if (g.pocket) { spot(c, L, g.cx, g.cz, Math.min(1.0, 0.3 * g.Ri), g.zone, countOf(c, L)); return; }
+    const zEnd = gi + 1 < walls.length ? walls[gi + 1].z + walls[gi + 1].wallA + 1.2 : bz + c.bossFinal + 1.5;
+    spot(c, L, (k % 2 ? 1 : -1) * c.W * 0.4, (g.z - g.wallA - 1.0 + zEnd) / 2, 1.0, g.zone, countOf(c, L));
+  });
+  const z0w = walls[0].z + walls[0].wallA + 1.4;
+  const front = alleys.filter(z => z > z0w + 0.6 && z < sp.z - 4);
+  openL.forEach((L, k) => {
+    const n = openL.length;
+    const want = sp.z - (0.28 + (0.4 * k) / Math.max(1, n - 1)) * (sp.z - z0w);
+    let z = front.length ? front.reduce((p, q) => (Math.abs(q - want) < Math.abs(p - want) ? q : p)) : want;
+    if (L.place === 'belt') z = want;
+    putLine(c, L, (k % 2 ? 1 : -1) * c.W * 0.41, z, 1.0);
+  });
+};
+
+// DECISION (11-04, §4.1 CK): Conveyor Kitchen = a feeder belt beside the spawn bringing fitting crumbs toward the pot
+// (vertical, travel +z), then a cross belt per belt line at p 0.42 / 0.66 with alternating direction (a junk belt
+// of T1–T2 takes the second slot when there is one belt line); dense T2+ counter junk flanks both ends of every
+// cross belt, so the early pot crosses through the middle (the choke points). Pens via buildPens.
+ARCH_FN.CK = function CK(c) {
+  const s = c.spec, sp = c.spawn;
+  const bz = bossZ(c, c.bossFinal);
+  placeBoss(c, c.nT - 1, 0, bz);
+  if (c.nT > 1) placeBoss(c, c.x1 - c.bossFinal - 1.4, (bz + sp.z) / 2);
+  c.progL = sp.z - bz;
+  const lines = linesOf(c);
+  const beltL = lines.filter(L => L.place === 'belt'), penL = lines.filter(L => L.place === 'pen');
+  const rest = lines.filter(L => L.place !== 'belt' && L.place !== 'pen');
+  const side = ri(c, 2) ? 1 : -1;
+  junkBelt(c, sp.x + side * 3.2, sp.z - 6.2, 9, true, 1.2, 6, [0], c.r0);
+  const bzs = [0.42, 0.66].map(p => sp.z - p * (sp.z - bz));
+  const bw = c.W * 0.6;
+  for (let i = 0; i < 2; i++) {
+    const v = i % 2 ? -1.2 : 1.2;
+    if (beltL[i]) beltLine(c, beltL[i], bzs[i], v);
+    else if (i === 1 || !beltL.length) junkBelt(c, 0, bzs[i], bw, false, v, 5, [1, 2], 0);
+    for (const sd of [-1, 1]) c.regions.push({ t: 'rect', x: sd * (bw / 2 + (c.W / 2 - bw / 2) / 2), z: bzs[i], w: c.W / 2 - bw / 2 - 0.3, d: 2.6, zone: 0, dens: 3.2, mask: [0, 0, 1, 1, 1] });
+  }
+  for (let i = 2; i < beltL.length; i++) beltLine(c, beltL[i], sp.z - (0.54 + 0.1 * i) * (sp.z - bz), i % 2 ? -1.2 : 1.2);
+  boardRegion(c, 0.55);
+  scatterBlankets(c, 4, bz + 1, sp.z - 3, 2.4, 1.2);
+  const ps = [0.28, 0.82, 0.55];
+  rest.forEach((L, k) => putLine(c, L, (k % 2 ? 1 : -1) * c.W * 0.3, sp.z - ps[k % 3] * (sp.z - bz), 1.0));
+  if (penL.length) buildPens(c, penL.map(L => ({ lines: [L], frac: 0.42, load: 3 })), bz + c.bossFinal + 0.5, sp.z - 0.5 * (sp.z - bz));
+};
+
+// DECISION (11-04, §4.1 PF): Pier Fingers = a deck boardwalk along the spawn edge (z1) and 3–4 deck piers reaching
+// toward z0 over the sand, of lengths 1 / 0.8 / 0.62 / 0.48 of the board; the final boss stands on a deck platform at
+// the end of the longest pier, ticket 1's boss (two-course) at the end of the second longest; pen lines get pens at
+// pier ends, open lines the other pier ends (one-course) or the pier middles and boardwalk ends (ticket 1 of two),
+// roll lines lanes down the piers toward the boardwalk, the gull roost (nest) is the shortest pier's end, and a
+// truck boss drives the longest pier (parks at both ends). Junk is dense on deck, sparse on sand. No water areas:
+// the pot walks everywhere, so sea would read as walkable water.
+ARCH_FN.PF = function PF(c) {
+  const s = c.spec, sp = c.spawn, tw = s.twist || {};
+  const nP = c.W >= 30 ? 4 : 3, bwD = 4.2, pw = 3.0;
+  const zS = c.z1 - bwD;
+  addSurf(c, 'deck', 0, c.z1 - bwD / 2, c.W, bwD, null);
+  c.regions.push({ t: 'rect', x: 0, z: c.z1 - bwD / 2, w: c.W, d: bwD, zone: 0, dens: 1.6 });
+  const xs = [];
+  for (let i = 0; i < nP; i++) xs.push(c.x0 + (c.W * (i + 0.5)) / nP);
+  const rank = shuffled(c, xs.map((_, i) => i));
+  const LEN = [1, 0.8, 0.62, 0.48];
+  const full = zS - (c.z0 + 0.4);
+  const piers = rank.map((pi, r) => ({ x: xs[pi], len: full * LEN[r], r, end: zS - full * LEN[r] }));
+  const fb = c.bossFinal, P0 = piers[0];
+  const bz = bossZ(c, fb);
+  const plat = 2 * fb + 1.6;
+  addSurf(c, 'deck', P0.x, bz, plat, plat, null);
+  placeBoss(c, c.nT - 1, P0.x, bz);
+  c.keeps.push({ x: P0.x, z: bz, r: fb + 1.6, maxA: 0.25 });
+  c.progL = hyp(P0.x - sp.x, bz - sp.z);
+  const two = c.nT > 1;
+  if (two) {
+    const P1 = piers[1], a0 = s.tickets[0].boss.a, z1 = P1.end + a0 + 0.9;
+    addSurf(c, 'deck', P1.x, z1, 2 * a0 + 1.4, 2 * a0 + 1.4, null);
+    placeBoss(c, 0, P1.x, z1);
+  }
+  for (const P of piers) {
+    const sf = addSurf(c, 'deck', P.x, zS - P.len / 2, pw, P.len, null);
+    if (sf) c.regions.push({ t: 'rect', x: sf.x, z: sf.z, w: sf.w, d: sf.d, zone: 0, dens: 2.4 });
+  }
+  boardRegion(c, 0.3);
+  if (tw.truck) {
+    c.truckPath = [{ x: r3(P0.x), z: r3(bz), stop: true }, { x: r3(P0.x), z: r3(zS - fb - 0.6), stop: true }];
+    c.segs.push({ ax: P0.x, az: bz, bx: P0.x, bz: zS - fb - 0.6, w: fb });
+  }
+  const shortest = piers[piers.length - 1];
+  if (tw.gulls) c.roost = { x: r3(shortest.x), z: r3(shortest.end + 0.9) };
+  const lines = linesOf(c);
+  if (lines.some(L => L.place === 'roll')) {
+    for (const P of piers.slice(1, 1 + clamp(tw.lanes || 2, 1, nP - 1))) addLane(c, P.x, P.end + 0.6, P.x, zS + 1.2, 1.1);
+  }
+  const ends = piers.slice(two ? 2 : 1).map(P => [P.x, P.end + 1.4]);
+  if (tw.gulls) { const k = ends.findIndex(e => e[0] === shortest.x); if (k >= 0) ends[k][1] += 1.6; }
+  const near = [[P0.x, zS - P0.len * 0.45], [c.x0 + 2.2, zS + bwD / 2], [c.x1 - 2.2, zS + bwD / 2]];
+  for (const P of piers.slice(1)) near.push([P.x, zS - P.len * 0.5]);
+  const late = L => !two || L.ti === c.nT - 1;
+  const penL = lines.filter(L => L.place === 'pen');
+  for (const L of penL) {
+    const e = (late(L) ? ends.shift() : near.shift()) || near.shift() || [0, 0];
+    penAt(c, [L], e[0], e[1] - 1.2, 0.42, 3, { x: e[0], z: zS });
+  }
+  for (const L of lines) {
+    if (L.place === 'pen') continue;
+    const e = (late(L) ? ends.shift() || near.shift() : near.shift() || ends.shift()) || [0, (zS + c.z0) / 2];
+    putLine(c, L, e[0], e[1], 1.0);
+  }
+};
+
+// DECISION (11-04, §4.1 PS): Plaza Spiral = the final boss on a central plaza behind a ring of gate pieces (gate at
+// r0 + 0.5·(needR − r0), as RR) facing the spiral's end; an elliptical spiral of 1.25 turns runs from the spawn
+// inward to that gate, marked by path stepping stones every 3.4 u, and junk grows along it: progress for the tier
+// windows is the spiral parameter s (c.progFn), and the regions along it allow T0–T2 on the first third, T0–T3 on
+// the middle, T1–T4 on the last. Lines sit at spiral stops spread over s 0.16–0.8 in ticket order (pens pushed
+// outward to the board edge); ticket 1's boss (two-course) sits just outside the spiral at s 0.5.
+/** Supply (K_WALL·a²) of ringWall's pieces for a ring of centre-line radius R (same piece count rule). */
+function ringCost(R, rG, kind) {
+  const { gateA, wallA } = gateSize(rG, kind);
+  const cnn = 2 * wallA + rPassFor(gateA, wallA);
+  if (cnn > 1.8 * R) R = cnn / 1.8;
+  const Phi = 2 * asinp(cnn / (2 * R)), dMax = 2 * asinp(Math.min(1, (1.16 * wallA) / (2 * R)));
+  const m = Math.ceil((TAU - Phi) / dMax - 1e-9);
+  return K_WALL * ((m + 1) * wallA * wallA + gateA * gateA);
+}
+// DECISION (11-04, §4.2 margin): the plaza ring's gate frac steps down from 0.5 (by 0.05, to 0.3) until the ring's
+// pieces, its pens' pieces (pens share the plaza's gate size) and the front food the gate needs
+// (gateM·(rG² − r0²)/G) fit inside (margin hi − 0.25)·needMass: market's 1.30 cars made L29's ring + pen 1.66 of a
+// 1.6–2.0 band. A spec gateR override still wins. Returns the frac.
+function plazaFrac(c, fb, kind, penA) {
+  const g = c.spec.gateR;
+  if (g && g[c.gi] != null) return 0.5;
+  const nr = needR(c.bossFinal), need = (nr * nr - c.r0 * c.r0) / G, hi = c.spec.margin[1];
+  let f = 0.5;
+  for (; f > 0.3 + 1e-9; f -= 0.05) {
+    const rG = c.r0 + f * (nr - c.r0), { wallA } = gateSize(rG, kind);
+    let cost = ringCost(fb + wallA + 0.7, rG, kind) + (gateM(c) * (rG * rG - c.r0 * c.r0)) / G;
+    for (const a of penA) cost += ringCost(clamp(1.25 + 0.36 + 1.2 * Math.max(0.15, a) + wallA, 1.8, 3.8), rG, kind);
+    if (cost <= (hi - 0.25) * need) break;
+  }
+  return f;
+}
+ARCH_FN.PS = function PS(c) {
+  const s = c.spec, sp = c.spawn;
+  const fb = c.bossFinal;
+  const pf = plazaFrac(c, fb, WALL_KIND[c.town], linesOf(c).filter(L => L.place === 'pen').map(L => KIND[L.kind].a));
+  const rG = gateR(c, pf);
+  const gateA = 0.97 * FIT * rG, wallA = Math.max(KIND[WALL_KIND[c.town]].a, 1.25 * gateA);
+  const Rb = fb + wallA + 0.7;
+  const zc = (sp.z + c.z0 + 1.4) / 2;
+  const S = { ax: c.W / 2 - 1.6, az: sp.z - zc, zc, th0: HPI, Th: 2.5 * PI, rIn: 0 };
+  S.rIn = clamp((Rb + wallA + 1.3) / Math.min(S.ax, S.az), 0.3, 0.75);
+  const zone = addZone(c, 0, zc, 0, 0.75);
+  placeBoss(c, c.nT - 1, 0, zc);
+  c.items[c.bossPos[c.nT - 1]].zone = zone;
+  const thEnd = S.th0 - S.Th;
+  ringWall(c, 0, zc, Rb, rG, WALL_KIND[c.town], zone, 0, atan2p(S.az * sinp(thEnd), S.ax * cosp(thEnd)), 1);
+  c.progFn = (x, z) => spiralS(S, x, z);
+  c.progL = hyp(sp.x, sp.z - zc) + Rb;
+  addSurf(c, 'path', 0, zc, 1.5 * (Rb - wallA), 1.5 * (Rb - wallA), null);
+  // stepping stones along the spiral
+  let acc = 0, [px, pz] = spiralPt(S, 0);
+  for (let i = 1; i <= 240; i++) {
+    const [x, z] = spiralPt(S, i / 240);
+    acc += hyp(x - px, z - pz); px = x; pz = z;
+    if (acc < 3.4) continue;
+    acc = 0;
+    if (hyp(x - sp.x, z - sp.z) < 3.2 || surfHit(c, x, z, 1.7, 1.7, 0.15)) continue;
+    addSurf(c, 'path', x, z, 1.7, 1.7, null);
+  }
+  boardRegion(c, 0.5);
+  for (let k = 0; k < 12; k++) {
+    const t = (k + 0.5) / 12, [x, z] = spiralPt(S, t);
+    c.regions.push({ t: 'disc', x, z, r: 2.3, zone: 0, dens: 2.2, mask: t < 0.34 ? [1, 1, 1, 0, 0] : t < 0.67 ? [1, 1, 1, 1, 0] : [0, 1, 1, 1, 1] });
+  }
+  const outward = (t, d) => { const [x, z] = spiralPt(S, t); const u = x / S.ax, v = (z - zc) / S.az, n = hyp(u, v) || 1; return [x + (u / n) * d, z + (v / n) * d]; };
+  if (c.nT > 1) { const a0 = s.tickets[0].boss.a, [x, z] = outward(0.5, a0 + 1.2); placeBoss(c, 0, clamp(x, c.x0 + a0 + 0.6, c.x1 - a0 - 0.6), clamp(z, c.z0 + a0 + 0.6, c.z1 - a0 - 0.6)); }
+  const lines = linesOf(c);
+  const ts = lines.map((L, k) => (lines.length < 2 ? 0.45 : 0.16 + (0.64 * k) / (lines.length - 1)));
+  // DECISION (11-04, §4.2 placement): with no pen / stack / belt / roll line, the slot nearest the spiral's far apex
+  // moves onto the farthest spiral stop from spawn (s 0.16–0.8), which lies ≥ 0.6·D away; slots stay in ticket order.
+  const farD = t => { const [x, z] = spiralPt(S, t); return hyp(x - sp.x, z - sp.z); };
+  if (s.n >= 4 && !lines.some(L => L.place && L.place !== 'open') && !ts.some(t => farD(t) >= 0.6 * c.D + 1.6)) {
+    let tf = 0.16;
+    for (let t = 0.16; t <= 0.8 + 1e-9; t += 0.02) if (farD(t) > farD(tf)) tf = t;
+    let j = 0;
+    for (let q = 1; q < ts.length; q++) if (Math.abs(ts[q] - tf) < Math.abs(ts[j] - tf)) j = q;
+    ts[j] = clamp(tf, j > 0 ? ts[j - 1] + 0.05 : 0, j + 1 < ts.length ? ts[j + 1] - 0.05 : 1);
+  }
+  lines.forEach((L, k) => {
+    const t = ts[k];
+    if (L.place === 'pen') { const [x, z] = outward(t, 3.2); penAt(c, [L], x, z, Math.min(pf, t), 3); return; }
+    const [x, z] = spiralPt(S, t);
+    putLine(c, L, x, z, 1.0);
+  });
+};
+
+// DECISION (11-04, §3.12 Feast, D23): the Feast course map (arch FE) is an open board with the Blanket Path's cloth;
+// ticket k's lines sit around progress 0.2 + 0.19·k on alternating sides (pens via penAt, rollers on two cross lanes,
+// belt lines a cross belt there), and ticket 4's mini boss stands open at the far end. Tickets 1–3 have no boss.
+ARCH_FN.FE = function FE(c) {
+  const sp = c.spawn;
+  const bz = bossZ(c, c.bossFinal);
+  placeBoss(c, c.nT - 1, 0, bz);
+  c.progL = sp.z - bz;
+  const ging = !!SURF[c.town].gingham;
+  const rw = (ging ? 0.3 : 0.4) * c.W, tile = 3.2, td = ging ? 2.4 : tile;
+  const n = Math.max(1, Math.ceil((sp.z + 1.6 - bz) / tile));
+  for (let i = 0; i < n; i++) addSurf(c, 'blanket', 0, sp.z + 1.6 - tile * (i + 0.5), rw, td, i % 2);
+  boardRegion(c, 0.6);
+  c.regions.push({ t: 'rect', x: 0, z: (sp.z + bz) / 2, w: rw, d: sp.z - bz, zone: 0, dens: 1.3 });
+  scatterBlankets(c, ging ? 2 : 4, bz, sp.z - 2, ging ? 2.0 : 2.4, 1.2);
+  const lines = linesOf(c);
+  if (lines.some(L => L.place === 'roll')) {
+    const z1 = sp.z - 0.5 * (sp.z - bz), z2 = sp.z - 0.74 * (sp.z - bz);
+    addLane(c, c.x0 + 0.8, z1, c.x1 - 0.8, z1, 1.1);
+    addLane(c, c.x1 - 0.8, z2, c.x0 + 0.8, z2, 1.3);
+  }
+  lines.forEach((L, k) => {
+    const p = 0.2 + 0.19 * L.ti + 0.06 * L.li;
+    const x = (k % 2 ? 1 : -1) * c.W * 0.27, z = sp.z - p * (sp.z - bz);
+    if (L.place === 'pen') penAt(c, [L], x * 1.25, z, Math.min(0.5, p), 3);
+    else putLine(c, L, x, z, 1.0);
+  });
+};
 
 function addLane(c, ax, az, bx, bz, v) {
   const i = c.lanes.length;
@@ -828,21 +1494,41 @@ function laneLine(c, L, nl) {
       const t = u / len;
       addItem(c, L.kind, ln.ax + (ln.bx - ln.ax) * t, ln.az + (ln.bz - ln.az) * t, { role: 'ing', lane: li, lu: u, zone: 0, line: L, edgeOk: true });
     }
+    if (m > 0) laneBed(c, li, k);
   });
 }
-function beltLine(c, L, z) {
+/** The strip under lane li (1.2 u wide): a priority surface tagged s.lane. With a T0/T1 roller kind k it is styled
+ *  so k passes the contrast rule anywhere along the lane. */
+// DECISION (11-04, contrast §4.2): every lane has a bed (Tuesday's default lane had none, so orange/apple rollers
+// failed contrast on Market ground / Picnic gingham); the bed prefers the town path and switches to the best
+// contrasting cloth when the roller fails on it.
+function laneBed(c, li, k) {
+  const ln = c.lanes[li];
+  const b = k && k.tier <= 1 ? bestSurfFor(c, k, 'path') : { type: 'path' };
+  const bed = c.surfaces.find(s => s.lane === li);
+  if (bed) { if (k && k.tier <= 1 && Math.abs(bed.lum - k.lum) < CONTRAST_MIN) restyle(c, bed, b); return; }
+  const horiz = Math.abs(ln.bx - ln.ax) >= Math.abs(ln.bz - ln.az);
+  const w = horiz ? Math.abs(ln.bx - ln.ax) + 1.2 : 1.2, d = horiz ? 1.2 : Math.abs(ln.bz - ln.az) + 1.2;
+  const s = addSurf(c, b.type, (ln.ax + ln.bx) / 2, (ln.az + ln.bz) / 2, w, d, b.col, { prio: true });
+  if (s) s.lane = li;
+}
+function beltLine(c, L, z, v = 1.2) {
   const w = c.W * 0.6, d = 1.4;
   const bi = c.belts.length;
-  c.belts.push({ x: 0, z: r3(z), w: r3(w), d, rot: 0, v: 1.2 });
+  c.belts.push({ x: 0, z: r3(z), w: r3(w), d, rot: 0, v });
   c.segs.push({ ax: -w / 2, az: z, bx: w / 2, bz: z, w: d / 2 + 0.1 });
-  addSurf(c, 'path', 0, z, w, d, null);
+  // DECISION (11-04, contrast §4.2): the belt bed is a priority surface styled for the belt kind (path when it passes).
+  const b = bestSurfFor(c, KIND[L.kind], 'path');
+  const bed = addSurf(c, b.type, 0, z, w, d, b.col, { prio: true });
+  if (bed) bed.belt = bi;
   const n = countOf(c, L);
   for (let j = 0; j < n; j++) addItem(c, L.kind, -w / 2 + w * ((j + 0.5) / n), z, { role: 'ing', belt: bi, zone: 0, line: L });
 }
 function stackLine(c, L, pts) {
   const n = Math.max(L.need + 1, countOf(c, L));
-  const sk = STACK_KIND[c.town];
   for (let j = 0; j < n; j++) {
+    const sks = STACK_KIND[c.town], sk = sks[(c.nStack || 0) % sks.length];
+    c.nStack = (c.nStack || 0) + 1;
     const p = pts[j % pts.length];
     for (let t = 0; t < 160; t++) {
       const sp = 2.5 + t / 40;
@@ -864,7 +1550,7 @@ function buildPalette(c) {
   const tk = c.spec.tickets;
   const recipe = new Set();
   const req = new Set();
-  for (const t of tk) { req.add(t.boss.kind); for (const l of t.lines) { recipe.add(l.kind); req.add(l.kind); } }
+  for (const t of tk) { if (t.boss) req.add(t.boss.kind); for (const l of t.lines) { recipe.add(l.kind); req.add(l.kind); } }
   for (const it of c.items) req.add(it.kind);
   const pool = kindsForTown(c.town).filter(k => !k.boss && !k.wall && !k.fragile && !recipe.has(k.id) && (k.tier < 3 || k.a <= JUNK_TOP * c.bossFinal + 1e-9));
   const byT = [[], [], [], [], []];
@@ -896,7 +1582,40 @@ function buildPalette(c) {
     }
     while (pal[t].length < alloc[t] && cand.length) pal[t].push(cand.shift());
   }
+  bridgeGaps(pal, byT);
   c.pal = pal;
+}
+// DECISION (11-04, no cliffs §4.4): the junk palette is a growth ladder. Walking its sizes upward, a step bigger
+// than LADDER_GAP× (L2 11-04: pinwheel 0.26 / sandwich 0.28 then bench 0.90, so the pot stalled at r 0.94 of the
+// 1.44 the hamper needs) is bridged: the tier above the gap swaps its largest pick for the largest unused kind of
+// its own tier that sits inside the step (else the tier below the gap swaps its smallest pick for one); a tier
+// keeps its pick count. Ladders without a gap are untouched (same layout, same rng draws).
+const LADDER_GAP = 1.8;
+function bridgeGaps(pal, byT) {
+  for (let pass = 0; pass < 8; pass++) {
+    const rungs = [];
+    for (let t = 0; t < 5; t++) for (const k of pal[t]) rungs.push({ t, k });
+    rungs.sort((p, q) => p.k.a - q.k.a);
+    let gap = -1;
+    for (let i = 0; i + 1 < rungs.length; i++) if (rungs[i + 1].k.a > LADDER_GAP * rungs[i].k.a + 1e-9) { gap = i; break; }
+    if (gap < 0) return;
+    const lo = rungs[gap].k.a, hi = rungs[gap + 1].k.a;
+    const inStep = t => byT[t].filter(k => !pal[t].includes(k) && k.a > lo + 1e-9 && k.a < hi - 1e-9 && k.a <= LADDER_GAP * lo + 1e-9);
+    let done = false;
+    for (const t of [rungs[gap + 1].t, rungs[gap].t]) {
+      const opts = inStep(t);
+      if (!opts.length || !pal[t].length) continue;
+      const pick = opts.reduce((p, q) => (q.a > p.a ? q : p));
+      // the tier above drops its largest pick; the tier below drops its smallest (the ladder keeps both ends)
+      const mine = pal[t].slice().sort((p, q) => p.a - q.a);
+      const drop = t === rungs[gap + 1].t && mine.length > 1 ? mine[mine.length - 1] : mine[0];
+      if (t === rungs[gap].t && mine.length < 2) continue;
+      pal[t][pal[t].indexOf(drop)] = pick;
+      done = true;
+      break;
+    }
+    if (!done) return;
+  }
 }
 function pickRegion(c, t) {
   let tot = 0;
@@ -1012,13 +1731,14 @@ function placeSpots(c) {
   }
 }
 /** Cloth patches under ingredient spots that would fail the contrast rule. */
+// DECISION (11-04): a patch is a priority surface: it splits the blanket/path it lands on instead of overlapping it.
 function ingPatches(c) {
   for (const s of c.spots) {
     const k = KIND[s.L.kind];
     if (k.tier > 1 || contrastOK(c, k, s.x, s.z)) continue;
     const b = bestSurfFor(c, k);
     const sz = 2 * s.r + 1.2;
-    const sf = addSurf(c, b.type, s.x, s.z, sz, sz, b.col != null ? b.col : null);
+    const sf = addSurf(c, b.type, s.x, s.z, sz, sz, b.col, { prio: true, anchor: [s.x, s.z] });
     if (sf) c.regions.push({ t: 'rect', x: sf.x, z: sf.z, w: sf.w, d: sf.d, zone: s.zone, dens: 0.6, mask: [1, 1, 0, 0, 0] });
   }
 }
@@ -1057,8 +1777,11 @@ function fixMargin(c) {
       if (canPlace(c, o.x, o.z, k.a, k.tier, { zone: o.zone })) addItem(c, k.id, o.x, o.z, { zone: o.zone, rot: o.rot });
       else { c.items.splice(i, 0, o); relocateUp(c); }
     } else {
+      // DECISION (11-04): a down-swap is undone only when it deepens a gate's front shortfall (fixGates); the old
+      // "any gate short → undo" froze the margin of levels whose fronts were already short (L4 3.87 vs 2.7–3.0).
+      const d0 = gateDeficit(c);
       c.items[i] = Object.assign({}, o, { kind: k.id, ki: KIND_ID[k.id], a: k.a, h: k.h, k: k.k, tier: k.tier, flags: k.fragile ? F.FRAGILE : 0 });
-      if (!gatesOK(c)) c.items[i] = o;   // a down-swap never starves the front of a gate (fixGates)
+      if (gateDeficit(c) > d0 + 1e-9) c.items[i] = o;
     }
   }
 }
@@ -1083,10 +1806,12 @@ function relocateUp(c) {
 // front as T2/T3 junk that fits before the gate.
 const gateM = c => c.spec.margin[0];
 function reachR(c, id) { let r = 0; for (let z = c.zones[id]; z && z.id > 0; z = c.zones[z.parent]) if (z.r > r) r = z.r; return r; }
+// DECISION (11-04): wall and gate pieces of an EARLIER gate count in a later gate's front at K_WALL (they fit before
+// it and are edible on the way, §4.2 counts them); a gate's own walls never fit before it (wall.a ≥ 1.25·gate.a).
 function frontSupply(c, rG) {
   let s = 0;
   for (const o of c.items) {
-    if ((o.role !== 'junk' && o.role !== 'ing') || o.a > FIT * rG + 1e-9 || reachR(c, o.zone) >= rG - 1e-9) continue;
+    if (o.role === 'boss' || o.a > FIT * rG + 1e-9 || reachR(c, o.zone) >= rG - 1e-9) continue;
     s += (o.role === 'ing' ? K_ING : o.k) * o.a * o.a;
   }
   return s;
@@ -1108,6 +1833,11 @@ function fixGates(c) {
       if (!placeFront(c, regs, ks)) c.items.splice(i, 0, o);
     }
   }
+}
+function gateDeficit(c) {
+  let d = 0;
+  for (const zn of c.zones) if (zn.id > 0 && zn.r > c.r0) d += Math.max(0, (gateM(c) * (zn.r * zn.r - c.r0 * c.r0)) / G - frontSupply(c, zn.r));
+  return d;
 }
 function gatesOK(c) {
   for (const zn of c.zones) if (zn.id > 0 && zn.r > c.r0 && frontSupply(c, zn.r) < (gateM(c) * (zn.r * zn.r - c.r0 * c.r0)) / G - 1e-9) return false;
@@ -1170,7 +1900,8 @@ export function genLevel(spec, seed) {
   const tw = spec.twist || {};
   fn(c);
   if (!surfAt(c, c.spawn.x, c.spawn.z, 0.5)) spawnPad(c);
-  if (tw.gulls) { c.gullEvery = tw.gulls.every || 16; c.gulls = tw.gulls.n || 1; c.roost = { x: r3(c.x1 - 1.5), z: r3(c.z0 + 1.5) }; }
+  // DECISION (11-04): an archetype's own roost (PF: the shortest pier's end) wins over the far-corner default.
+  if (tw.gulls) { c.gullEvery = tw.gulls.every || 16; c.gulls = tw.gulls.n || 1; c.roost = c.roost || { x: r3(c.x1 - 1.5), z: r3(c.z0 + 1.5) }; }
   if (tw.cake) c.cake = { tiers: tw.cake.slice() };
   if (tw.truck && !c.truckPath.length) truck(c, 0, 0, Math.min(c.W, c.D) * 0.28);
   settleSpots(c);
@@ -1180,6 +1911,7 @@ export function genLevel(spec, seed) {
   c.keeps.push({ x: c.spawn.x, z: c.spawn.z, r: 2.0, maxA: FIT * c.r0 }, { x: c.spawn.x, z: c.spawn.z, r: 4.0, maxA: 0.5 });
   placeSpots(c);
   spawnRing(c);
+  fillBelts(c);
   const walls = c.items.filter(o => o.role === 'wall' || o.role === 'gate').length;
   const bosses = c.items.filter(o => o.role === 'boss').length;
   const M = Math.max(0, Math.min(ITEM_MAX, spec.items) - walls - bosses);
@@ -1236,7 +1968,8 @@ function finish(c, spec, seed) {
     surfaces: c.surfaces.map(s => ({ type: s.type, x: mx(s.x), z: s.z, w: s.w, d: s.d, rot: 0, color: s.color })),
     decor: c.decor.map(d => ({ kind: d.kind, x: mx(d.x), z: d.z, rot: mr(d.rot), s: d.s })),
     lanes: c.lanes.map(l => ({ ax: mx(l.ax), az: l.az, bx: mx(l.bx), bz: l.bz, v: l.v })),
-    belts: c.belts.map(b => ({ x: mx(b.x), z: b.z, w: b.w, d: b.d, rot: 0, v: mir ? -b.v : b.v })),
+    // DECISION (11-04): mirroring flips a horizontal belt's v; a vertical belt (rot −π/2, travel +z) is unchanged.
+    belts: c.belts.map(b => ({ x: mx(b.x), z: b.z, w: b.w, d: b.d, rot: b.rot || 0, v: mir && !b.rot ? -b.v : b.v })),
     roost: c.roost ? { x: mx(c.roost.x), z: c.roost.z } : null, gullEvery: c.gullEvery, gulls: c.gulls,
     truckPath: c.truckPath.map(p => ({ x: mx(p.x), z: p.z, stop: p.stop })), cake: c.cake,
     tickets, zones, seed: seed >>> 0,

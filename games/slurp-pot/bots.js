@@ -1,7 +1,7 @@
 // Slurp Pot bots (GDD §5.2, §13.3). Sim role. Pure and deterministic: every bot acts only through
 // inp = {x, z, m} on game time, seeded with mulberry32; it reads w and never writes it.
-// Kinds: greedy, casual, average, planner, expert. director (Wednesday) falls back to expert for now.
-import { DT, G, K_ING } from './consts.js';
+// Kinds: greedy, casual, average, planner, expert, director.
+import { DT, G, K_ING, GULL, CRACK_V, WOBBLE_V } from './consts.js';
 import * as L from './logic.js';
 
 export function rng(seed) {
@@ -10,55 +10,136 @@ export function rng(seed) {
 }
 
 const DEG = Math.PI / 180;
-// redecide s, second-best chance, lag s, OU sigma, OU theta (1/s), m, idle at start s, sight, sidestep chance, planner
+// redecide s, second-best chance, lag s, OU sigma, OU theta (1/s), m, idle at start s, sight, sidestep chance, planner,
+// focus (ticket focus once the boss fits, see focusOf), turn (max heading rate rad/s, 0 = none)
 const KINDS = {
-  greedy:  { precise: false, every: 0.1,  second: 0,    lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: false, look: false },
-  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.30, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 0.5, plan: false, look: false },
-  average: { precise: true, every: 0.2,  second: 0.1,  lag: 0.20, sigma: 15 * DEG, theta: 3, m: 0.92, idle: 0.6, sight: false, side: 1,   plan: false, look: true },
-  planner: { precise: false, every: 15 * DT, second: 0, lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false },
-  expert:  { precise: true, every: 15 * DT, second: 0, lag: 0.12, sigma: 6 * DEG,  theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false },
+  greedy:  { precise: false, every: 0.1,  second: 0,    lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: false, look: false, focus: false, turn: 0 },
+  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.30, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 0.5, plan: false, look: false, focus: true,  turn: 0 },
+  average: { precise: true, every: 0.2,  second: 0.1,  lag: 0.20, sigma: 15 * DEG, theta: 3, m: 0.92, idle: 0.6, sight: false, side: 1,   plan: false, look: true,  focus: true,  turn: 0 },
+  // DECISION (Wed): the planner gets ticket focus too (it is verify's "best route" reference for gate 3a). On the
+  // frozen L4–L9 its time / greedy drops to 0.59–0.86 (from 0.80–0.97); L8 0.96 and L10 0.85 are unchanged (layout).
+  planner: { precise: false, every: 15 * DT, second: 0, lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 0 },
+  expert:  { precise: true, every: 15 * DT, second: 0, lag: 0.12, sigma: 6 * DEG,  theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 0 },
+  // DECISION (Wed): director = the record/showcase bot: expert's planner and ticket focus, no lag or noise, and
+  // a turn-rate limit (7 rad/s) so the camera path reads smooth on video; follows level.recordPath when present.
+  director: { precise: true, every: 15 * DT, second: 0, lag: 0,   sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 7 },
 };
 
 const STUCK_T = 0.5, BAN_T = 1.5, ESCAPE_T = 0.6, KEEP_T = 0.25;
 
 /**
- * DECISION: 'director' (Wednesday) uses expert settings until it is built; bot.fallback says so.
- * opts.noiseDeg adds a fixed-sigma heading noise to any kind (verify gate: greedy + 20 seeds at ±3°).
+ * DECISION: an unknown kind falls back to expert (bot.fallback = true).
+ * opts.noiseDeg adds heading noise with a stationary error of noiseDeg to any kind (verify gate: greedy + 20 seeds
+ * at ±3°).
  */
 export function createBot(kind = 'greedy', seed = 1, opts = {}) {
   const k = KINDS[kind] ? kind : 'expert';
   const P = Object.assign({}, KINDS[k]);
-  if (opts.noiseDeg) { P.sigma = opts.noiseDeg * DEG; }
+  if (opts.noiseDeg) { P.sigma = opts.noiseDeg * DEG * Math.sqrt(2 * P.theta); }   // ±noiseDeg stationary
   if (opts.P) Object.assign(P, opts.P);             // tuning overrides (sim tools only)
   return {
     kind, base: k, fallback: !KINDS[kind], P, rand: rng(seed), seed,
     t: 0, nextDecide: 0, target: -1, targetT: -9, ban: new Float32Array(256), sideOn: true,
     stuckX: 0, stuckZ: 0, stuckT: 0, escapeT: 0, escapeSign: 1, skip: -1, skipT: 0, ox: 0, oz: 0, rTgt: -1, rT: -1, rWp: null,
     noise: 0, queue: [], out: { x: 0, z: 0, m: 0 }, dir: { x: 0, z: -1 }, plan: [], planT: -9, w: null,
+    lv: null, zNeed: null, foc: false, gullT: null, wp: 0,
   };
 }
 
 function gauss(R) { const u = R() || 1e-9, v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
 // ------------------------------------------------------------------ scoring helpers
-function wantKinds(w) {
+/**
+ * DECISION (Wed, zoneGraph): bots read level.zoneGraph (levels.js puts it on every expanded level) instead of a
+ * zone pass of their own: zNeed[z] = the largest gate radius (edge r = needR(gate a)) on the way from zone z to
+ * zone 0, so an item in zone z is reachable once rEff >= zNeed[z]. Recomputed when w.level changes (Feast course).
+ */
+function zNeedOf(bot, w) {
+  const lv = w.level;
+  if (bot.lv === lv && bot.zNeed) return bot.zNeed;
+  const zg = lv && lv.zoneGraph;
+  let need = new Float64Array(1);
+  if (zg && zg.nodes && zg.nodes.length) {
+    const N = zg.nodes.length, par = new Int32Array(N).fill(-1), er = new Float64Array(N);
+    for (const e of zg.edges || []) if (e.b >= 0 && e.b < N) { par[e.b] = e.a; er[e.b] = +e.r || 0; }
+    need = new Float64Array(N);
+    for (let z = 1; z < N; z++) { let m = 0, q = z; for (let g = 0; q > 0 && g < N; g++) { if (er[q] > m) m = er[q]; q = par[q]; } need[z] = m; }
+  }
+  bot.lv = lv; bot.zNeed = need;
+  return need;
+}
+function zoneOK(bot, w, i, r) {
+  const z = w._.zone[i], nd = zNeedOf(bot, w);
+  return !(z > 0 && z < nd.length && nd[z] > r + 1e-9);
+}
+/** Open lines of the CURRENT ticket item i would count toward (itself + an intact fragile stack's contents). */
+function ingHits(w, i) {
+  const _ = w._, ref = _.lineRef, ti = w.ti;
+  let h = 0;
+  const r = ref[w.kind[i]];
+  if (r >= 0 && (r >> 3) === ti) h++;
+  const sk = _.stackK[i];
+  if (sk && !_.stackLost[i]) for (let c = 0; c < sk.length; c++) { const r2 = ref[sk[c]]; if (r2 >= 0 && (r2 >> 3) === ti) h++; }
+  return h;
+}
+/**
+ * DECISION (Wed, pacing): ticket focus. Humans read the ticket: once the pot fits the boss (the meter passes the
+ * boss mark) and lines are still open, they stop growing and go get the missing ingredients. focus-kind bots
+ * (casual, average, expert, director) then value a reachable current-ticket ingredient (or a stack holding one) at
+ * FOC_V per line hit and other food at x FOC_JUNK, so they only take junk that is right on the way. Every bot
+ * (greedy too) focuses on a boss-less ticket (Feast tickets 1-3), where growth alone never serves it.
+ * greedy and planner keep the GDD rule in normal levels (they anchor T and the route gate). Before the boss
+ * fits nothing changes: lines are 3a^2 + 0.02 as before.
+ */
+const FOC_V = 1, FOC_JUNK = 0.1, STACK_ING = 0.1;
+function focusOf(bot, w) {
   const tk = w.tickets[w.ti];
-  return tk ? tk.lines.some(l => l.got < l.need) : false;
+  if (!tk || tk.done || !tk.lines.some(l => l.got < l.need)) return false;
+  const b = tk.boss;
+  if (b < 0) return true;
+  return !!bot.P.focus && L.canFit(w.pot.r, w._.a[b]);
+}
+/**
+ * DECISION (Wed, gulls): a bot beats a gull when it can: an item under a swoop telegraph (gull st 1) that the pot
+ * can reach before the 1.6 s run out (dist / vMax <= time left + 0.15 s) is worth max(v, 1) x 4.
+ * Returns a per-decision Map item -> 1 (or null when no gull is swooping).
+ */
+function gullTargets(w) {
+  const Gs = w.gulls;
+  if (!Gs || !Gs.length) return null;
+  let m = null;
+  const v = L.speedOf(w.pot.r);
+  for (let g = 0; g < Gs.length; g++) {
+    const q = Gs[g];
+    if (q.st !== 1 || q.i < 0) continue;
+    const d = Math.hypot(w.ix[q.i] - w.pot.x, w.iz[q.i] - w.pot.z) - w.pot.rEff;
+    if (d / v <= GULL.warn - q.t + 0.15) { if (!m) m = new Map(); m.set(q.i, 1); }
+  }
+  return m;
 }
 
 /** Value of eating item i now (growth, with counted ingredients and the open boss weighted up). */
-function valueOf(w, i, look) {
+function valueOf(bot, w, i, look) {
   const fl = w.flags[i];
   if (fl & L.F.BOSS) return L.bossState(w, i) === 'open' ? 1e3 : 0;
   const a = w._.a[i];
-  if (L.lineOf(w, i) >= 0) return 3 * a * a + 0.02;
-  let v = L.growthOf(w, i);
-  if (look) {
-    // 1-step recipe lookahead: an item whose growth lets a needed ingredient or the boss fit is worth more.
-    const P = w.pot, r1 = Math.min(P.cap, Math.sqrt(P.r0 * P.r0 + G * (P.mass + v)));
-    const b = L.curBoss(w);
-    if (b >= 0 && w.tickets[w.ti].done && !L.canFit(P.r, w._.a[b]) && L.canFit(r1, w._.a[b])) v *= 3;
+  const h = ingHits(w, i);
+  let v;
+  if (L.lineOf(w, i) >= 0) v = 3 * a * a + 0.02;
+  else {
+    v = L.growthOf(w, i) + STACK_ING * h;
+    if (look) {
+      // 1-step recipe lookahead: an item whose growth lets a needed ingredient or the boss fit is worth more.
+      const P = w.pot, r1 = Math.min(P.cap, Math.sqrt(P.r0 * P.r0 + G * (P.mass + v)));
+      const b = L.curBoss(w);
+      if (b >= 0 && w.tickets[w.ti].done && !L.canFit(P.r, w._.a[b]) && L.canFit(r1, w._.a[b])) v *= 3;
+    }
   }
+  if (bot.foc) {
+    if (h > 0 && zoneOK(bot, w, i, w.pot.rEff)) v = Math.max(v, FOC_V * h);
+    else v *= FOC_JUNK;
+  }
+  if (bot.gullT && bot.gullT.has(i)) v = Math.max(v, 1) * 4;
   return v;
 }
 
@@ -79,8 +160,13 @@ function pathBlocked(w, tx, tz, skip) {
   return false;
 }
 
+// DECISION (Wed, lag): a lagged non-planner bot treats every item the pot will already have swallowed when its next
+// command lands (predicted spot within rEff − 0.25·a, the swallow rule) as eaten, not only the current target.
+// With one skip slot it re-picked those items (80 re-picks a run on L8) and steered at a point inside its own
+// mouth, so the heading flipped every few frames: 5–12 % of the casual run on L8/L10.
 function candidates(bot, w) {
   const P = w.pot, out = [], t = bot.t, ox = bot.ox, oz = bot.oz;
+  const lagged = bot.P.lag > 0 && !bot.P.plan && !bot.P.noskip, re = P.rEff;
   let sight = 1e9;
   if (bot.P.sight) sight = L.SEE_R(P.r);
   for (let pass = 0; pass < 3 && !out.length; pass++) {
@@ -89,9 +175,30 @@ function candidates(bot, w) {
       if (!L.edible(w, i) || bot.ban[i] > t || i === bot.skip) continue;
       const dx = w.ix[i] - ox, dz = w.iz[i] - oz, d2 = dx * dx + dz * dz;
       if (d2 > s2) continue;
+      if (lagged && !(w.flags[i] & L.F.BOSS)) {
+        const a = w._.a[i], lim = re - 0.25 * a;
+        if (lim > 0 && d2 < lim * lim && L.canFit(re, a)) continue;
+      }
       out.push(i);
     }
     sight = pass === 0 ? L.VIEW_R(P.r) : 1e9;
+  }
+  // DECISION (Wed, §7.6 edge arrows): a sight-limited bot (casual) still follows the arrows a player sees: the open
+  // boss (padlock pop + arrow) and, when no current-ticket ingredient is in sight, the nearest reachable one.
+  if (bot.P.sight) {
+    const b = L.curBoss(w);
+    if (b >= 0 && L.edible(w, b) && !out.includes(b)) out.push(b);
+    let has = false;
+    for (let k = 0; k < out.length && !has; k++) if (ingHits(w, out[k]) > 0) has = true;
+    if (!has) {
+      let bi = -1, bd = 1e18;
+      for (let i = 0; i < w.n; i++) {
+        if (!L.edible(w, i) || bot.ban[i] > t || i === bot.skip || !ingHits(w, i) || !zoneOK(bot, w, i, P.rEff)) continue;
+        const dx = w.ix[i] - ox, dz = w.iz[i] - oz, d2 = dx * dx + dz * dz;
+        if (d2 < bd) { bd = d2; bi = i; }
+      }
+      if (bi >= 0 && !out.includes(bi)) out.push(bi);
+    }
   }
   return out;
 }
@@ -103,14 +210,17 @@ function candidates(bot, w) {
 function scoreList(bot, w, list) {
   const res = [];
   for (const i of list) {
-    const v = valueOf(w, i, bot.P.look);
+    const v = valueOf(bot, w, i, bot.P.look);
     if (v <= 0) continue;
     const d = Math.hypot(w.ix[i] - bot.ox, w.iz[i] - bot.oz);
     let s = v / Math.pow(d + 0.6, 1.5);
     if (!(w.flags[i] & L.F.BOSS) && pathBlocked(w, w.ix[i], w.iz[i], i)) {
       const wp = i === bot.target && bot.sideOn ? routeTo(bot, w, i, w.ix[i], w.iz[i]) : null;
       if (wp) s = v / Math.pow(Math.hypot(wp.x - bot.ox, wp.z - bot.oz) + Math.hypot(w.ix[i] - wp.x, w.iz[i] - wp.z) + 0.6, 1.5);
-      else s *= 0.02;
+      else {
+        const pl = bot.P.precise ? pathLen(w, i) : -1;      // pens: see pathLen (greedy keeps ×0.02)
+        s = pl > 0 ? v / Math.pow(penD(d, pl) + 0.6, 1.5) : s * 0.02;
+      }
     }
     res.push([s, i]);
   }
@@ -144,23 +254,101 @@ function segBlocked(w, x0, z0, x1, z1, skip) {
  */
 const RC = 0.5;
 let rBlk = new Uint8Array(0), rPar = new Int32Array(0), rQ = new Int32Array(0);
-function route(w, tgt, tx, tz) {
+/** Fills blk (closed cells of the router grid for the pot's current size, item skip left open); returns nx. */
+function blockGrid(w, blk, skip) {
   const _ = w._, x0 = _.x0, z0 = _.z0;
-  const nx = Math.max(1, Math.ceil((_.x1 - x0) / RC)), nz = Math.max(1, Math.ceil((_.z1 - z0) / RC)), N = nx * nz;
-  if (rBlk.length < N) { rBlk = new Uint8Array(N); rPar = new Int32Array(N); rQ = new Int32Array(N); }
-  rBlk.fill(0, 0, N);
-  const P = w.pot, half = 0.5 * P.r + 0.05;
+  const nx = Math.max(1, Math.ceil((_.x1 - x0) / RC)), nz = Math.max(1, Math.ceil((_.z1 - z0) / RC));
+  blk.fill(0, 0, nx * nz);
+  const half = 0.5 * w.pot.r + 0.05;
   for (let j = 0; j < w.n; j++) {
-    if (j === tgt || w.st[j] !== 0 || w.hid[j] || !(w.flags[j] & L.F.SOLID)) continue;
+    if (j === skip || w.st[j] !== 0 || w.hid[j] || !(w.flags[j] & L.F.SOLID)) continue;
     const rr = _.a[j] + half, cx = w.ix[j], cz = w.iz[j];
     let i0 = Math.floor((cx - rr - x0) / RC), i1 = Math.floor((cx + rr - x0) / RC);
     let k0 = Math.floor((cz - rr - z0) / RC), k1 = Math.floor((cz + rr - z0) / RC);
     if (i0 < 0) i0 = 0; if (k0 < 0) k0 = 0; if (i1 >= nx) i1 = nx - 1; if (k1 >= nz) k1 = nz - 1;
     for (let k = k0; k <= k1; k++) for (let i = i0; i <= i1; i++) {
       const ex = x0 + (i + 0.5) * RC - cx, ez = z0 + (k + 0.5) * RC - cz;
-      if (ex * ex + ez * ez < rr * rr) rBlk[k * nx + i] = 1;
+      if (ex * ex + ez * ez < rr * rr) blk[k * nx + i] = 1;
     }
   }
+  return nx;
+}
+function gridN(w) {
+  const _ = w._;
+  return Math.max(1, Math.ceil((_.x1 - _.x0) / RC)) * Math.max(1, Math.ceil((_.z1 - _.z0) / RC));
+}
+
+/**
+ * DECISION (Wed, pens): bots know the way into a pen. When a straight first leg is blocked, the leg is the
+ * router-grid path length from the pot (one 8-neighbour BFS flood per decision, steps × RC × 1.08 for the
+ * diagonal mix, read at the best open cell within 0.75·rEff of the item) instead of the blocked ×0.02 penalty,
+ * which stays when no path exists. Every bot but greedy uses it; greedy keeps ×0.02 (it is the T reference
+ * every level was tuned on). Without it the planner and expert never entered L34's
+ * pen (gate car at its west end, the eggplant line inside) and timed out at r 1.43 with the line 0/3; L22/L53
+ * casual timeouts had the same cause. The steering already routes (routeTo) once the item is the target.
+ * The leg costs the straight distance plus TWICE the detour (pl − d: in, then back out; penD). Measured on
+ * 8 seeds (L4/5/6/8/10/22/34/53) against "max(d, pl) × 1.6 + 0.6", "×1.25", "×1.0", "ingredients only" and
+ * "keep ×0.02 behind a wall the pot fits at 1.4 r": in+out wins L34 (planner 60 s 3★ vs 63 / timeout before,
+ * expert and average 75 % vs 38 % / 13 %), L8 (planner 0.74 × greedy vs 0.80; average 3★ 38 % vs 13 %) and L22
+ * / L4 average 3★ (25 % vs 0 %). Cost: the L4 expert flip-flops between two coolers behind the pen and enters it
+ * small: 40/40 wins but median 42 s of T 46 (32 s before), 3★ 5 %. A commit bonus in the beam did not fix it.
+ */
+const DETOUR = 2;
+/** Leg length (u) to a pen item: straight distance d plus the detour (path pl − d), paid going in and coming out. */
+const penD = (d, pl) => d + Math.max(0, pl - d) * DETOUR;
+let fBlk = new Uint8Array(0), fD = new Int32Array(0), fQ = new Int32Array(0), fW = null, fT = -1, fX = 0, fZ = 0, fR = 0, fNx = 1;
+function pathField(w) {
+  const P = w.pot;
+  if (fW === w && fT === w.t && fX === P.x && fZ === P.z && fR === P.r) return;
+  const N = gridN(w);
+  if (fBlk.length < N) { fBlk = new Uint8Array(N); fD = new Int32Array(N); fQ = new Int32Array(N); }
+  const nx = blockGrid(w, fBlk, -1), nz = N / nx, _ = w._;
+  fD.fill(-1, 0, N);
+  let i0 = Math.floor((P.x - _.x0) / RC), k0 = Math.floor((P.z - _.z0) / RC);
+  if (i0 < 0) i0 = 0; else if (i0 >= nx) i0 = nx - 1;
+  if (k0 < 0) k0 = 0; else if (k0 >= nz) k0 = nz - 1;
+  const s0 = k0 * nx + i0;
+  let qh = 0, qt = 0;
+  fQ[qt++] = s0; fD[s0] = 0;
+  while (qh < qt) {
+    const c = fQ[qh++], ci = c % nx, ck = (c - ci) / nx, dc = fD[c] + 1;
+    for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++) {
+      if (!di && !dk) continue;
+      const i = ci + di, k = ck + dk;
+      if (i < 0 || k < 0 || i >= nx || k >= nz) continue;
+      const q = k * nx + i;
+      if (fD[q] >= 0 || fBlk[q]) continue;
+      if (di && dk && (fBlk[ck * nx + i] || fBlk[k * nx + ci])) continue;
+      fD[q] = dc; fQ[qt++] = q;
+    }
+  }
+  fW = w; fT = w.t; fX = P.x; fZ = P.z; fR = P.r; fNx = nx;
+}
+/** Grid path length from the pot to item i (u), or -1 when no open cell near it is reachable. */
+function pathLen(w, i) {
+  pathField(w);
+  const _ = w._, nx = fNx, nz = gridN(w) / nx, x = w.ix[i], z = w.iz[i];
+  const reach = Math.max(RC, 0.75 * w.pot.rEff), R = Math.ceil(reach / RC);
+  const ci = Math.floor((x - _.x0) / RC), ck = Math.floor((z - _.z0) / RC);
+  let best = -1;
+  for (let k = ck - R; k <= ck + R; k++) for (let j = ci - R; j <= ci + R; j++) {
+    if (j < 0 || k < 0 || j >= nx || k >= nz) continue;
+    const d = fD[k * nx + j];
+    if (d < 0) continue;
+    const ex = _.x0 + (j + 0.5) * RC - x, ez = _.z0 + (k + 0.5) * RC - z, e2 = ex * ex + ez * ez;
+    if (e2 > reach * reach + 0.5 * RC * RC) continue;
+    const len = d * RC * 1.08 + Math.sqrt(e2);
+    if (best < 0 || len < best) best = len;
+  }
+  return best;
+}
+
+function route(w, tgt, tx, tz) {
+  const _ = w._, x0 = _.x0, z0 = _.z0;
+  const N = gridN(w);
+  if (rBlk.length < N) { rBlk = new Uint8Array(N); rPar = new Int32Array(N); rQ = new Int32Array(N); }
+  const nx = blockGrid(w, rBlk, tgt), nz = N / nx;
+  const P = w.pot;
   const cell = (x, z) => {
     let i = Math.floor((x - x0) / RC), k = Math.floor((z - z0) / RC);
     if (i < 0) i = 0; else if (i >= nx) i = nx - 1;
@@ -344,7 +532,9 @@ function plan(bot, w) {
  * x0.02; hysteresis 1.15 on the current first target; growth x2 when the ticket is done and < 20 s remain. It is a
  * rate objective, not literally "time to boss": an explicit time-to-boss rollout planner (plan(), P.roll) lost to it.
  * A/B, 30 genLevel variants + 5 proto layouts, same run: depth 3 geo-mean time 0.868 x greedy, depth 4 0.854
- * (13/32 layouts <= 0.88). Knobs for A/B: P.bd/bw/bc/bp/bh/bg. Does not read levels.zoneGraph yet.
+ * (13/32 layouts <= 0.88). Knobs for A/B: P.bd/bw/bc/bp/bh/bg.
+ * DECISION (Wed): items in a zone whose gate the node's r cannot pass yet (level.zoneGraph) are skipped; focus
+ * kinds (expert, director) and every bot on a boss-less ticket apply the ticket focus per node (focusOf).
  */
 function planBeam(bot, w) {
   const P = w.pot, n = w.n, t = bot.t, A = w._.a;
@@ -365,10 +555,12 @@ function planBeam(bot, w) {
   let beam = [{ x: P.x, z: P.z, mass: P.mass, r: P.r, time: 0, score: 0, eaten: [], need: lineNeed.slice() }];
   let best = null;
   const BD = bot.P.bd || 4, BW = bot.P.bw || 6, BC = bot.P.bc || 10, BX = bot.P.bp || 1.5, BH = bot.P.bh || 1.15, BG = bot.P.bg ?? 1;
+  const FOC = !!bot.P.focus, BI = bot.P.bi ?? 3;
   for (let depth = 0; depth < BD; depth++) {
     const next = [];
     for (const nd of beam) {
       const done = nd.need.every(v => v <= 0);
+      const foc = !done && (bossI < 0 || (FOC && L.canFit(nd.r, bossA)));
       const sc = [];
       for (const i of pool) {
         if (nd.eaten.includes(i)) continue;
@@ -378,16 +570,24 @@ function planBeam(bot, w) {
           if (!(depth === 0 ? L.bossState(w, i) === 'open' : done && L.canFit(nd.r, bossA))) continue;
           val = 1e3;
         } else {
-          if (!L.canFit(nd.r, a)) continue;
+          if (!L.canFit(nd.r, a) || (!bot.P.nozone && !zoneOK(bot, w, i, nd.r))) continue;
           li = nd.need.findIndex((v, k) => v > 0 && lineKid[k] === w.kind[i]);
           if (li < 0 && depth === 0 && L.refused(w, i)) continue;
-          if (li >= 0) val = 3 * a * a + 0.02;
-          else { val = w.ik[i] * a * a; if (hurry && bossA > 0 && nd.r < L.needR(bossA)) val *= 2; }
+          const h = li >= 0 ? 1 : (w._.stackK[i] ? ingHits(w, i) : 0);
+          if (li >= 0) val = BI * a * a + 0.02;
+          else { val = w.ik[i] * a * a + STACK_ING * h; if (hurry && bossA > 0 && nd.r < L.needR(bossA)) val *= 2; }
+          if (foc) val = h > 0 ? Math.max(val, FOC_V * h) : val * FOC_JUNK;
+          if (depth === 0 && bot.gullT && bot.gullT.has(i)) val = Math.max(val, 1) * 4;
         }
-        const d = Math.hypot(w.ix[i] - nd.x, w.iz[i] - nd.z);
+        let d = Math.hypot(w.ix[i] - nd.x, w.iz[i] - nd.z), blocked = false;
+        if (!boss && depth === 0 && pathBlocked(w, w.ix[i], w.iz[i], i)) {
+          blocked = true;
+          const pl = pathLen(w, i);
+          if (pl > 0) { d = penD(d, pl); blocked = false; }
+        }
         const tt = d / L.speedOf(nd.r);
         let s = val / Math.pow((nd.time + tt) * v0 + 0.6, BX) * Math.pow(BG, depth);
-        if (!boss && pathBlocked(w, w.ix[i], w.iz[i], i) && depth === 0) s *= 0.02;
+        if (blocked) s *= 0.02;
         sc.push([s, i, tt, li, a, boss]);
       }
       sc.sort((p, q) => q[0] - p[0] || p[1] - q[1]);
@@ -490,6 +690,88 @@ function steer(bot, w, tx, tz, target) {
   return { x: dx, z: dz, near: near && d < 1.5 };
 }
 
+// ------------------------------------------------------------------ twist helpers (movers, belts, stacks)
+/** Ground velocity [vx, vz, lane|null] of a moving item (roller, belt item, driving truck), or null. */
+function velOf(w, i) {
+  const _ = w._, m = _.mover[i];
+  if (!m) return null;
+  if (m === 1) {
+    const ln = w.lanes[_.rollLane[i]];
+    if (!ln) return null;
+    const dx = ln.bx - ln.ax, dz = ln.bz - ln.az, l = Math.hypot(dx, dz) || 1;
+    return [dx / l * ln.v, dz / l * ln.v, ln];
+  }
+  if (m === 2) {
+    const k = _.beltOf[i], b = w.belts[k], d = L.beltDir(w, k);
+    return b && d ? [d[0] * b.v, d[1] * b.v, null] : null;
+  }
+  if (m === 3) {
+    const T = w.truck, p = _.path;
+    if (T.stop || w.st[i] !== 0 || !p || p.length < 2) return [0, 0, null];
+    const a = p[T.seg], q = p[(T.seg + 1) % p.length], dx = q.x - a.x, dz = q.z - a.z, l = Math.hypot(dx, dz) || 1;
+    return [dx / l * _.truckV, dz / l * _.truckV, null];
+  }
+  return null;
+}
+/**
+ * DECISION (Wed, movers): bots lead moving targets (rollers on lanes, belt items, the driving truck): they aim at
+ * pos + vel * t, t = dist / vMax iterated twice (cap 3 s); a roller's lead stops at its lane end.
+ */
+function leadOf(w, i, px, pz) {
+  const vv = velOf(w, i);
+  let x = w.ix[i], z = w.iz[i];
+  if (!vv || (!vv[0] && !vv[1])) return { x, z };
+  const sp = L.speedOf(w.pot.r);
+  for (let k = 0; k < 2; k++) {
+    const t = Math.min(3, Math.hypot(x - px, z - pz) / sp);
+    x = w.ix[i] + vv[0] * t; z = w.iz[i] + vv[1] * t;
+  }
+  const ln = vv[2];
+  if (ln) {
+    const dx = ln.bx - ln.ax, dz = ln.bz - ln.az, l2 = dx * dx + dz * dz || 1;
+    if (((x - ln.ax) * dx + (z - ln.az) * dz) / l2 > 1) { x = ln.bx; z = ln.bz; }
+  }
+  return { x, z };
+}
+/**
+ * DECISION (Wed, belts): bots ride belts: on a belt the command c (|c| = 1) is solved so that vMax*m*c + vBelt
+ * points along the wanted direction, so a belt going their way speeds them up and they cross one in a straight line.
+ */
+function beltComp(w, x, z, m) {
+  if (!w.belts.length) return null;
+  const P = w.pot, k = L.beltAt(w, P.x, P.z);
+  if (k < 0) return null;
+  const d = L.beltDir(w, k), bx = d[0] * w.belts[k].v, bz = d[1] * w.belts[k].v, v = L.speedOf(P.r) * m;
+  const l = Math.hypot(x, z);
+  if (!(l > 1e-9) || !(v > 1e-9)) return null;
+  const ux = x / l, uz = z / l, db = ux * bx + uz * bz, disc = db * db - (bx * bx + bz * bz) + v * v;
+  if (disc <= 0) return null;
+  const lam = db + Math.sqrt(disc);
+  return { x: (lam * ux - bx) / v, z: (lam * uz - bz) / v };
+}
+/**
+ * DECISION (Wed, fragile D22): bots slow down near an intact fragile stack the pot cannot swallow yet: when the gap
+ * to it is < 1.6 u and the pot is heading at it, speed is capped at 0.8 u/s (below WOBBLE_V, gap < 0.6) or 1.7 u/s
+ * (below CRACK_V). casual only does it on decisions where it sidesteps (its 50 % "bumps blockers" roll), so it
+ * still cracks a stack now and then like a player.
+ */
+function stackCap(w, x, z) {
+  const P = w.pot, A = w._.a, lost = w._.stackLost, l = Math.hypot(x, z);
+  if (!(l > 1e-9)) return Infinity;
+  let cap = Infinity;
+  for (let j = 0; j < w.n; j++) {
+    if (!(w.flags[j] & L.F.FRAGILE) || lost[j] || w.st[j] !== 0 || L.canFit(P.rEff, A[j])) continue;
+    const ex = w.ix[j] - P.x, ez = w.iz[j] - P.z, d = Math.hypot(ex, ez) || 1e-6;
+    const gap = d - A[j] - 0.5 * P.r;
+    if (gap > 1.6) continue;
+    const toward = Math.max((x * ex + z * ez) / (l * d), (P.vx * ex + P.vz * ez) / ((Math.hypot(P.vx, P.vz) || 1e9) * d));
+    if (toward < 0.2) continue;
+    const c = gap < 0.6 ? WOBBLE_V * 0.9 : CRACK_V * 0.85;
+    if (c < cap) cap = c;
+  }
+  return cap;
+}
+
 export function decide(bot, w, dt = DT) {
   const P = bot.P, R = bot.rand, pot = w.pot;
   bot.w = w;
@@ -497,6 +779,8 @@ export function decide(bot, w, dt = DT) {
   const t = bot.t;
   if (w.result) { bot.out = { x: 0, z: 0, m: 0 }; return bot.out; }
   if (t <= P.idle + 1e-9) { bot.out = { x: 0, z: 0, m: 0 }; return bot.out; }
+  bot.foc = focusOf(bot, w);
+  bot.gullT = gullTargets(w);
   // stuck detection: barely moved for STUCK_T while pushing → ban target, escape sideways
   if (t - bot.stuckT >= STUCK_T) {
     const moved = Math.hypot(pot.x - bot.stuckX, pot.z - bot.stuckZ);
@@ -511,7 +795,7 @@ export function decide(bot, w, dt = DT) {
   const pr = predict(bot, w);
   bot.ox = pr.x; bot.oz = pr.z;
   if (bot.skip >= 0 && (!L.edible(w, bot.skip) || t > bot.skipT)) bot.skip = -1;
-  if (P.lag > 0 && !P.plan && bot.target >= 0 && L.edible(w, bot.target) && !(w.flags[bot.target] & L.F.BOSS)) {
+  if (P.lag > 0 && !P.plan && !P.noskip && bot.target >= 0 && L.edible(w, bot.target) && !(w.flags[bot.target] & L.F.BOSS)) {
     const a = w._.a[bot.target], lim = pot.rEff - 0.25 * a, dx = w.ix[bot.target] - pr.x, dz = w.iz[bot.target] - pr.z;
     if (lim > 0 && dx * dx + dz * dz < lim * lim) { bot.skip = bot.target; bot.skipT = t + P.lag + 0.3; bot.target = -1; bot.nextDecide = 0; }
   }
@@ -531,8 +815,24 @@ export function decide(bot, w, dt = DT) {
     if (lim > 0 && (w.ix[aim] - px) ** 2 + (w.iz[aim] - pz) ** 2 < lim * lim && nx >= 0 && w.st[nx] === 0) aim = nx;
   }
   if (aim < 0) { const b = L.curBoss(w); if (b >= 0 && L.edible(w, b)) aim = b; }
-  if (aim >= 0) {
-    let tx = w.ix[aim], tz = w.iz[aim];
+  // DECISION (Wed, cake): between tiers (the 0.6 s reopen) a bot whose pot fits the next tier stays on the cake.
+  {
+    const b = L.curBoss(w), tk = w.tickets[w.ti];
+    if (b >= 0 && b === w.cake.i && tk && tk.open && w._.cakeCd > 0 && L.canFit(pot.r, w._.a[b])) aim = b;
+  }
+  // director: follow level.recordPath waypoints (when present) unless the target is close
+  const rp = P.turn > 0 && w.level && w.level.recordPath;
+  let wpAim = null;
+  if (rp && bot.wp < rp.length) {
+    const q = rp[bot.wp];
+    if (Math.hypot(q.x - pot.x, q.z - pot.z) < pot.r + 0.6) bot.wp++;
+    else if (!(aim >= 0 && Math.hypot(w.ix[aim] - pot.x, w.iz[aim] - pot.z) < 2)) wpAim = q;
+  }
+  if (wpAim) {
+    want = steer(bot, w, wpAim.x, wpAim.z, -1);
+  } else if (aim >= 0) {
+    const ld = leadOf(w, aim, pot.x, pot.z);
+    let tx = ld.x, tz = ld.z;
     if (bot.sideOn && pathBlocked(w, tx, tz, aim)) {
       const wp = routeTo(bot, w, aim, tx, tz);
       if (wp) { tx = wp.x; tz = wp.z; }
@@ -544,19 +844,41 @@ export function decide(bot, w, dt = DT) {
     want = b >= 0 ? steer(bot, w, w.ix[b], w.iz[b], b) : { x: -pot.x, z: -pot.z, near: false };
   }
   let x = want.x, z = want.z;
+  {
+    const bc = beltComp(w, x, z, P.m);
+    if (bc) { x = bc.x; z = bc.z; }
+  }
   if (bot.escapeT > 0) {
     bot.escapeT -= dt;
     const c = Math.cos(0.9 * bot.escapeSign), s = Math.sin(0.9 * bot.escapeSign);
     const ex = -x, ez = -z;                       // back off and turn ±0.9 rad
     x = ex * c - ez * s; z = ex * s + ez * c;
   }
-  // heading noise (Ornstein–Uhlenbeck)
+  // heading noise (Ornstein–Uhlenbeck). DECISION (Wed): the GDD's σ is read in the standard SDE form
+  // dX = −θ·X·dt + σ·dW (σ = the diffusion), so the stationary heading error is σ/√(2θ): casual 10.2°, average 6.1°,
+  // expert 2.4°. Tuesday used σ as the stationary error (25° casual), which alone made casual 10–18 % slower than
+  // the same bot without noise and 17–35 % with the 0.30 s lag (it kept missing small targets and circling back).
   if (P.sigma > 0) {
-    bot.noise += -P.theta * bot.noise * dt + P.sigma * Math.sqrt(2 * P.theta * dt) * gauss(R);
+    bot.noise += -P.theta * bot.noise * dt + P.sigma * Math.sqrt(dt) * gauss(R);
     const c = Math.cos(bot.noise), s = Math.sin(bot.noise);
     const nx = x * c - z * s, nz = x * s + z * c; x = nx; z = nz;
   }
-  const m = want.near && P.precise ? Math.min(P.m, 0.4) : P.m;
+  // director: turn-rate limit (smooth camera path)
+  if (P.turn > 0) {
+    const ox = bot.dir.x, oz = bot.dir.z, lo = Math.hypot(ox, oz), ln = Math.hypot(x, z);
+    if (lo > 1e-6 && ln > 1e-6) {
+      const c = (ox * x + oz * z) / (lo * ln), mx = P.turn * dt;
+      if (c < Math.cos(mx)) {
+        const sg = ox * z - oz * x >= 0 ? 1 : -1, cs = Math.cos(mx), sn = Math.sin(mx) * sg;
+        x = (ox * cs - oz * sn) / lo; z = (ox * sn + oz * cs) / lo;
+      }
+    }
+  }
+  let m = want.near && P.precise ? Math.min(P.m, 0.4) : P.m;
+  if (bot.sideOn) {
+    const cap = stackCap(w, x, z);
+    if (cap < Infinity) { const v = L.speedOf(pot.r); if (m * v > cap) m = cap / v; }
+  }
   const cmd = { x, z, m: Math.hypot(x, z) > 1e-6 ? m : 0 };
   bot.dir = { x, z };
   // reaction lag: output the command decided `lag` seconds ago

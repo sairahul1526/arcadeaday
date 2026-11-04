@@ -1,0 +1,62 @@
+{
+  "cover-c": {
+    "prompt": "Night harbour toy diorama on a wooden pier: a tall chunky red and white striped toy lighthouse shaped like a jam jar with a glowing warm top, a big shiny golden padlock floating above it, the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints, same pink blush, no mouth, same loop handles) large in the foreground looking up with wide hungry eyes, its glowing orange stew lighting it from below, toy buoys and rope coils on the pier, deep navy night sky with small soft stars, a large calm empty area of plain navy sky in the top left third. Only the pot has a face. Empty environment only: NO animals, NO people, no text",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "db028e7b797fdf6cdb10e82dea87052f"
+    ],
+    "bytes": 49280,
+    "at": "2026-11-04T04:47:21.396Z"
+  },
+  "cover-a": {
+    "prompt": "Dramatic low-angle shot on a toy diorama picnic board with a red and white gingham cloth: the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints on the front rim, same pink blush, no mouth, same chunky loop handles), huge, filling the bottom right of the frame, tilted back and gulping a giant pink birthday cake with candles that tips into its glowing orange stew, crumbs and confetti flying, tiny toy food (strawberries, tomatoes, cupcakes) scattered on the cloth, deep dark saturated teal sky background with a soft vignette, a large calm empty area of plain teal sky in the top left third. Only the pot has a face: the cake and all food are inanimate with no faces. Empty environment only: NO animals, NO people, no text",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "d719cc80235b726d48ade196ef11e7e9"
+    ],
+    "bytes": 67674,
+    "at": "2026-11-04T04:47:51.584Z"
+  },
+  "cover-b": {
+    "prompt": "High three-quarter view of a whole toy diorama park on a red and white gingham picnic board at sunset, a winding trail of bare empty ground where everything has been eaten leading to the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints, same pink blush, no mouth, same loop handles), now giant, glowing orange stew, about to swallow a small white toy gazebo that tips toward it, toy trees and benches still standing around the edges, warm deep plum and orange sunset sky, a large calm empty area of plain sky in the top left third. Only the pot has a face. Empty environment only: NO animals, NO people, no text",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "375d1e8860aad93032ed8ffff24dd8fe"
+    ],
+    "bytes": 57684,
+    "at": "2026-11-04T04:48:32.049Z"
+  },
+  "cover-tall": {
+    "prompt": "Same scene as the first reference cover, recomposed for a tall portrait frame: the same giant golden pot character in the lower half gulping the giant pink birthday cake, gingham picnic board, the same dark saturated teal sky with a large calm empty area in the top third. Only the pot has a face. Empty environment only: NO animals, NO people, no text",
+    "aspect": "2:3",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1200,
+    "tasks": [
+      "79cebad18a4cf75b1b3be7ba41ebe88e"
+    ],
+    "bytes": 43738,
+    "at": "2026-11-04T04:57:34.179Z"
+  },
+  "cover-square": {
+    "prompt": "Same scene and same pot design as the first reference cover, recomposed for a square frame: the same giant golden pot character, centred and slightly above the middle of the frame, tilted back, gulping the giant pink birthday cake that tips in through the OPEN TOP RIM of the pot into its glowing orange stew. The pot face is exactly like the references: only two big round cartoon eyes with white glints and pink blush on the front of the rim, the pot has NO mouth and no opening on its body. Gingham picnic board only in the bottom fifth with a few tiny strawberries and cupcakes, the same dark saturated teal sky filling the top and sides. Only the pot has a face. Empty environment only: NO animals, NO people, no text",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "8e055202c73da64321bc75a962c933ac"
+    ],
+    "bytes": 49538,
+    "at": "2026-11-04T04:58:53.614Z"
+  }
+}

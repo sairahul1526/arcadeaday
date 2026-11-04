@@ -27,20 +27,28 @@
 //   with melody only (plus a quiet pad so it is not empty) whatever the town, 'map' same as play. bus start -> play,
 //   win/fail -> card. Tension (last 10 s: shaker doubles, melody drops): setTension(on) is exact; as a fallback bus
 //   lowTime holds it 11 s and every tick refreshes it 1.8 s. Feast (setFeast): +6 % tempo.
-// DECISION: Market and Harbour are quick Wednesday stubs built to the §8.1 instrument recipes with generated (seeded)
-//   melodies; Picnic is hand-written. All three share one scheduler and look-ahead timer.
+// DECISION (Wed): all three town loops are hand-written and share one family: the same AABA form over 8-bar variants,
+//   the same I–vi–IV–V chord rhythm, the same bass rhythm (root on 1, fifth/root on 3, pickup in bar 4), the same
+//   "pot motif" (scale degrees 3-5-6-5) opening every A section, a soft 16th/8th shaker grid, and the same glock sting
+//   (key fifth -> octave) at the end of the B section. The instruments (GDD §8.1) make each town distinct.
+// DECISION (Wed): Feast variant = the town loop at +6 % tempo, form ABAB (brighter B more often) plus a "kitchen rush"
+//   layer: hat 8ths, a pot-lid rim on 2 and 4, a soft tom on 1 and 3 and a bass octave bounce. Same family, more drive.
 // DECISION: P import path is ../shared/platform.js (build rewrites to ./). renderOffline(durSec, events, opts) -> AudioBuffer,
 //   renderWav() -> base64 WAV; default music OFF (record mode adds music in the edit, GDD §8.4), opts.music true includes it.
-// DECISION: Chromium's DynamicsCompressor (GDD §8.4 requires it) attenuates whatever lands in the first ~100-150 ms of a
-//   brand-new AudioContext (measured: the same bite peaks 0.16-0.23 in the unlocking gesture vs 0.68 a moment later, about
-//   -9 dB). It is a one-off per page (suspend/resume does not repeat it) and a steady near-silent or audible signal through
-//   the compressor does not warm it, so it is accepted instead of hacked around: the first tap is almost always a UI tap,
-//   and the music's first notes land 200 ms later. The bypass experiment (no compressor) removes it but also drops the
-//   compressor's makeup gain, so the spec'd compressor stays. Test section 0 reports the ratio and only fails if it is eaten.
+// DECISION (Wed, fixes the Tuesday first-sound dip): the Chromium/WebKit DynamicsCompressor starts with its gain envelope
+//   at full reduction and releases it over the first ~100-150 ms of *running* context time (input level does not matter,
+//   which is why a warm-up signal never helped: the clock does not run while suspended). So the compressor's release
+//   starts at 0 (instant recovery) and is set to the spec'd 0.15 s at context time 0.05 s (WARM_S). Measured in a fresh
+//   context: first bite in the unlocking gesture 0.695 vs 0.675 later in Chromium and WebKit (was 0.227, -9.4 dB), with no
+//   added latency. The same applies to every OfflineAudioContext render (record mode).
+// DECISION (Wed listen pass): MUSIC_K 0.75 -> 0.6 and the loop bass x BASS_K 0.65. The loop's crest came from the bass
+//   (square-ish root notes on every downbeat), so the busiest 400 ms of music sat only 12.3 dB under the median SFX peak.
+//   Now 15.6 dB under it (loudest loop peak -6.7 dBFS vs SFX peaks -1.7..-5 dBFS). Town lvl (1 / 1.2 / 1.04) puts the
+//   three loops within 0.4 dB RMS. Numbers in studio/2026-11-04/audio/listen.txt.
 import P from '../shared/platform.js';
 
-const OPEN_S = 0.012, LOOK = 0.2, TICK_MS = 25, POLL_MS = 250, SUSPEND_MS = 70, KICK_GAP_MS = 2000;
-const MUSIC_K = 0.75, SFX_K = 0.85, MASTER = 0.8, LIFT = 1.5, FF_GAIN = 1.5;
+const WARM_S = 0.05, OPEN_S = 0.012, LOOK = 0.2, TICK_MS = 25, POLL_MS = 250, SUSPEND_MS = 70, KICK_GAP_MS = 2000;
+const MUSIC_K = 0.6, BASS_K = 0.65, SFX_K = 0.85, MASTER = 0.8, LIFT = 1.5, FF_GAIN = 1.5;
 const MAX_VOICES = 28, BITE_VOICES = 10, BITE_GAP = 0.045, BITE_MAX_LAG = 0.09;
 const FIREFOX = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '');
 const CLIP_CURVE = (() => { // y = x up to 0.6, then 0.6 + 0.25·tanh((x − 0.6)/0.25): ceiling 0.85 (−1.4 dBFS); the input is pre-scaled by 0.5
@@ -75,37 +83,34 @@ const LADDER = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2, 9 / 4, 5 / 2]; // pentatonic s
 export function biteHz(tier, n) { return BASE_HZ[clampI(tier, 0, 4)] * LADDER[(Math.max(1, n | 0) - 1) & 7]; }
 
 // ------------------------------------------------------------------ towns (GDD §8.1)
-// mel: [step 0..15 of the bar, MIDI]; two notes per bar; 8 bars per variant; order AABA over 32 bars.
+// mel: per bar [[step 0..15, MIDI], ...]; 8 bars per variant; form AABA over 32 bars (Feast: ABAB). Every A section opens
+// with the "pot motif" (scale degrees 3-5-6-5); the B section ends on the glock sting (key fifth -> octave, steps 12/14).
 const PICNIC_MEL = {
   A: [[[0, 76], [8, 79]], [[0, 81], [10, 79]], [[0, 81], [8, 84]], [[0, 79], [6, 74]],
       [[0, 79], [8, 76]], [[0, 81], [8, 79]], [[0, 76], [10, 81]], [[0, 74], [8, 79]]],
   B: [[[0, 84], [8, 81]], [[0, 79], [6, 81]], [[0, 84], [8, 81]], [[0, 79], [8, 74]],
       [[0, 76], [6, 79]], [[0, 81], [8, 84]], [[0, 81], [6, 79]], [[0, 74], [8, 76]]],
 };
-function genMel(seed, pcs, lo, hi, chords, second) { // quick seeded pentatonic walk for the Wednesday stubs
-  const rr = rng(seed), scale = [];
-  for (let m = lo; m <= hi; m++) if (pcs.includes(m % 12)) scale.push(m);
-  const make = () => {
-    const out = [];
-    let i = scale.length >> 1;
-    for (let b = 0; b < 8; b++) {
-      const ch = chords[b & 3].map(x => x % 12);
-      const c = []; for (let k = 0; k < scale.length; k++) if (ch.includes(scale[k] % 12) && Math.abs(k - i) <= 3) c.push(k);
-      if (c.length) i = c[Math.floor(rr() * c.length)];
-      const a = scale[i];
-      i = Math.max(0, Math.min(scale.length - 1, i + (rr() < 0.5 ? 1 : -1) * (1 + (rr() < 0.3 ? 1 : 0))));
-      out.push([[0, a], [second[Math.floor(rr() * second.length)], scale[i]]]);
-    }
-    return out;
-  };
-  return { A: make(), B: make() };
-}
-const MARKET_CH = [[53, 57, 60], [50, 53, 57], [58, 62, 65], [48, 52, 55]];
-const HARBOUR_CH = [[55, 59, 62], [52, 55, 59], [60, 64, 67], [62, 66, 69]];
+// Market Street, F major pentatonic (F G A C D) over F - Dm - Bb - C: busier pizzicato line, 8th-note pickups
+const MARKET_MEL = {
+  A: [[[0, 69], [4, 72], [6, 74], [8, 72]], [[0, 77], [6, 74], [8, 69]], [[0, 74], [4, 77], [8, 79], [12, 77]], [[0, 79], [6, 77], [8, 72]],
+      [[0, 69], [4, 72], [6, 74], [8, 77]], [[0, 81], [8, 77], [12, 74]], [[0, 74], [6, 77], [8, 74], [12, 72]], [[0, 72], [8, 67], [12, 72]]],
+  B: [[[0, 84], [8, 81], [12, 77]], [[0, 81], [4, 77], [8, 74]], [[0, 77], [8, 74], [12, 77]], [[0, 79], [4, 84], [8, 79]],
+      [[0, 81], [6, 84], [8, 81], [12, 77]], [[0, 74], [8, 77], [12, 81]], [[0, 79], [6, 77], [8, 74]], [[0, 72], [8, 79]]],
+};
+// Harbour Pier, G major pentatonic (G A B D E) over G - Em - C - D: lazier steel-pan line with longer notes
+const HARBOUR_MEL = {
+  A: [[[0, 71], [6, 74], [8, 76], [12, 74]], [[0, 79], [8, 76]], [[0, 76], [6, 79], [10, 81]], [[0, 81], [8, 74]],
+      [[0, 71], [6, 74], [8, 76], [12, 79]], [[0, 83], [8, 79], [12, 76]], [[0, 76], [8, 79]], [[0, 74], [8, 69]]],
+  B: [[[0, 86], [8, 83]], [[0, 79], [6, 83], [8, 79]], [[0, 76], [8, 79], [12, 81]], [[0, 81], [8, 86]],
+      [[0, 83], [8, 79], [12, 74]], [[0, 76], [6, 79], [10, 83]], [[0, 81], [8, 79], [12, 76]], [[0, 74], [8, 81]]],
+};
+// chords are voice-led triads (common tones held between bars); roots are the bass notes
+// lvl: per-town loop gain, calibrated in the listen pass so the three loops sit within 1.5 dB RMS of each other
 const TOWN_DEF = {
-  picnic: { name: 'Picnic Park', style: 'picnic', bpm: 104, swing: 0.5, chords: [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]], roots: [48, 45, 41, 43], mel: PICNIC_MEL, order: 'AABA' },
-  market: { name: 'Market Street', style: 'market', bpm: 112, swing: 0.56, chords: MARKET_CH, roots: [41, 50, 46, 48], mel: genMel(11, [5, 7, 9, 0, 2], 65, 81, MARKET_CH, [6, 10]), order: 'AABA' },
-  harbour: { name: 'Harbour Pier', style: 'harbour', bpm: 96, swing: 0.54, chords: HARBOUR_CH, roots: [43, 40, 48, 50], mel: genMel(23, [7, 9, 11, 2, 4], 67, 83, HARBOUR_CH, [6, 8, 10]), order: 'AABA' },
+  picnic: { name: 'Picnic Park', style: 'picnic', bpm: 104, swing: 0.5, chords: [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]], roots: [48, 45, 41, 43], mel: PICNIC_MEL, order: 'AABA', sting: [79, 84], lvl: 1 },
+  market: { name: 'Market Street', style: 'market', bpm: 112, swing: 0.56, chords: [[53, 57, 60], [53, 57, 62], [53, 58, 62], [52, 55, 60]], roots: [41, 38, 46, 48], mel: MARKET_MEL, order: 'AABA', sting: [84, 89], lvl: 1.2 },
+  harbour: { name: 'Harbour Pier', style: 'harbour', bpm: 96, swing: 0.54, chords: [[55, 59, 62], [55, 59, 64], [55, 60, 64], [54, 57, 62]], roots: [43, 40, 48, 50], mel: HARBOUR_MEL, order: 'AABA', sting: [86, 91], lvl: 1.04 },
 };
 export const TOWN_IDS = Object.keys(TOWN_DEF);
 function normTown(t) {
@@ -119,15 +124,22 @@ function normTown(t) {
 }
 const MODES = ['play', 'card', 'title', 'map'];
 
-// ------------------------------------------------------------------ bus events audio reacts to (GDD §13.3 list)
-export const BUS_EVENTS = ['start', 'bite', 'sizeUp', 'line', 'ticketDone', 'courseDone', 'padlock', 'bossNudge', 'bump', 'bossBite',
-  'chain', 'sizzle', 'lowTime', 'tick', 'gullWarn', 'gullMiss', 'steal', 'nest', 'wobble', 'crack', 'refuse', 'shove', 'boil',
-  'belt', 'truckHorn', 'cakeTier', 'boost', 'win', 'fail'];
+// ------------------------------------------------------------------ bus events audio reacts to (GDD §13.3 + the Wednesday Sim contract)
+// BUS_EVENTS are the sound-making logic events (modes.js records exactly these for the record-mode WAV). Where Sim sends
+// both the brief's name and the GDD's name for one moment (gull + gullWarn, tier + cakeTier, course + courseDone), both
+// are mapped and de-duplicated here, so either name alone also works.
+export const BUS_EVENTS = ['start', 'bite', 'sizeUp', 'line', 'ticketDone', 'courseDone', 'course', 'padlock', 'bossNudge', 'bump', 'bossBite',
+  'chain', 'sizzle', 'lowTime', 'tick', 'gull', 'gullWarn', 'gullMiss', 'steal', 'nest', 'wobble', 'crack', 'refuse', 'shove', 'boil',
+  'belt', 'truck', 'truckHorn', 'tier', 'cakeTier', 'spawn', 'feastWipe', 'feastCourse', 'feastTicket', 'boost', 'win', 'fail'];
+// control events from game.js (subscribed by bindBus, not recorded: levelStart carries the whole level and world)
+export const CTRL_EVENTS = ['levelStart', 'freezeContinue', 'boostEmpty'];
 // sfx() also accepts the bus-event names and the GDD's loose names for the recipes below
-const SFX_ALIAS = { refuse: 'lid', shove: 'lid', nest: 'plop', truckHorn: 'horn', cakeTier: 'cake', ticketDone: 'ticket', courseDone: 'orderUp',
-  gullWarn: 'gullSquawk', tap: 'ui', click: 'ui', lose: 'fail', victory: 'win', levelUp: 'sizeUp' };
+const SFX_ALIAS = { refuse: 'lid', shove: 'lid', nest: 'plop', truck: 'horn', truckHorn: 'horn', cake: 'tier', cakeTier: 'tier', ticketDone: 'ticket',
+  courseDone: 'orderUp', feastWipe: 'course', gull: 'gullSquawk', gullWarn: 'gullSquawk', tap: 'ui', click: 'ui', lose: 'fail', victory: 'win',
+  levelUp: 'sizeUp', boostEmpty: 'nope', denied: 'nope', purchase: 'buy', shop: 'buy', streakStamp: 'streak', townChest: 'chest' };
 // minimum seconds between two plays of the same id (rate limits from §8.3 plus anti-spam)
-const MIN_GAP = { coin: 1 / 12, glug: 0.12, wobble: 0.2, sizzle: 0.08, ui: 0.03, bump: 0.07, lid: 0.08, tick: 0.2, crack: 0.05 };
+const MIN_GAP = { coin: 1 / 12, glug: 0.12, wobble: 0.2, sizzle: 0.08, ui: 0.03, bump: 0.07, lid: 0.22, tick: 0.2, crack: 0.05, horn: 0.4,
+  gullSquawk: 0.3, plop: 0.1, boil: 0.2, nope: 0.25, buy: 0.3, course: 0.6, tier: 0.25, chest: 1, milestone: 1, streak: 0.4 };
 
 // ------------------------------------------------------------------ bite buffer synthesis (JS, per context)
 function synthBite(ctx, tier, idx, ing) {
@@ -163,8 +175,8 @@ function makeEngine(ctx, offline) {
   const E = {
     ctx, offline: !!offline, base: 0, loop: null, musicOn: false, town: 'picnic', mode: 'play', tension: false, tensionUntil: 0,
     feast: false, musicV: 0.7, sfxV: 0.9, lastT: {}, biteNext: -1, coalesce: 0, bv: [], biteBufs: {}, beltOn: false, beltNext: 0,
-    belt: null, duckEnd: 0, wobbleAt: {}, gateTarget: offline ? 1 : 0, openAt: 0,
-    st: { bites: 0, bitesPlayed: 0, bitesDropped: 0, bitesStolen: 0, voicesStolen: 0, peakVoices: 0, sfxPlayed: 0 },
+    belt: null, beltWant: false, duckEnd: 0, wobbleAt: {}, onceAt: {}, servedAt: -1e9, gateTarget: offline ? 1 : 0, openAt: 0,
+    st: { bites: 0, bitesPlayed: 0, bitesDropped: 0, bitesStolen: 0, voicesStolen: 0, peakVoices: 0, sfxPlayed: 0, ids: {} },
   };
   const now = () => E.base;
   E.clock = () => (offline ? E.base : ctx.currentTime);
@@ -190,7 +202,8 @@ function makeEngine(ctx, offline) {
   if (FIREFOX) comp = G(FF_GAIN); // Firefox's compressor squashes short blips; a fixed gain stands in there
   else {
     comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -12; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.15;
+    comp.threshold.value = -12; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = 0.003;
+    comp.release.value = 0; comp.release.setValueAtTime(0.15, WARM_S); // start-up envelope recovers instantly (see DECISION at the top)
   }
   comp.connect(lift);
   const master = G(MASTER); master.connect(comp);
@@ -313,7 +326,7 @@ function makeEngine(ctx, offline) {
     },
     bass(t, m, v, d, dec = 0.34, sq = 0.1) { // sine + 10 % square
       const f = mtof(m), o1 = osc('sine', f), o2 = osc('square', f), g = ctx.createGain(), sg = G(sq), lp = filt('lowpass', 600);
-      env(g.gain, t, 0.006, v, dec);
+      env(g.gain, t, 0.006, v * BASS_K, dec);
       o1.connect(g); o2.connect(sg).connect(lp).connect(g); g.connect(d);
       o1.start(t); o2.start(t); o1.stop(t + dec + 0.06); o2.stop(t + dec + 0.06);
     },
@@ -344,7 +357,7 @@ function makeEngine(ctx, offline) {
     },
     tuba(t, m, v, d, dec = 0.3) { // sine + 2nd harmonic
       const f = mtof(m), o1 = osc('sine', f), o2 = osc('sine', f * 2), g = ctx.createGain(), g2 = G(0.4);
-      env(g.gain, t, 0.01, v, dec); o1.connect(g); o2.connect(g2).connect(g); g.connect(d);
+      env(g.gain, t, 0.01, v * BASS_K, dec); o1.connect(g); o2.connect(g2).connect(g); g.connect(d);
       o1.start(t); o2.start(t); o1.stop(t + dec + 0.06); o2.stop(t + dec + 0.06);
     },
     clap(t, v, d) { I.noiseHit(t, 0.09, 'bandpass', 1500, 1.2, v, d, 0.003); },
@@ -425,30 +438,77 @@ function makeEngine(ctx, offline) {
       tone('sine', f, f, 0.15, 0.16, 0, { a: 0.003 }); tone('sine', f, f, 0.15, 0.13, 0.09, { a: 0.003 });
     },
     sizzle() { // frying noise through a 40 Hz random gate + "+1" pop
-      const t = now(), s = ctx.createBufferSource(), hp = filt('highpass', 3000, 0.7), g = ctx.createGain();
+      // DECISION: band 1.8-4 kHz (24 dB/oct above 4 kHz) instead of a bare 3 kHz highpass: the listen pass measured 81 % of
+      // the old sizzle's energy above 4 kHz (hissy, the one shrill sound in the set); this keeps the frying texture, soft.
+      const t = now(), s = ctx.createBufferSource(), hp = filt('highpass', 1800, 0.7), lp = filt('lowpass', 4000, 0.7), lp2 = filt('lowpass', 4000, 0.7), g = ctx.createGain();
       s.buffer = noiseBuf; g.gain.setValueAtTime(0, t);
       for (let k = 0; k < 14; k++) g.gain.setValueAtTime(r() < 0.65 ? (0.07 + r() * 0.1) * (1 - k / 18) : 0, t + k * 0.025);
       g.gain.setValueAtTime(0, t + 0.35);
-      s.connect(hp).connect(g).connect(sfxIn); s.start(t, r() * 0.6); s.stop(t + 0.37);
+      s.connect(hp).connect(lp).connect(lp2).connect(g).connect(sfxIn); s.start(t, r() * 0.6); s.stop(t + 0.37);
       track([s], g, t + 0.37);
       tone('sine', 1320, 1320, 0.04, 0.16, 0, { a: 0.002 });
     },
     gullSquawk() { for (let i = 0; i < 2; i++) tone('sawtooth', 900, 650, 0.12, 0.3, i * 0.16, { a: 0.01, bp: [1500, 1.2], vib: [18, 150] }); },
-    gullMiss() { tone('sine', 800, 1600, 0.2, 0.14, 0, { a: 0.01 }); },
+    gullMiss() { // rising whistle 800 -> 1600 + sparkle C6 E6 G6 + the +1 coin tick
+      tone('sine', 800, 1600, 0.2, 0.13, 0, { a: 0.01 });
+      [1046, 1318, 1568].forEach((f, i) => bell(f, 0.45, 0.085, 0.16 + i * 0.05));
+      tone('sine', 1568, 1568, 0.05, 0.09, 0.34, { a: 0.002 }); tone('sine', 2093, 2093, 0.07, 0.08, 0.375, { a: 0.002 });
+    },
     steal() { for (let i = 0; i < 3; i++) noise(0.05, 400, 400, 1.2, 0.2, i * 0.06, 'bandpass', { a: 0.01 }); tone('sine', 700, 300, 0.3, 0.12, 0.05, { a: 0.02 }); },
-    plop() { tone('sine', 300, 200, 0.04, 0.28, 0, { a: 0.002 }); },
-    crack() { for (let i = 0; i < 4; i++) { const f = 2500 + r() * 1500; tone('sine', f, f, 0.12, 0.08, i * 0.015, { a: 0.001 }); } noise(0.06, 5000, 5000, 1, 0.13, 0, 'highpass', { a: 0.001 }); },
-    wobble() { tone('sine', 1200, 1200, 0.3, 0.16, 0, { a: 0.01, am: [22, 1] }); },
-    lid() { tone('sine', 1100, 1100, 0.12, 0.15, 0, { a: 0.002 }); tone('sine', 2640, 2640, 0.08, 0.07, 0, { a: 0.002 }); },
-    boil() { noise(0.3, 600, 600, 0.8, 1.0, 0, 'lowpass', { a: 0.04, am: [12, 1] }); },
+    plop() { // nest drop: soft plop + a smaller bounce + twig rustle
+      tone('sine', 300, 190, 0.05, 0.3, 0, { a: 0.002 });
+      tone('sine', 330, 230, 0.035, 0.15, 0.11, { a: 0.002 });
+      noise(0.12, 2600, 1800, 1.4, 0.06, 0.02, 'bandpass', { a: 0.01 }); noise(0.08, 3200, 2200, 1.4, 0.04, 0.13, 'bandpass', { a: 0.01 });
+    },
+    crack() { // porcelain: body clunk + 4 soft pings 2.5-3.8 kHz 15 ms apart + noise 5 kHz 60 ms + shards settling
+      tone('sine', 520, 300, 0.07, 0.2, 0, { a: 0.001 }); noise(0.05, 1800, 900, 1.2, 0.15, 0, 'bandpass', { a: 0.001 });
+      for (let i = 0; i < 4; i++) { const f = 2500 + r() * 1300; tone('sine', f, f * 0.995, 0.14, 0.07, 0.01 + i * 0.015, { a: 0.001 }); }
+      noise(0.06, 5000, 5000, 1, 0.09, 0, 'highpass', { a: 0.001 });
+      for (let i = 0; i < 3; i++) { const f = 2600 + r() * 1000; tone('sine', f, f, 0.06, 0.03, 0.13 + i * 0.05 + r() * 0.03, { a: 0.001 }); }
+    },
+    wobble(o = {}) { // teacup rattle: sine 1.2 kHz + a 1.51x partial, both with 22 Hz AM, 0.3 s; contact = a little louder
+      const v = o.contact ? 1.25 : 1;
+      tone('sine', 1200, 1180, 0.3, 0.15 * v, 0, { a: 0.01, am: [22, 1] });
+      tone('sine', 1810, 1790, 0.22, 0.05 * v, 0.01, { a: 0.01, am: [22, 1] });
+    },
+    lid() { // pot-lid clink (sine 1100 + 2.4f) that rattles to rest: 3 clinks, each softer
+      [[0, 1, 1], [0.075, 0.6, 1.012], [0.125, 0.38, 0.992]].forEach(([d, k, m]) => {
+        const f = 1100 * m;
+        tone('sine', f, f, 0.12, 0.15 * k, d, { a: 0.002 }); tone('sine', f * 2.4, f * 2.4, 0.07, 0.065 * k, d, { a: 0.002 });
+      });
+      noise(0.02, 3000, 3000, 1.2, 0.05, 0, 'bandpass', { a: 0.001 });
+    },
+    boil() { // bubbling burst: lowpass noise 600 Hz with 12 Hz AM + 5 bubble blips
+      noise(0.32, 600, 600, 0.8, 0.9, 0, 'lowpass', { a: 0.04, am: [12, 1] });
+      for (let i = 0; i < 5; i++) { const f = 220 + r() * 260; tone('sine', f, f * 1.8, 0.035, 0.09, 0.03 + i * 0.06 + r() * 0.02, { a: 0.003 }); }
+    },
     tick(o = {}) { // wood block; the last two seconds a little higher
       const f = (o.s | 0) > 0 && (o.s | 0) <= 2 ? 1250 : 1000;
       tone('sine', f, f * 0.9, 0.028, 0.22, 0, { a: 0.001 }); noise(0.01, 2400, 2400, 1.5, 0.08, 0, 'bandpass', { a: 0.001 });
     },
     lowTime() { for (let i = 0; i < 2; i++) { tone('sine', 1250, 1130, 0.03, 0.2, i * 0.11, { a: 0.001 }); noise(0.01, 2400, 2400, 1.5, 0.08, i * 0.11, 'bandpass', { a: 0.001 }); } },
-    belt(o = {}) { E.setBelt(o.on !== false); },
-    horn() { tone('square', 233, 233, 0.3, 0.08, 0, { a: 0.02, lp: 800 }); tone('square', 294, 294, 0.3, 0.07, 0, { a: 0.02, lp: 800 }); },
-    cake(o = {}) { const f = [784, 880, 1046, 1318, 1568][clampI(o.tier, 0, 4)]; bell(f, 0.6, 0.14); bell(f * 2, 0.4, 0.05, 0.03); },
+    belt(o = {}) { E.beltWant = o.on !== false; E.applyBelt(); },
+    horn() { // toy food truck "meep meep" (A4 + C#5 dyad through a lowpass) + wind-up ratchet
+      for (let b = 0; b < 2; b++) {
+        const d = b * 0.17;
+        tone('square', 440, 440, 0.11, 0.05, d, { a: 0.008, lp: 1400 }); tone('square', 554, 554, 0.11, 0.045, d, { a: 0.008, lp: 1400 });
+        tone('sine', 440, 440, 0.11, 0.06, d, { a: 0.008 });
+      }
+      for (let i = 0; i < 4; i++) noise(0.012, 2500, 2500, 2, 0.05, 0.36 + i * 0.035, 'bandpass', { a: 0.001 });
+    },
+    tier(o = {}) { // a cake tier eaten: medium glug + drum + frosting squish + rising sparkle (higher each tier)
+      const k = clampI(o.k != null ? o.k : o.tier, 0, 3), f = [784, 880, 988, 1046][k];
+      S.glug({ k: 1.25, vol: 0.9 });
+      tone('sine', 95, 58, 0.26, 0.42, 0.02, { a: 0.005 });
+      noise(0.16, 1100, 380, 1.1, 0.14, 0.04, 'lowpass', { a: 0.02 });
+      [1, 5 / 4, 3 / 2].forEach((m, i) => bell(f * m, 0.55, 0.11, 0.12 + i * 0.06));
+      duckMusic(0.9);
+    },
+    course() { // course swap: steam whoosh + paper unfold + rising bell G5 -> C6
+      noise(0.5, 700, 2400, 0.9, 0.13, 0, 'bandpass', { a: 0.18 });
+      noise(0.06, 2200, 2200, 1, 0.08, 0.14, 'bandpass', { a: 0.01 }); noise(0.08, 1800, 1800, 1, 0.07, 0.22, 'bandpass', { a: 0.01 });
+      bell(784, 0.5, 0.13, 0.28); bell(1046, 0.7, 0.14, 0.4);
+    },
     boost(o = {}) {
       const k = o.kind;
       if (k === 'freeze') { [2349, 3136, 3951].forEach((f, i) => bell(f, 0.7, 0.09, i * 0.06)); noise(0.3, 6000, 6000, 1, 0.05, 0, 'highpass', { a: 0.05 }); }
@@ -476,6 +536,37 @@ function makeEngine(ctx, offline) {
     coin() { tone('sine', 1568, 1568, 0.05, 0.13, 0, { a: 0.002 }); tone('sine', 2093, 2093, 0.07, 0.13, 0.035, { a: 0.002 }); },
     ui() { tone('sine', 600, 560, 0.022, 0.16, 0, { a: 0.001 }); noise(0.008, 3000, 3000, 1, 0.05, 0, 'bandpass', { a: 0.001 }); },
     gift() { [1046, 1318, 1568, 2093].forEach((f, i) => bell(f, 0.8, 0.12, i * 0.08)); noise(0.5, 8000, 8000, 1, 0.04, 0.2, 'highpass', { a: 0.15 }); duckMusic(1.4); },
+    chest() { // town chest: creak + lid thunk + coin shower + shimmer bells
+      tone('sawtooth', 170, 250, 0.34, 0.035, 0, { a: 0.06, bp: [900, 4], vib: [11, 40] });
+      tone('sine', 120, 68, 0.1, 0.42, 0.38, { a: 0.002 }); noise(0.04, 700, 700, 1, 0.16, 0.38, 'bandpass', { a: 0.002 });
+      for (let i = 0; i < 8; i++) { const f = 1568 * (1 + r() * 0.34), d = 0.46 + i * 0.06 + r() * 0.02; tone('sine', f, f, 0.05, 0.07, d, { a: 0.002 }); tone('sine', f * 1.335, f * 1.335, 0.06, 0.045, d + 0.03, { a: 0.002 }); }
+      [1046, 1318, 1568, 2093].forEach((f, i) => bell(f, 0.8, 0.09, 0.5 + i * 0.07));
+      noise(0.6, 8000, 8000, 1, 0.035, 0.5, 'highpass', { a: 0.2 });
+      duckMusic(1.8);
+    },
+    milestone() { // every 15 stars: glock arpeggio C5..E6 + warm triangle chord + shimmer
+      [523, 659, 784, 1046, 1318].forEach((f, i) => bell(f, 0.7, 0.11, i * 0.07));
+      [262, 330, 392].forEach(f => tone('triangle', f, f, 0.9, 0.07, 0.3, { a: 0.06, lp: 1500 }));
+      noise(0.6, 8000, 8000, 1, 0.03, 0.3, 'highpass', { a: 0.2 });
+      duckMusic(1.6);
+    },
+    streak(o = {}) { // streak ladder stamp: thunk + ink squish + a ding that rises with the day (1..7); day 7 adds a fanfare
+      const day = clampI(o.day || 1, 1, 7), f = [784, 880, 988, 1046, 1175, 1318, 1568][day - 1];
+      tone('sine', 95, 55, 0.1, 0.6, 0, { a: 0.002 }); noise(0.05, 1000, 1000, 0.8, 0.22, 0.008, 'bandpass', { a: 0.002 });
+      noise(0.13, 800, 300, 1.2, 0.1, 0.04, 'lowpass', { a: 0.02 });
+      bell(f, 0.8, 0.14, 0.16); bell(f * 2, 0.35, 0.035, 0.18);
+      if (day === 7) [1046, 1318, 1568, 2093].forEach((g, i) => bell(g, 0.8, 0.09, 0.42 + i * 0.08));
+      duckMusic(day === 7 ? 1.6 : 1);
+    },
+    buy() { // shop buy: drawer slide + thunk + ka-ching (E6 -> A6) + coin clinks
+      noise(0.18, 420, 950, 1.3, 0.12, 0, 'bandpass', { a: 0.05 });
+      tone('sine', 115, 70, 0.07, 0.4, 0.17, { a: 0.002 }); noise(0.03, 800, 800, 1, 0.12, 0.17, 'bandpass', { a: 0.002 });
+      bell(1318, 0.35, 0.12, 0.22); bell(1760, 0.9, 0.13, 0.3);
+      for (let i = 0; i < 3; i++) { tone('sine', 1568, 1568, 0.04, 0.06, 0.45 + i * 0.07, { a: 0.002 }); tone('sine', 2093, 2093, 0.05, 0.05, 0.48 + i * 0.07, { a: 0.002 }); }
+    },
+    nope() { // soft "can't": two low notes E4 -> C4, never a buzzer
+      tone('triangle', 330, 322, 0.1, 0.15, 0, { a: 0.006, lp: 1200 }); tone('triangle', 262, 255, 0.16, 0.15, 0.12, { a: 0.006, lp: 1200 });
+    },
   };
   E.play = (id, o) => {
     id = SFX_ALIAS[id] || id;
@@ -483,30 +574,36 @@ function makeEngine(ctx, offline) {
     if (!f) return false;
     const gap = MIN_GAP[id];
     if (gap) { const t = now(); if (t - (E.lastT[id] != null ? E.lastT[id] : -1e9) < gap) return false; E.lastT[id] = t; }
-    E.st.sfxPlayed++;
+    E.st.sfxPlayed++; E.st.ids[id] = (E.st.ids[id] || 0) + 1;
     f(o || {});
     return true;
   };
 
-  // ambient belt hum (loop) with 0.25 s ticks driven by the pump
-  E.setBelt = on => {
-    const t = now();
+  // ambient belt hum (loop) with 0.25 s ticks driven by the pump.
+  // DECISION (Wed): the belt hums only while the pot is on a belt (bus belt {on}) AND the mode is 'play': a card, the map
+  //   or the title silence it, and it comes back by itself when play resumes on the belt. levelStart / win / fail clear
+  //   the wish. 55 Hz alone is inaudible on phone speakers, so the hum adds 110 / 165 Hz harmonics (same 0.08 gain).
+  E.applyBelt = () => {
+    const on = !!E.beltWant && E.mode === 'play', t = now();
     if (on && !E.beltOn) {
-      const o = osc('sine', 55), g = ctx.createGain();
+      const g = ctx.createGain(), lp = filt('lowpass', 400, 0.6), os = [];
       g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.08, t + 0.15);
-      o.connect(g).connect(sfxIn); o.start(t);
-      E.belt = { o, g }; E.beltOn = true; E.beltNext = t;
+      for (const [f, a] of [[55, 1], [110, 0.55], [165, 0.25]]) { const o = osc('sine', f), og = G(a); o.connect(og).connect(lp); o.start(t); os.push(o); }
+      lp.connect(g).connect(sfxIn);
+      E.belt = { os, g }; E.beltOn = true; E.beltNext = t;
     } else if (!on && E.beltOn) {
       const b = E.belt; E.belt = null; E.beltOn = false;
-      b.g.gain.cancelScheduledValues(t); b.g.gain.setTargetAtTime(0, t, 0.05); try { b.o.stop(t + 0.4); } catch {}
+      b.g.gain.cancelScheduledValues(t); b.g.gain.setTargetAtTime(0, t, 0.05);
+      for (const o of b.os) try { o.stop(t + 0.4); } catch {}
     }
   };
+  E.setBelt = on => { E.beltWant = !!on; E.applyBelt(); };
 
   // ---------------------------------------------------------------- music loop + scheduler
   function startLoop(town, t, fade) {
     const def = TOWN_DEF[town], out = ctx.createGain(), beds = [];
     out.gain.setValueAtTime(0.0001, t);
-    out.gain.setTargetAtTime(1, t, fade / 3);
+    out.gain.setTargetAtTime(def.lvl || 1, t, fade / 3);
     out.connect(mIn);
     if (def.style === 'harbour') { // waves: looped lowpassed noise, LFO 0.12 Hz on the gain (0.02–0.06)
       const s = ctx.createBufferSource(), lp = filt('lowpass', 500, 0.5), wg = G(0.04), lfo = osc('sine', 0.12), lg = G(0.02);
@@ -523,33 +620,52 @@ function makeEngine(ctx, offline) {
   }
   function stepDur(d) { return 60 / (d.bpm * (E.feast ? 1.06 : 1)) / 4; }
   const PAT_A = [0, 1, 2, 3, 2, 1, 2, 1], PAT_B = [0, 2, 1, 2, 3, 2, 1, 2];
+  function tom(t, v, d) { // soft floor tom for the Feast layer: sine 150 -> 90 Hz, 0.18 s
+    const o = osc('sine', 150), g = ctx.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.16);
+    env(g.gain, t, 0.003, v, 0.18); o.connect(g).connect(d); o.start(t); o.stop(t + 0.25);
+  }
   function schedStep(L, s, t) {
-    const d = L.def, out = L.out, bar = (s >> 4) & 7, sub = s & 15, beat = stepDur(d) * 4;
-    const tens = E.tension || t < E.tensionUntil, title = E.mode === 'title';
+    const d = L.def, out = L.out, bar = (s >> 4) & 7, sub = s & 15, sd = stepDur(d), beat = sd * 4;
+    const tens = E.tension || t < E.tensionUntil, title = E.mode === 'title', feast = E.feast && !title;
     const tt = d.swing > 0.5 && (sub & 3) === 2 ? t + (d.swing - 0.5) * beat : t;
     const ci = bar & 3, ch = d.chords[ci], root = d.roots[ci];
-    const mel = d.mel[d.order[(s >> 7) & 3]][bar];
+    const vari = (feast ? 'ABAB' : d.order)[(s >> 7) & 3], mel = d.mel[vari][bar];
     const lead = d.style === 'picnic' ? (t2, m) => I.glock(t2, m, 0.2, out, 0.6)
       : d.style === 'market' ? (t2, m) => I.pizz(t2, m, 0.17, out)
         : (t2, m) => I.steel(t2, m, 0.17, out);
-    if (!tens) for (const [st, m] of mel) if (st === sub) lead(tt, m);
+    if (!tens) {
+      for (const [st, m] of mel) if (st === sub) lead(tt, m);
+      if (vari === 'B' && bar === 7 && (sub === 12 || sub === 14)) I.glock(tt, d.sting[sub === 12 ? 0 : 1], 0.13, out, 0.7); // family sting
+    }
     if (title) { if (sub === 0 && (bar & 1) === 0) I.pad(t, ch, beat * 8 - 0.1, 0.05, out); return; }
+    const pickup = sub === 14 && (bar & 3) === 3; // family bass pickup into the next phrase
     if (d.style === 'picnic') {
       if ((sub & 1) === 0) { const j = sub >> 1, pat = (bar & 1) ? PAT_B : PAT_A; I.uke(t, [ch[0], ch[1], ch[2], ch[0] + 12][pat[j]], (j & 1) ? 0.085 : 0.11, out); }
       if (sub === 0 || sub === 8) I.bass(t, root, sub === 0 ? 0.3 : 0.24, out);
-      else if (sub === 14 && (bar & 3) === 3) I.bass(t, root + 7, 0.14, out, 0.2);
+      else if (pickup) I.bass(t, root + 7, 0.14, out, 0.2);
       I.shaker(t, tens ? 0.09 : (sub & 3) === 2 ? 0.065 : (sub & 1) ? 0.035 : 0.05, out);
-      if (tens) I.shaker(t + stepDur(d) / 2, 0.05, out);
+      if (tens) I.shaker(t + sd / 2, 0.05, out);
     } else if (d.style === 'market') { // oom-pah: tuba on 1 and 3, accordion chords on 2 and 4, clap on 4
       if (sub === 0) I.tuba(t, root, 0.3, out); else if (sub === 8) I.tuba(t, root + 7, 0.24, out);
-      if (sub === 4 || sub === 12) I.accordion(t, ch.map(m => m + 0), beat * 0.55, 0.075, out);
+      else if (pickup) I.tuba(t, root + 7, 0.14, out, 0.18);
+      if (sub === 4 || sub === 12) I.accordion(t, ch, beat * 0.55, 0.075, out);
       if (sub === 12) I.clap(t, 0.07, out);
       if ((sub & 3) === 2) I.pizz(tt, ch[(sub >> 2) % 3] + 12, 0.055, out);
-      if (tens) { I.shaker(t, 0.08, out); I.shaker(t + stepDur(d) / 2, 0.05, out); }
-    } else { // harbour: marimba arps, round sine bass
-      if ((sub & 1) === 0) { const j = sub >> 1; I.marimba(t, [ch[0], ch[1], ch[2], ch[1]][j & 3] + 12, (j & 1) ? 0.07 : 0.095, out); }
+      if ((sub & 1) === 0) I.shaker((sub & 3) === 2 ? tt : t, tens ? 0.08 : (sub & 3) === 2 ? 0.045 : 0.03, out);
+      if (tens) I.shaker(t + sd / 2, 0.05, out);
+    } else { // harbour: marimba arps, round sine bass, waves bed
+      if ((sub & 1) === 0) { const j = sub >> 1; I.marimba((sub & 3) === 2 ? tt : t, [ch[0], ch[1], ch[2], ch[1]][j & 3] + 12, (j & 1) ? 0.07 : 0.095, out); }
       if (sub === 0 || sub === 8) I.bass(t, root, sub === 0 ? 0.28 : 0.2, out, 0.4, 0);
-      if (tens) { I.shaker(t, 0.08, out); I.shaker(t + stepDur(d) / 2, 0.05, out); }
+      else if (pickup) I.bass(t, root + 7, 0.13, out, 0.22, 0);
+      if ((sub & 1) === 0) I.shaker((sub & 3) === 2 ? tt : t, tens ? 0.08 : (sub & 3) === 2 ? 0.04 : 0.026, out);
+      if (tens) I.shaker(t + sd / 2, 0.05, out);
+    }
+    if (feast) { // "kitchen rush": hat 8ths, pot-lid rim on 2 and 4, soft tom on 1 and 3, bass octave bounce
+      if ((sub & 1) === 0) I.noiseHit((sub & 3) === 2 ? tt : t, 0.025, 'highpass', 7000, 0.7, (sub & 3) === 2 ? 0.045 : 0.028, out, 0.002);
+      if (sub === 4 || sub === 12) I.noiseHit(t, 0.04, 'bandpass', 2200, 3, 0.07, out, 0.001);
+      if (sub === 0 || sub === 8) tom(t, 0.14, out);
+      if (sub === 6 || sub === 14) I.bass(tt, root + 12, 0.1, out, 0.12, 0);
     }
   }
   E.pump = (until, from = -Infinity) => {
@@ -562,7 +678,7 @@ function makeEngine(ctx, offline) {
     }
     if (E.beltOn) {
       while (E.beltNext < until) {
-        if (E.beltNext >= from) { const t = E.beltNext, o = osc('sine', 1800), g = ctx.createGain(); env(g.gain, t, 0.001, 0.05, 0.02); o.connect(g).connect(sfxIn); o.start(t); o.stop(t + 0.04); }
+        if (E.beltNext >= from) { const t = E.beltNext, o = osc('sine', 900), g = ctx.createGain(); env(g.gain, t, 0.001, 0.035, 0.015); o.connect(g).connect(sfxIn); o.start(t); o.stop(t + 0.035); }
         E.beltNext += 0.25;
       }
     }
@@ -581,20 +697,38 @@ function makeEngine(ctx, offline) {
     E.mode = mode;
     const tt = t != null ? t : E.clock();
     const target = mode === 'card' ? 0.5 : 1;
-    if (offline) { modeG.gain.setValueAtTime(target, tt); } else modeG.gain.setTargetAtTime(target, tt, 0.15);
-    if (was !== mode) E.syncLoop(tt);
+    if (offline) modeG.gain.setValueAtTime(target, tt);
+    else if (ctx.state !== 'running') { modeG.gain.cancelScheduledValues(0); modeG.gain.value = target; }
+    else modeG.gain.setTargetAtTime(target, tt, 0.15);
+    if (was !== mode) { E.syncLoop(tt); const b = E.base; E.base = tt; try { E.applyBelt(); } finally { E.base = b; } }
   };
   E.setTension = on => { E.tension = !!on; if (!on) E.tensionUntil = 0; };
 
-  // ---------------------------------------------------------------- bus events -> sounds (GDD §8.3 / §13.3)
+  // ---------------------------------------------------------------- bus events -> sounds (GDD §8.3 / §13.3, Sim contract Wed)
+  // DECISION (Wed): one moment, one sound. once(key, win) drops a repeat of the same key inside win seconds, so Sim's
+  //   paired names (gull + gullWarn per swoop, tier + cakeTier per tier, truck + truckHorn) and courseDone next to win
+  //   play once. The served fanfare (orderUp) is shared by courseDone and win; course swap (course / feastWipe) waits
+  //   0.45 s when it lands right on the served bell so the two do not smear.
+  // DECISION (Wed): spawn (Feast slot reuse) is silent by design: spawns happen off-screen up to several times a second
+  //   and a sound would teach nothing. feastCourse is silent too (its feastWipe already played the course swap), and
+  //   feastTicket only plays the ticket ding when ticketDone did not just play it.
   const p = (id, o) => E.play(id, o);
+  const once = (key, win, f) => { const t = now(), l = E.onceAt[key]; if (l != null && t >= l && t - l < win) return false; E.onceAt[key] = t; f(); return true; };
+  const served = () => once('served', 0.4, () => { p('orderUp'); E.servedAt = now(); });
+  const gull = d => once('gull:' + (d.g != null ? d.g : '') + ':' + (d.i != null ? d.i : ''), 1, () => p('gullSquawk'));
+  const tier = d => once('tier:' + (d.k != null ? d.k : d.tier != null ? d.tier : ''), 0.5, () => p('tier', d));
+  const course = () => once('course', 1, () => later(now() - E.servedAt < 0.6 ? 0.45 : 0, () => p('course')));
+  const horn = () => once('horn', 0.4, () => p('horn'));
+  const ticket = () => once('ticket', 0.5, () => { p('ticket'); later(0.2, () => p('stamp')); });
+  const endBelt = () => { E.beltWant = false; E.applyBelt(); };
   E.bus = {
     start: () => { E.setTension(false); if (E.mode === 'card') E.setMode('play'); },
-    bite: d => { d = d || {}; p('bite', d); if ((d.tier | 0) >= 3 || d.big) p('glug'); },
+    bite: d => { p('bite', d); if ((d.tier | 0) >= 3 || d.big) p('glug'); },
     sizeUp: () => p('sizeUp'),
     line: () => p('line'),
-    ticketDone: () => { p('ticket'); later(0.2, () => p('stamp')); },
-    courseDone: () => p('orderUp'),
+    ticketDone: ticket,
+    courseDone: served,
+    course,
     padlock: () => p('padlock'),
     bossNudge: () => p('bossNudge'),
     bump: () => p('bump'),
@@ -603,36 +737,48 @@ function makeEngine(ctx, offline) {
     sizzle: () => p('sizzle'),
     lowTime: () => { E.tensionUntil = Math.max(E.tensionUntil, E.base + 11); p('lowTime'); },
     tick: d => { E.tensionUntil = Math.max(E.tensionUntil, E.base + 1.8); p('tick', d); },
-    gullWarn: () => p('gullSquawk'),
+    gull,
+    gullWarn: gull,
     gullMiss: () => p('gullMiss'),
     steal: () => p('steal'),
     nest: () => p('plop'),
-    wobble: d => { const k = d && d.i != null ? d.i : -1, t = now(); if (t - (E.wobbleAt[k] != null ? E.wobbleAt[k] : -1e9) < 0.5) return; E.wobbleAt[k] = t; p('wobble'); },
+    wobble: d => { // max 1 per stack per 0.5 s; a contact wobble also gets the bounce thonk
+      const k = d.i != null ? d.i : -1, t = now();
+      if (t - (E.wobbleAt[k] != null ? E.wobbleAt[k] : -1e9) < 0.5) return;
+      E.wobbleAt[k] = t; p('wobble', { contact: !!d.contact }); if (d.contact) p('bump');
+    },
     crack: () => p('crack'),
     refuse: () => p('lid'),
     shove: () => p('lid'),
     boil: () => p('boil'),
     belt: d => p('belt', d),
-    truckHorn: () => p('horn'),
-    cakeTier: d => p('cake', d),
+    truck: horn,
+    truckHorn: horn,
+    tier,
+    cakeTier: tier,
+    spawn: () => {},
+    feastWipe: course,
+    feastCourse: () => {},
+    feastTicket: () => { if (now() - (E.onceAt.ticket != null ? E.onceAt.ticket : -1e9) >= 0.5) ticket(); },
     boost: d => p('boost', d),
     win: d => {
-      E.setTension(false);
-      p('orderUp');
+      E.setTension(false); endBelt();
+      served();
       later(0.5, () => p('stamp'));
-      later(0.62, () => p('win', { stars: d && d.stars }));
+      later(0.62, () => p('win', { stars: d.stars }));
       E.setMode('card');
     },
-    fail: () => { E.setTension(false); p('fail'); E.setMode('card'); },
+    fail: () => { E.setTension(false); endBelt(); p('fail'); E.setMode('card'); },
+    // control events (CTRL_EVENTS)
+    levelStart: () => { E.setTension(false); endBelt(); E.onceAt = {}; E.wobbleAt = {}; E.servedAt = -1e9; },
+    freezeContinue: () => { E.setTension(false); p('boost', { kind: 'freeze' }); },
+    boostEmpty: () => p('nope'),
   };
   return E;
 }
-export const SFX_IDS = (() => { // names of the recipes, without building an engine
-  const ids = ['bite', 'glug', 'sizeUp', 'line', 'ticket', 'padlock', 'bossNudge', 'bump', 'bossBite', 'orderUp', 'stamp', 'chain', 'sizzle',
-    'gullSquawk', 'gullMiss', 'steal', 'plop', 'crack', 'wobble', 'lid', 'boil', 'tick', 'lowTime', 'belt', 'horn', 'cake', 'boost', 'win',
-    'star', 'fail', 'coin', 'ui', 'gift'];
-  return ids;
-})();
+export const SFX_IDS = ['bite', 'glug', 'sizeUp', 'line', 'ticket', 'padlock', 'bossNudge', 'bump', 'bossBite', 'orderUp', 'stamp', 'chain', 'sizzle',
+  'gullSquawk', 'gullMiss', 'steal', 'plop', 'crack', 'wobble', 'lid', 'boil', 'tick', 'lowTime', 'belt', 'horn', 'tier', 'course', 'boost', 'win',
+  'star', 'fail', 'coin', 'ui', 'gift', 'chest', 'milestone', 'streak', 'buy', 'nope']; // names of the recipes, without building an engine
 
 // ------------------------------------------------------------------ live module state
 let ctx = null, E = null, boundOff = null, unlocked = false, held = false, muted = false;
@@ -661,6 +807,7 @@ function reconcile(force) {
   if (!ctx || ctx.state === 'closed') return;
   const want = desired();
   E.setGate(want);
+  if (want && !lastDesired) { E.base = E.lead(); try { E.applyBelt(); } catch {} } // a belt change that came while silent
   lastDesired = want;
   if (busy && !force && performance.now() - busySince < 1500) { dirty = true; return; }
   if (want) {
@@ -688,7 +835,7 @@ export function initAudio() {
     E = makeEngine(ctx, false);
   } catch (e) { try { ctx.close(); } catch {} ctx = null; E = null; try { console.warn('[audio]', e && e.message); } catch {} return false; }
   E.setMusic(musicV); E.setSfx(sfxV);
-  E.town = wantTown; E.mode = wantMode; E.feast = wantFeast; E.musicOn = wantMusic;
+  E.town = wantTown; E.feast = wantFeast; E.musicOn = wantMusic; E.setMode(wantMode, ctx.currentTime);
   ctx.onstatechange = () => { if (busy) dirty = true; else reconcile(); };
   if (!poll) poll = setInterval(pollTick, POLL_MS);
   if (E.musicOn) E.syncLoop(ctx.currentTime);
@@ -736,7 +883,8 @@ export function setMuted(b) { muted = !!b; if (ctx) reconcile(); }
 export function suspend() { held = true; if (ctx) reconcile(); }
 export function resume() { held = false; if (ctx) reconcile(); }
 export function isRunning() { return !!ctx && ctx.state === 'running'; }
-/** Plays a §8.3 recipe now (ids in SFX_IDS). opts depend on the id: bite {tier,n,ing}, chain {n}, win {stars,town}, star {i}, tick {s}, cake {tier}, boost {kind}, belt {on}. Dropped while not allowed. */
+/** Plays a §8.3 recipe now (ids in SFX_IDS). opts depend on the id: bite {tier,n,ing}, chain {n}, win {stars,town}, star {i}, tick {s}, tier {k},
+ *  boost {kind}, belt {on}, wobble {contact}, streak {day 1..7}. UI ids: ui, coin, gift, chest, milestone, streak, buy, nope. Dropped while not allowed. */
 export function sfx(id, opts) {
   if (!E || !desired()) return false;
   E.base = E.lead();
@@ -744,14 +892,20 @@ export function sfx(id, opts) {
 }
 /** Subscribes to the game bus (bus.on(ev, fn)); returns off(). Calling again replaces the previous binding. */
 export function bindBus(bus) {
+  // DECISION (Wed): bindBus listens to BUS_EVENTS + CTRL_EVENTS (levelStart, freezeContinue, boostEmpty; not recorded).
+  //   While sound is not allowed (paused, muted, audio flag off) nothing plays and no node is made, but the belt wish is
+  //   still tracked (belt {on}, levelStart / win / fail clear it), so resuming on a belt brings the hum back and resuming
+  //   after the belt ended does not.
   if (boundOff) { boundOff(); boundOff = null; }
   if (!bus || typeof bus.on !== 'function') return () => {};
   const offs = [];
-  for (const ev of BUS_EVENTS) {
+  for (const ev of BUS_EVENTS.concat(CTRL_EVENTS)) {
     offs.push(bus.on(ev, d => {
-      if (!E || !desired()) return;
+      if (!E) return;
+      if (!desired()) { if (ev === 'levelStart' || ev === 'win' || ev === 'fail' || ev === 'belt') E.beltWant = ev === 'belt' && !!(d && d.on !== false); return; }
       E.base = E.lead();
       try { E.bus[ev](d || {}); } catch (e) { try { console.warn('[audio]', ev, e && e.message); } catch {} }
+      startTimer();
     }));
   }
   boundOff = () => { for (const f of offs) try { if (f) f(); } catch {} };
@@ -762,7 +916,7 @@ export function analyser() { return E ? E.analyser() : null; }
 export function stats() {
   return Object.assign({ state: ctx ? ctx.state : 'none', time: ctx ? ctx.currentTime : 0, desired: desired(), unlocked, held, muted, flagOn: P.audioOn !== false,
     gate: E ? E.gateTarget : 0, gateVal: E ? +E.gate.gain.value.toFixed(3) : 0, music: !!(E && E.loop), town: E ? E.town : wantTown, mode: E ? E.mode : wantMode, tension: !!(E && (E.tension || E.tensionUntil > E.base)), duck: E ? +E.duck.gain.value.toFixed(3) : 1,
-    voices: E ? E.bv.filter(v => v.end > ctx.currentTime).length : 0, timer: !!timer, busy }, E ? E.st : {});
+    voices: E ? E.bv.filter(v => v.end > ctx.currentTime).length : 0, timer: !!timer, busy, belt: !!(E && E.beltOn), beltWant: !!(E && E.beltWant) }, E ? E.st : {});
 }
 
 // ------------------------------------------------------------------ offline render (record mode, tests)
@@ -777,8 +931,8 @@ export async function renderOffline(durSec = 5, events = [], opts = {}) {
   const oc = new OAC(2, Math.ceil(sr * dur), sr);
   const X = makeEngine(oc, true);
   X.setMusic(opts.musicVolume != null ? opts.musicVolume : musicV); X.setSfx(opts.sfxVolume != null ? opts.sfxVolume : sfxV);
-  X.town = normTown(opts.town) || 'picnic'; X.mode = MODES.includes(opts.mode) ? opts.mode : 'play'; X.feast = !!opts.feast;
-  X.musicOn = !!opts.music; X.syncLoop(0);
+  X.town = normTown(opts.town) || 'picnic'; X.feast = !!opts.feast; X.musicOn = !!opts.music;
+  X.setMode(MODES.includes(opts.mode) ? opts.mode : 'play', 0); X.syncLoop(0);
   const evs = (Array.isArray(events) ? events : []).filter(e => e && isFinite(e.t)).slice().sort((a, b) => a.t - b.t);
   for (const e of evs) {
     const t = Math.max(0, Math.min(dur, +e.t));
@@ -820,4 +974,4 @@ function wavBase64(buf) {
 }
 
 export default { initAudio, unlock, setTown, music, setMode, setTension, setFeast, sfx, setVolumes, setMuted, suspend, resume, bindBus,
-  isRunning, analyser, stats, renderOffline, renderWav, biteHz, SFX_IDS, BUS_EVENTS, TOWN_IDS };
+  isRunning, analyser, stats, renderOffline, renderWav, biteHz, SFX_IDS, BUS_EVENTS, CTRL_EVENTS, TOWN_IDS };

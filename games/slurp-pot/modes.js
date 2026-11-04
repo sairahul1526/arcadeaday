@@ -4,7 +4,7 @@
 //   install(api)       -> installs, depending on the query:
 //        ?qa=1       the __qa* hooks of §11.4 (+ __qaAdvance, __qaScreen for tools/slurp-pot/qa-run.mjs)
 //        ?record=1   window.__rec = { step(n), frame(q), audio(dur) } and __recReady (record.mjs)
-//        ?og=1       runs 1,092 REC steps at boot, renders once, sets __ogReady
+//        ?og=1       runs 1,020 REC steps (17.0 s, cake tip) at boot, renders once, sets __ogReady
 //        ?cover=...  same hero run as og, sets __coverReady (backplates for covers.mjs)
 //
 // Nothing here may throw into game.js: every hook is wrapped, errors go to api.P.error. No storage access of any
@@ -12,21 +12,33 @@
 //
 // Everything that the UI needs from record mode is published on api.rec and window.__recState:
 //   { t, frames, over, hook, cap2, end, still, ready }   t = video seconds (frames / 60), over = t >= 24.5.
+//   show: { hook, cap2, end, iris }  caption / end-card alphas 0..1 for this frame (recShow(t)); iris = loop wipe 0..1.
+//   step (pot SIZE UP step now), beats [{ t, step }] (the planned big beats), looped (true after the 24.5 s restart).
 //
 // DECISION: flags are on only for the exact value "1" (the platform layer's qa test is /[?&]qa=1\b/, record.mjs and
 //   og.mjs also send 1), so ?qa=true is not qa. ?level=n is honoured only together with ?qa=1 (GDD §11.4).
 // DECISION: hook / cap2 / end are trimmed, stripped of control characters and cut to 120 characters. An empty
 //   value falls back to the GDD default; end has no default and no URL is ever hard-coded here (Playables text scan).
 // DECISION: if a module asks for something the API does not offer yet (api.startRecord, api.advance, bots.screenDir),
-//   modes.js falls back (L1 + director bot, api.tick, a naive chaser) and reports the fallback in window.__spFallbacks,
+//   modes.js falls back (recHook path / L1 + greedy, api.tick, a naive chaser) and reports it in window.__spFallbacks,
 //   so qa-run can print which pieces are still missing instead of silently passing.
+// DECISION (Wednesday): the REC showcase lives here. recPlan(base) lays the REC food ladder along a serpentine route
+//   timed to the §12.2 beat sheet, and the director bot follows it on schedule. Core's api.startRecord({ level,
+//   decide }) runs them; logic.js decides every bite and growth, so the video is real play on a scripted course.
+import * as Lg from './logic.js';
+import { KINDS } from './catalog.js';
+import { kindMax as KIND_MAX } from './levels-data.js';
+import { G, K_ING, SIZEUP_MUL } from './consts.js';
 
 export const HOOK_DEFAULT = 'Can a pea-sized pot eat the WHOLE park?';
 export const CAP2_DEFAULT = '…even the giant cake?';
 export const LEVELS = 60;
 const DT = 1 / 60;
 const REC_OVER_T = 24.5;      // mode 'over' once the end card has shown 1.0 s (GDD §12.1)
-const OG_STEPS = 1092;        // 18.2 s of REC (GDD §12.3)
+// DECISION (11-04, og at the tip): GDD §12.3 says 1,092 steps (18.2 s), but on today's REC course that frame is past
+//   the gulp (win heart showing). Measured in record.mjs snaps: final boss bite 16.63 s, cake whole on the rim 16.8 s,
+//   half sunk 17.2 s, a sliver + ORDER UP 17.6 s, heart 18.0 s. 1,020 steps (17.0 s) = the cake tipping into the pot.
+export const OG_STEPS = 1020; // 17.0 s of REC
 const STILL_GUARD_MS = 25000; // og/cover: stop stepping after this much wall time (SwiftShader safety), see __ogSteps
 const TIERS = ['low', 'mid', 'high'];
 const COVERS = ['wide', 'tall', 'square'];
@@ -229,6 +241,7 @@ function qaState(api) {
     fps: num(stats.fps), drawCalls: num(stats.drawCalls), tier: stats.tier || '', dpr: num(stats.dpr),
     items: aliveItems(w), r: num(w && w.pot && w.pot.r), needR: 0, bossState: '', tLeft: num(w && w.tLeft),
     result: (w && w.result) || null, stars: num(w && w.stars), coins: 0, chain: num(w && w.chain && w.chain.n),
+    chainBest: num(w && w.chain && w.chain.best),
     screen: st.screen || '', paused: !!st.paused, state: st, kind: st.mode || 'level',
   };
   o.streak = o.chain;
@@ -343,22 +356,264 @@ function installQa(api, M) {
   if (M.level) safe(api, 'qa.level', () => { api.startLevel(M.level); });
 }
 
-// ------------------------------------------------------------------ ?record=1 / ?og=1 / ?cover=
+// ------------------------------------------------------------------ REC showcase: course + director (§12.1, §12.2)
+export const REC_PRE = 0.4;                         // preroll seconds: Core runs 24 steps before frame 0
+// [video t, SIZE UP step] knots of the growth schedule: the big beats of D31 land exactly on these times.
+export const REC_KNOTS = [[-REC_PRE, 0], [2.5, 2], [7.5, 5], [11.5, 8], [14.5, 11]];
+export const REC_OPEN_T = 15.5, REC_RUSH_T = 16.0;  // padlock pops; the pot rushes the cake
+const REC_FIRST = [-0.30, -0.17, -0.04];            // three peas in the preroll: chain x3 on frame 0, the third tipping
+const REC_BERRY_T = [3.3, 4.8, 6.3];                // strawberry ticket 1/3, 2/3, 3/3 (tick before SIZE UP 5)
+// Target bites per second over video time (the montage gets denser early, chunkier late).
+const REC_RATE = [[-REC_PRE, 12], [7.5, 9], [11.5, 6], [14.5, 4], [REC_OPEN_T, 4]];
+const REC_Q = 0.92;                                 // every course item fits with 8 % to spare when it is reached
+const REC_V = 0.86;                                 // planned cruise = 86 % of top speed (the director has headroom)
+const REC_GAP = 0.06, REC_GAP_MAX = 0.5;            // bite spacing (s); 0.5 keeps the chain alive (CHAIN_WIN 0.7)
+const REC_HOLD_D = 4.0;                             // pot centre to cake centre at the padlock (0.5 s rush)
+const REC_ITEMS = 236;                              // course items (+ the cake) stay under ITEM_MAX 240
+// The course's kind ladder (16 kinds + strawberry + cake = KINDS_MAX 18): colourful tiny food, picnic snacks, then
+// the props a hole game is remembered for (cooler, bench, parasol, tree, swing set, gazebo) before the cake.
+const REC_KINDS = ['pea', 'blueberry', 'cherry', 'juicebox', 'cupcake', 'pinwheel', 'sandwich', 'watermelon', 'beachball',
+  'bin', 'cooler', 'bench', 'parasol', 'tree', 'swingset', 'gazebo'];
+const r3 = v => Math.round(v * 1000) / 1000;
+const frac = v => v - Math.floor(v);
+const knotAt = (K, t) => {
+  if (t <= K[0][0]) return K[0][1];
+  for (let j = 1; j < K.length; j++) if (t <= K[j][0]) return K[j - 1][1] + (K[j][1] - K[j - 1][1]) * (t - K[j - 1][0]) / (K[j][0] - K[j - 1][0]);
+  return K[K.length - 1][1];
+};
+
+/** Growth schedule r(t) (log-linear between the knots, ending at the padlock radius) and its inverse t(r). */
+function recSchedule(r0, rOpen) {
+  const R = [r0];
+  for (let k = 1; k <= 16; k++) R.push(R[k - 1] * SIZEUP_MUL);   // same repeated product as logic's sizeUpR
+  const K = REC_KNOTS.map(([t, s]) => [t, Math.log(R[s])]).concat([[REC_OPEN_T, Math.log(rOpen)]]);
+  const seg = (y, a, b) => (a === b ? 0 : (y - a) / (b - a));
+  const rAt = t => Math.exp(knotAt(K, t));
+  const tAt = r => {
+    const y = Math.log(r);
+    if (y <= K[0][1]) return K[0][0];
+    for (let j = 1; j < K.length; j++) if (y <= K[j][1]) return K[j - 1][0] + (K[j][0] - K[j - 1][0]) * seg(y, K[j - 1][1], K[j][1]);
+    return REC_OPEN_T;
+  };
+  return { rAt, tAt, beats: REC_KNOTS.slice(1).map(([t, s]) => ({ t, s, r: R[s] })) };
+}
+
 /**
- * Starts the REC level. DECISION: asks Core for api.startRecord() (REC via levels.getRecord(), director bot, no boosters,
- * recordPath); until that exists it falls back to L1 with the director bot (or greedy), which is a stand-in, not the REC
- * beat sheet. window.__spFallbacks gets 'startRecord'.
+ * Boustrophedon route from the spawn down to the hold spot in front of the cake; w = half-width of the rows.
+ * DECISION: row spacing widens down the board (1.8 → 4.8 m) because the pot is bigger there, and the route never
+ *   folds back: a big prop that does not fit yet must stay clear of every earlier stretch of the route.
  */
-function startRecordLevel(api) {
-  if (isFn(api.startRecord)) {
+function recRoute(w, spawn, cake) {
+  const hz = cake.z + REC_HOLD_D, span = spawn.z - hz;
+  const z = f => spawn.z - span * f;
+  return [[spawn.x, spawn.z], [0, z(0.093)], [w, z(0.093)], [w, z(0.207)], [-w, z(0.207)], [-w, z(0.352)], [w, z(0.352)],
+    [w, z(0.549)], [-w, z(0.549)], [-w, z(0.798)], [cake.x, hz]];
+}
+function routeLen(p) { let s = 0; for (let i = 1; i < p.length; i++) s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return s; }
+/** Point at arc length s on polyline p, pushed `off` to the left of the travel direction. */
+function routeAt(p, s, off = 0) {
+  for (let i = 1; i < p.length; i++) {
+    const dx = p[i][0] - p[i - 1][0], dz = p[i][1] - p[i - 1][1], l = Math.hypot(dx, dz) || 1e-9;
+    if (s <= l || i === p.length - 1) {
+      const u = Math.min(s, l) / l;
+      return [p[i - 1][0] + dx * u - (dz / l) * off, p[i - 1][1] + dz * u + (dx / l) * off];
+    }
+    s -= l;
+  }
+  return [p[0][0], p[0][1]];
+}
+
+/**
+ * Pure: the REC showcase course from the expanded REC level (levels.getRecord()). Keeps the board, surfaces, decor
+ * and the cake; replaces the food with a size ladder laid along a serpentine route so that, eaten in order on
+ * schedule, the pot crosses SIZE UP 2 / 5 / 8 / 11 at 2.5 / 7.5 / 11.5 / 14.5 s and pops the padlock at 15.5 s.
+ * Returns { level, plan: [{ i, t }], route, beats, rOpen } (plan = item index + video time the director aims for).
+ * DECISION: growth is path-independent (r² = r0² + G·Σk·a²), so the radius after each planned bite is exact; only
+ *   arrival times can drift, and the director's speed control holds them. Each bite takes the course kind (that
+ *   fits with 8 % to spare, within levels-data kindMax so the render pools fit) whose growth keeps the bite rate
+ *   nearest REC_RATE, rotating among near-ties for variety; strawberry ×3 is the ticket (3.3 / 4.8 / 6.3 s).
+ *   The kinds come from the curated REC_KINDS ladder (whatever of it the catalogue has in this town).
+ */
+export function recPlan(base) {
+  const r0 = num(base && base.r0, 0.14);
+  const bi = Math.max(0, base.items.findIndex(it => it.flags & Lg.F.BOSS));
+  const boss = base.items[bi];
+  const rOpen = Lg.needR(boss.a) + 1e-6;
+  const S = recSchedule(r0, rOpen);
+  const town = base.town || 'picnic';
+  const inTown = k => (k.towns || [k.town]).some(t => t === town || t === 'all');
+  const plain = k => !k.boss && !k.wall && !k.gate && !k.fragile && !k.surface && !k.roll && k.id !== 'strawberry' && inTown(k);
+  let pool = REC_KINDS.map(id => KINDS.find(k => k.id === id)).filter(k => k && plain(k));
+  if (pool.length < 8) pool = KINDS.filter(plain);
+  pool.sort((a, b) => b.a - a.a || (a.id < b.id ? -1 : 1));
+  const byId = id => KINDS.find(k => k.id === id);
+  const pea = byId('pea') || pool[pool.length - 1], berry = byId('strawberry');
+  const used = {}, bites = [];
+  let r2 = r0 * r0, t = -REC_PRE, rot = 0, bk = 0;
+  const R = () => Math.sqrt(r2);
+  const gain = (k, ing) => G * (ing ? K_ING : num(k.k, 1)) * k.a * k.a;
+  const add = (k, tt, ing) => { bites.push({ k, t: tt, r: R(), ing: !!ing }); used[k.id] = (used[k.id] | 0) + 1; r2 += gain(k, ing); t = tt; };
+  const rawT = k => {
+    const r = R(), rn = Math.sqrt(r2 + gain(k, false));
+    let tt = S.tAt(rn);
+    for (const b of S.beats) if (r < b.r && rn >= b.r) tt = b.t;
+    if (rn >= rOpen) tt = REC_OPEN_T;
+    return tt;
+  };
+  for (const tf of REC_FIRST) add(pea, tf, false);
+  while (R() < rOpen && bites.length < REC_ITEMS) {
+    const lim = REC_Q * Lg.FIT * R();
+    const c = pool.filter(k => k.a <= lim && (used[k.id] | 0) < num(KIND_MAX[k.id], 0));
+    if (!c.length) break;
+    const want = 1 / knotAt(REC_RATE, t);
+    const sc = c.map(k => { const g = rawT(k) - t; return { k, g, s: Math.abs(Math.log(Math.max(g, 0.005) / want)) + (g > REC_GAP_MAX ? 9 : 0) }; });
+    const best = Math.min(...sc.map(o => o.s));
+    const near = sc.filter(o => o.s <= best + 0.35);
+    const o = near[rot++ % near.length];
+    const tn = Math.max(t + REC_GAP, o.g + t);
+    if (berry && bk < REC_BERRY_T.length && REC_BERRY_T[bk] < tn) { add(berry, Math.max(REC_BERRY_T[bk++], t + REC_GAP), true); continue; }
+    add(o.k, tn, false);
+  }
+  // arc length the pot covers by time t at the planned cruise speed
+  const sTab = [];
+  for (let s = 0, tt = -REC_PRE; tt <= REC_OPEN_T + 1; tt += DT) { sTab.push(s); s += REC_V * Lg.speedOf(S.rAt(tt)) * DT; }
+  const sAt = tt => { const f = (tt + REC_PRE) / DT, j = clamp(Math.floor(f), 0, sTab.length - 2); return sTab[j] + (sTab[j + 1] - sTab[j]) * clamp(f - j, 0, 1); };
+  const arcs = bites.map(b => sAt(b.t) + 0.9 * Math.max(0, b.r - 0.25 * b.k.a));
+  const need = Math.max(sAt(REC_OPEN_T), arcs.length ? arcs[arcs.length - 1] : 0) + 0.3;
+  const spawn = base.spawn || { x: 0, z: 13 }, cake = { x: boss.x, z: boss.z };
+  let lo = 0.5, hi = 7.5;
+  for (let it = 0; it < 40; it++) { const mid = (lo + hi) / 2; if (routeLen(recRoute(mid, spawn, cake)) < need) lo = mid; else hi = mid; }
+  const route = recRoute(hi, spawn, cake);
+  const x0 = num(base.x0, -9) + 0.3, x1 = num(base.x1, 9) - 0.3, z0 = num(base.z0, -15) + 0.3, z1 = num(base.z1, 15) - 0.3;
+  const items = [Object.assign({}, boss, { zone: 0 })], plan = [];
+  bites.forEach((b, j) => {
+    // lateral spread inside the swallow band, so the straight route collects every item
+    const reach = Math.max(0, b.r - 0.25 * b.k.a);
+    const off = j < REC_FIRST.length ? 0 : (frac(j * 0.618034) - 0.5) * 1.5 * reach;
+    const [x, z] = routeAt(route, arcs[j], off);
+    items.push({ kind: b.k.id, ki: b.k.i, x: r3(clamp(x, x0, x1)), z: r3(clamp(z, z0, z1)), a: b.k.a, h: b.k.h, k: num(b.k.k, 1),
+      flags: b.ing ? Lg.F.ING : 0, rot: r3(frac(j * 0.381966) * 2 * Math.PI - Math.PI), lane: -1, lu: 0, belt: -1, stack: null, zone: 0 });
+    plan.push({ i: items.length - 1, t: b.t });
+  });
+  const tickets = [{ lines: [{ kind: 'strawberry', need: Math.min(3, bites.filter(b => b.ing).length) || 1, place: 'open' }], boss: 0 }];
+  const level = Object.assign({}, base, {
+    items, tickets, path: route.map(([x, z]) => ({ x: r3(x), z: r3(z) })),
+    zones: [{ id: 0, x: 0, z: 0, parent: -1, gate: -1, r: 0 }],
+    zoneGraph: { nodes: [{ id: 0, x: 0, z: 0, items: items.map((_, i) => i) }], edges: [] },
+  });
+  return { level, plan, route, beats: S.beats, rOpen };
+}
+
+/** The scripted showcase bot: plan from recPlan. Pure and deterministic like bots.js (reads w, never writes it). */
+export function createDirector(plan) { return { plan: plan || [], j: 0, n: 0, out: { x: 0, z: -1, m: 0 } }; }
+/**
+ * One decision per sim step -> { x, z, m }. Video time = steps so far − the 0.4 s preroll.
+ * DECISION: target = the first planned item still on the board that fits (looking ≤ 6 ahead, so a missed one never
+ *   stalls the run); speed m = distance to its swallow point / time left to its planned bite, over top speed
+ *   (0.08..1, full when late). Props that do not fit yet and sit ahead within reach bend the heading onto their
+ *   tangent (no bump stalls). After the plan: face the cake, creep (m 0.1) while the padlock pops, rush at 16.0 s.
+ */
+export function directorDecide(d, w, dt = DT) {
+  const vt = d.n * dt - REC_PRE;
+  d.n++;
+  const o = d.out;
+  if (!w || w.result) { o.m = 0; return o; }
+  const P = w.pot, pl = d.plan, st = w.st;
+  while (d.j < pl.length && st[pl[d.j].i] !== 0) d.j++;
+  let tx, tz, m = 1;
+  const tk = w.tickets[w.ti], b = Lg.curBoss(w);
+  if (d.j >= pl.length || (tk && tk.open)) {
+    if (b < 0) { o.m = 0; return o; }
+    tx = w.ix[b]; tz = w.iz[b];
+    m = tk && tk.open ? (vt < REC_RUSH_T ? 0.1 : 1) : 0.15;
+  } else {
+    let q = d.j;
+    for (let k = d.j; k < pl.length && k < d.j + 6; k++) if (Lg.edible(w, pl[k].i)) { q = k; break; }
+    const it = pl[q], i = it.i;
+    tx = w.ix[i]; tz = w.iz[i];
+    const dist = Math.max(0, Math.hypot(tx - P.x, tz - P.z) - (P.r - 0.25 * w.ia[i])), tau = it.t - vt;
+    m = tau > dt ? clamp(dist / tau / Lg.speedOf(P.r), 0.08, 1) : 1;
+  }
+  const dx = tx - P.x, dz = tz - P.z, l = Math.hypot(dx, dz);
+  if (l < 1e-6) { o.m = 0; return o; }
+  let ux = dx / l, uz = dz / l, vx = ux, vz = uz;
+  for (let i = 0; i < w.n; i++) {
+    if (st[i] !== 0 || i === b || Lg.canFit(P.rEff, w.ia[i])) continue;
+    const ox = w.ix[i] - P.x, oz = w.iz[i] - P.z, od = Math.hypot(ox, oz), R = w.ia[i] + 0.5 * P.r + 0.3;
+    if (od > R + 1.2 || od < 1e-6 || od > l + R) continue;
+    const ahead = (ox * ux + oz * uz) / od;
+    if (ahead <= 0) continue;
+    const s = ox * uz - oz * ux >= 0 ? 1 : -1;             // obstacle right of the heading → pass it on the left
+    const k = clamp(1 - (od - R) / 1.2, 0, 1) * ahead;
+    vx += k * (s * oz / od - 0.3 * ox / od); vz += k * (-s * ox / od - 0.3 * oz / od);
+  }
+  const vl = Math.hypot(vx, vz) || 1;
+  o.x = vx / vl; o.z = vz / vl; o.m = m;
+  return o;
+}
+
+// ------------------------------------------------------------------ ?record=1 / ?og=1 / ?cover=
+let recCourse = null;    // the REC course, planned once per page from the pristine levels.getRecord()
+/** Plans the REC showcase course once (recPlan on a copy of levels.getRecord()); null when levels is missing. */
+function courseFor(api) {
+  if (recCourse) return recCourse;
+  const base = api.levels && isFn(api.levels.getRecord) ? api.levels.getRecord() : null;
+  if (!base || !Array.isArray(base.items)) return null;
+  recCourse = recPlan(Object.assign({}, base, { items: base.items.slice() }));
+  return recCourse;
+}
+
+/**
+ * Starts (or restarts, for the loop) the REC showcase: the recPlan course, a fresh director, the 0.4 s preroll.
+ * DECISION: asks Core for api.startRecord({ level, decide }) (course level + director decide(w, dt) driving the
+ *   sim, preroll inside). Until Core takes the options (seen as: decide never called), modes falls back in three
+ *   steps, all inside this capture page: the course is copied onto the cached levels.getRecord() object, the
+ *   director drives through api.input.sample with the bot off, and api.retry() + 24 api.advance(DT) steps redo
+ *   the REC start and preroll. window.__spFallbacks gets 'recHook'. With no startRecord at all: L1 + greedy bot.
+ */
+function startRecordLevel(api, rec) {
+  let P = null;
+  try { P = courseFor(api); } catch (e) { report(api, e, 'recPlan'); }
+  if (isFn(api.startRecord) && P) {
+    const d = createDirector(P.plan);
+    const decide = (w, dt) => directorDecide(d, w, dt);
+    const ok = safe(api, 'startRecord', () => api.startRecord({ level: P.level, decide }), false);
+    if (ok !== false && d.n > 0) { if (rec) rec.director = d; return true; }
+    fallback('recHook');
+    const d2 = createDirector(P.plan);
+    const ok2 = safe(api, 'record.fallback', () => {
+      const lv = api.levels.getRecord();
+      if (lv !== P.level) Object.assign(lv, P.level);
+      if (ok === false && api.startRecord() === false) return false;
+      api.setBot(false);
+      if (api.input) api.input.sample = () => directorDecide(d2, api.world(), DT);
+      if (api.retry() === false) return false;
+      for (let i = 0; i < Math.round(REC_PRE / DT); i++) api.advance(DT);
+      return true;
+    }, false);
+    if (ok2) { if (rec) rec.director = d2; return true; }
+  } else if (isFn(api.startRecord)) {
     const ok = safe(api, 'startRecord', () => api.startRecord(), false);
     if (ok !== false) return true;
   }
   fallback('startRecord');
-  safe(api, 'record.bot', () => { api.setBot(true, 'director'); });
-  let ok = safe(api, 'record.level', () => api.startLevel(1), false);
-  if (!ok) { safe(api, 'record.bot2', () => api.setBot(true, 'greedy')); ok = safe(api, 'record.level2', () => api.startLevel(1), false); }
-  return !!ok;
+  safe(api, 'record.bot', () => { api.setBot(true, 'greedy'); });
+  return !!safe(api, 'record.level', () => api.startLevel(1), false);
+}
+
+/**
+ * Caption alphas and the loop iris for ui.js, from video time t (s). DECISION: hook on from frame 0, fading out
+ * 2.75–3.0 s and back in over 24.5–25.0 (so the last frame matches frame 0); cap2 12.8–15.6 s with 0.2 s fades;
+ * end card in over 23.5–23.7 s and held until the loop frame; iris 0→1 over 24.5–25.0 (circle wipe on the pot).
+ */
+export function recShow(t) {
+  const up = (a, b) => clamp((t - a) / (b - a), 0, 1);
+  return {
+    hook: t < 24.5 ? 1 - up(2.75, 3.0) : up(24.5, 25.0),
+    cap2: up(12.8, 13.0) * (1 - up(15.4, 15.6)),
+    end: t < 25.0 ? up(23.5, 23.7) : 0,
+    iris: up(24.5, 25.0),
+  };
 }
 
 const SLIM_KEYS = ['i', 'kind', 'tier', 'n', 'ing', 'step', 'r', 'ti', 'li', 'final', 'add', 'g', 'why', 'stars', 'on', 'v', 's'];
@@ -388,8 +643,15 @@ function makeCapture(api) {
   };
 }
 
+/**
+ * ?record=1 / ?og=1 / ?cover=: the __rec contract (§12.1), window.__recState for ui.js captions, the 25.0 s loop.
+ * DECISION (loop): at 24.5 s (mode 'over') the REC restarts with a fresh director and preroll, and the last 30
+ *   frames only repaint (tick 0) under the iris, so frame 1500 shows the same pose as frame 0. Bus events after
+ *   the restart and before frame 0 are not sent to the soundtrack.
+ */
 function installRecord(api, M, still) {
-  const rec = { t: 0, frames: 0, over: false, hook: M.hook, cap2: M.cap2, end: M.end, still: !!still, ready: false, steps: 0 };
+  const rec = { t: 0, frames: 0, over: false, hook: M.hook, cap2: M.cap2, end: M.end, still: !!still, ready: false, steps: 0,
+    show: recShow(0), iris: 0, step: 0, beats: [], looped: false, director: null };
   api.rec = rec;
   window.__recState = rec;
   window.__spMode = M;
@@ -397,7 +659,7 @@ function installRecord(api, M, still) {
   // Bus events for the soundtrack (audio.renderWav takes [{ t, ev, data }]).
   const events = [];
   const names = new Set((api.audio && api.audio.BUS_EVENTS) || ['start', 'bite', 'sizeUp', 'line', 'ticketDone', 'padlock', 'bossBite', 'chain', 'sizzle', 'win']);
-  safe(api, 'record.bus', () => { api.bus.on('*', (d, ev) => { if (names.has(ev) && events.length < 6000) events.push({ t: rec.frames / 60, ev, data: slim(d) }); }); });
+  safe(api, 'record.bus', () => { api.bus.on('*', (d, ev) => { if (!rec.looped && names.has(ev) && events.length < 6000) events.push({ t: rec.frames / 60, ev, data: slim(d) }); }); });
 
   const snap = () => {
     let w = null;
@@ -407,14 +669,26 @@ function installRecord(api, M, still) {
   };
   const stepOne = (useAdvance) => {
     rec.frames++; rec.t = rec.frames / 60; rec.over = rec.t >= REC_OVER_T;
-    if (useAdvance && isFn(api.advance)) api.advance(DT); else api.tick(DT);
+    const sh = recShow(rec.t);
+    rec.show = sh; rec.iris = sh.iris;
+    if (!still && !rec.looped && rec.frames >= Math.round(REC_OVER_T * 60)) {
+      rec.looped = true;
+      startRecordLevel(api, rec);
+      api.tick(0);
+    } else if (rec.looped) api.tick(0);
+    else if (useAdvance && isFn(api.advance)) api.advance(DT); else api.tick(DT);
+    try { const w = api.world(); rec.step = w && w.pot ? w.pot.step | 0 : 0; } catch {}
   };
   window.__rec = {
-    /** n x DT of sim through the same accumulator path as play (no rAF); also paints each frame (ui reads api.rec.t). */
+    /**
+     * n x DT of sim through the same accumulator path as play (no rAF); paints each frame (ui reads api.rec.t).
+     * DECISION: a long jump (n > 30, --snap) runs sim-only api.advance for all but the last 30 frames, which are
+     *   painted so the camera and particles settle; record.mjs video mode steps 1 at a time and paints every frame.
+     */
     step(n = 1) {
       return safe(api, '__rec.step', () => {
         n = Math.max(1, Math.floor(num(+n, 1)));
-        for (let i = 0; i < n; i++) stepOne(false);
+        for (let i = 0; i < n; i++) stepOne(n > 30 && i < n - 30);
         return snap();
       }, snap());
     },
@@ -436,8 +710,11 @@ function installRecord(api, M, still) {
 
   (async () => {
     try {
-      startRecordLevel(api);
       safe(api, 'record.tut', () => { api.meta.tutAll(); });
+      startRecordLevel(api, rec);
+      if (recCourse) rec.beats = recCourse.beats.map(b => ({ t: b.t, step: b.s }));
+      // the preroll's bites happen before frame 0: the soundtrack starts clean at t = 0
+      for (let i = events.length - 1; i >= 0; i--) if (!/^(start|levelStart)$/.test(events[i].ev)) events.splice(i, 1);
       await fontsReady();
       if (still) {
         // og / cover: run the REC beats synchronously (sim only when Core offers advance), render the last stretch fully.

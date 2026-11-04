@@ -347,5 +347,44 @@ if (existsSync(lvPath) && existsSync(join(ROOT, 'games/slurp-pot/levels-data.js'
   } catch (e) { ok(false, 'real levels load', String(e && e.stack || e).split('\n').slice(0, 3).join(' / ')); }
 } else console.log('real levels: games/slurp-pot/levels.js not there yet (skipped)');
 
+// ------------------------------------------------------------------ Feast (§3.12) and pen routing (Wed)
+if (existsSync(lvPath) && existsSync(join(ROOT, 'games/slurp-pot/feast.js'))) {
+  console.log('feast');
+  try {
+    const FE = await import(join(ROOT, 'games/slurp-pot/feast.js'));
+    ok([1, 4, 5, 8, 12, 30].map(FE.addOf).join() === '12,12,11,8,6,6', 'addOf: 12 for c ≤ 4, then max(6, 12 − (c − 4))', [1, 4, 5, 8, 12, 30].map(FE.addOf).join());
+    // one casual run, game time capped at 600 s: tickets bank time, slots respawn, the run ends with fail 'timeout'
+    const run = () => {
+      const fs = FE.createFeast('picnic', 3, { cur: 30 }), w = L.createWorld(FE.feastLevel(fs), { mode: 'feast' });
+      const bot = B.createBot('casual', 3), n = {}, adds = [];
+      let failEv = null;
+      for (let s = 0; s < 600 / DT && !w.result; s++) {
+        L.step(w, B.decide(bot, w, DT), DT);
+        FE.feastStep(fs, w, DT);
+        for (const e of w.events) { n[e.type] = (n[e.type] || 0) + 1; if (e.type === 'feastTicket') adds.push(e.add); if (e.type === 'fail') failEv = e; }
+        w.events.length = 0;
+      }
+      return { fs, w, n, adds, failEv, h: hashWorld(w) };
+    };
+    const a = run(), b = run();
+    ok(a.h === b.h && a.fs.served === b.fs.served, 'feast run deterministic (same seed → same world hash)', `tickets ${a.fs.served} t ${a.w.t.toFixed(1)}`);
+    ok(a.fs.served >= 1 && a.n.feastTicket === a.fs.served, 'feastTicket per served ticket', `n=${a.n.feastTicket}`);
+    ok(a.adds.every((v, k) => Math.abs(v - FE.addOf(1 + (k >> 2))) < 1e-9), 'feastTicket add = addOf(course)', a.adds.slice(0, 9).join(','));
+    ok((a.n.spawn || 0) >= 1, 'spawner reuses gone slots (spawn events)', `spawn=${a.n.spawn || 0}`);
+    ok(a.fs.served < 4 || (a.n.feastCourse || 0) >= 1, 'course rolls over after 4 tickets', `courses=${a.n.feastCourse || 0}`);
+    ok(a.w.result === 'timeout' && a.failEv && a.failEv.why === 'timeout', 'feast ends with fail {why: timeout}', String(a.w.result));
+    const r = FE.runFeast('picnic', 'casual', 3, { maxT: 600 });
+    ok(r.tickets === a.fs.served && r.why === 'timeout', 'runFeast matches the manual loop', `tickets ${r.tickets} tEnd ${r.tEnd.toFixed(1)} s`);
+  } catch (e) { ok(false, 'feast load', String(e && e.stack || e).split('\n').slice(0, 3).join(' / ')); }
+
+  console.log('pen routing');
+  try {
+    // L34's pen (gate car, eggplant line inside): the planner (no pen knowledge before Wed) timed out at r 1.43
+    const LV = await import(lvPath), lv = LV.getLevel(34);
+    const r = B.runLevel(lv, 'planner', 1, { maxT: (lv.T || 120) + 30 });
+    ok(r.win, 'planner enters the L34 pen and wins', `t=${r.tUsed.toFixed(1)} of T ${lv.T} stars=${r.stars}`);
+  } catch (e) { ok(false, 'pen routing (L34)', String(e && e.stack || e).split('\n').slice(0, 3).join(' / ')); }
+}
+
 console.log(`\n${failN ? 'RED' : 'GREEN'}: ${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

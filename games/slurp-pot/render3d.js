@@ -4,9 +4,9 @@
 import {
   WebGLRenderer, Scene, PerspectiveCamera, Group, Mesh, InstancedMesh, BufferGeometry, BufferAttribute,
   InstancedBufferAttribute, MeshLambertMaterial, MeshBasicMaterial, MeshPhongMaterial, ShaderMaterial,
-  CanvasTexture, Color, Vector3, Matrix4, Quaternion, HemisphereLight, DirectionalLight, Fog, CircleGeometry,
-  CylinderGeometry, PlaneGeometry, TorusGeometry, SRGBColorSpace, RepeatWrapping, BackSide, DynamicDrawUsage,
-  AlwaysStencilFunc, EqualStencilFunc, NotEqualStencilFunc, ReplaceStencilOp, mergeGeometries,
+  CanvasTexture, Color, Vector2, Vector3, Matrix4, Quaternion, HemisphereLight, DirectionalLight, Fog, CircleGeometry,
+  CylinderGeometry, PlaneGeometry, TorusGeometry, BoxGeometry, SphereGeometry, SRGBColorSpace, RepeatWrapping, BackSide,
+  DynamicDrawUsage, AlwaysStencilFunc, EqualStencilFunc, NotEqualStencilFunc, ReplaceStencilOp, mergeGeometries,
 } from './vendor/three.bundle.js';
 import * as props from './props.js';
 import * as LD from './levels-data.js';
@@ -38,13 +38,27 @@ const TOWN = {
 const LID = { sunny: '#F5B323', cauldron: '#C8743A', wok: '#D9412F', teapot: '#2FB5A5', ricecooker: '#E6D6BA',
   dutch: '#8FE3C8', steamer: '#D9B36B', royal: '#FFD23F', ufo: '#C9D3E0', starladle: '#2B3A8C' };
 const BIG_STEPS = new Set([2, 5, 8, 11]);   // D31
-const F_ING = 1, F_GATE = 16, F_BOSS = 32;
+const F_ING = 1, F_FRAGILE = 8, F_GATE = 16, F_BOSS = 32, F_BELT = 128;
+const HOOD = { picnic: '#F5B323', market: '#2FB5A5', harbour: '#E04F4F' };   // belt end hoods per town
 const SWAY = new Set(['hedge', 'tree', 'bush', 'parasol']);
 const WUV = props.WHITE_UV || [0.0635, 0.0635];
+const BELT_TOP = props.BELT_TOP || 0.06, BELT_PERIOD = props.BELT_PERIOD || 0.5, SEA_Y = -0.32;
+const DEC_SH = ITEM_MAX + 8, DEC_FL = 128, DEC_MAX = DEC_SH + DEC_FL;   // decal pool: shadows first, then flats
+// Per-town lights (GDD §7.2 moods; physical-light intensities as tuned for picnic on 11-03).
+const LIGHT = {
+  picnic: { sky: '#FFF6E8', gnd: '#B08A62', hi: 1.75, sun: '#FFF1D6', si: 2.0 },
+  market: { sky: '#FFF1E6', gnd: '#B9876A', hi: 1.75, sun: '#FFE6C8', si: 2.05 },
+  harbour: { sky: '#F4FBFF', gnd: '#A08A6E', hi: 1.8, sun: '#FFF8EC', si: 2.0 },
+};
+// crack splat colour per stack kind (what spills): tea, jam, yolk, syrup, cream
+const SPLAT = { teacups: '#8A5A2B', jarstack: '#C2185B', eggcrate: '#FFC93C', wafflestack: '#C77A1E', platepile: '#FFF6E3' };
+// paired bus names (WED-BRIEF vs GDD spelling) → one canonical name, deduped per frame
+const EV_ALIAS = { courseDone: 'course', tier: 'cakeTier', gullWarn: 'gull' };
+const ALIASED = new Set(Object.values(EV_ALIAS));
 
 // ------------------------------------------------------------------ module state
 let renderer = null, scene = null, camera = null, canvas = null, gl = null;
-let tier = 'high', REC = false, dpr = 1, cssW = 1, cssH = 1;
+let tier = 'high', REC = false, OGP = false, STILL = false, dpr = 1, cssW = 1, cssH = 1;
 let play = { x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.6 };
 const U = { time: { value: 0 } };
 let time = 0, ppu = 50;
@@ -54,29 +68,42 @@ const kindMesh = [];                   // by catalog index
 const kindCnt = new Int32Array(KINDS.length);
 let used = [];                         // catalog indices present in the loaded level
 let staticMesh, staticMat, groundTex = null, blankTex, curTown = null, LV = null, BB = null;   // BB = board bounds
-let holeG, rimDisc, pit, stew, stewMat;
+let holeG, rimDisc, pitStew, stewMat;
 let potRoot, potG = null, potExtras = {}, skin = null, warmGlow = null;
 let eyes, eyeMat;
-let shMesh, shA, flatMk, flatA, bbMk, bbP, bbM, fxMesh, fxP, fxC, fxR;
+let decMesh, decA, bbMk, bbP, bbM, fxMesh, fxP, fxC, fxR;
+const fScr = new Float32Array(DEC_FL * 16), fScrM = new Float32Array(DEC_FL * 4);   // flats, appended after shadows
 let atlasCv, atlasCtx, atlasTex;
 const iconCell = new Int16Array(KINDS.length).fill(-1), iconLoaded = new Set();
-let gullG = null;
+let gullMesh = null, gullA = null;
+let beltMesh = null, beltMat = null, beltTex = null;
+let cakeRest = null, cakeTop = null, cakeKey = '', cakeH = 0, cakeCat = -1;
+let splatMesh = null, lidMesh = null, wipeMesh = null, wipeT = -1;
+const splats = [];
+const uBC = new Vector2(), uBH = new Vector2(1, 1);   // board centre / half extents (harbour foam)
 let lostFn = null, ctxHandlers = null;
 
 // per-world state
-let W = null, itemCat = null, itemRot = null, prevSt = null, prevHid = null;
+let W = null, itemCat = null, itemRot = null, prevSt = null, prevHid = null, prevKind = null;
 const eGlow = new Float32Array(ITEM_MAX), eOcc = new Float32Array(ITEM_MAX), wobT = new Float32Array(ITEM_MAX);
 const popT = new Float32Array(ITEM_MAX), rollA = new Float32Array(ITEM_MAX), rollH = new Float32Array(ITEM_MAX);
+const rollQ = new Float32Array(ITEM_MAX * 4);   // accumulated rolling orientation per item (ball kinds)
+const WHEELS = new Set(['cheesewheel']);   // rolling kinds that roll like a wheel (axle = local x, yaw = heading)
 const lastX = new Float32Array(ITEM_MAX), lastZ = new Float32Array(ITEM_MAX), rattleT = new Float32Array(ITEM_MAX);
+const crackT = new Float32Array(ITEM_MAX), prevCrack = new Uint8Array(ITEM_MAX);
+const gH = new Float32Array(4), gBank = new Float32Array(4), gPitch = new Float32Array(4), gY = new Float32Array(4), gOn = new Uint8Array(4);
+const lid = { on: false, pop: 0, jig: 0, steamT: 0 };
+let potLift = 0, truckYaw = 0, truckStop = false, truckSq = 0, glance = null, bossRing = null;
+const evSeen = new Set();
 
 // pot + camera state
 const pot = { x: 0, z: 0, r: 0.3, rVis: 0.3 };
 const cam = { x: 0, z: 0, vx: 0, vz: 0, rCam: 0.3, yaw: 0, pitch: 55 * D2R, wv: 6, ax: 0, ay: 0 };
-let titleOn = false, titleT = 0, reveal = null, punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0;
+let titleOn = false, titleT = 0, reveal = null, punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0, recWinT = -1;
 const mood = { biteT: 0, biteDx: 0, biteDz: 1, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, bumpDx: 0, bumpDz: 0,
   celebrateT: -1, sad: false, worried: false, blinkIn: 3, blinkT: -1, sqzT: 0, lookX: 0, lookY: -0.08,
   lid: 0, happy: 0, wide: 0, worry: 0, droop: 0, squeeze: 0, dim: 1, sink: 0, tilt: 0, tiltDx: 0, tiltDz: 1, shockT: -1 };
-const _m = new Matrix4(), _q = new Quaternion(), _q2 = new Quaternion(), _p = new Vector3(), _s = new Vector3();
+const _m = new Matrix4(), _q = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _p = new Vector3(), _s = new Vector3();
 const _v = new Vector3(), _ax = new Vector3(), _up = new Vector3(0, 1, 0);
 
 // frame timing / adaptive DPR
@@ -87,6 +114,8 @@ let winStart = 0;
 // ------------------------------------------------------------------ perf tier (D10)
 /** 'low' | 'mid' | 'high' from the GPU renderer string and the UA (GDD §13.3). */
 export function detectTier(g) {
+  // DECISION (11-04): unchanged until the orchestrator's adb test of ?tier=mid on the Realme (Mali-G57 MC2, holds
+  // 60 at low/dpr 1.25). The proposed narrower low regex is in studio/2026-11-04/render/notes.txt (TIER_LOW_NEXT).
   let s = '';
   try {
     let ctx = g;
@@ -161,21 +190,10 @@ const SH_GROUND_V = `attribute vec4 aM; varying vec2 vUv; varying vec4 vM;
 void main() { vUv = uv * 2.0 - 1.0; vM = aM; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`;
 const COV = 'float cov(float d) { float w = max(fwidth(d), 1e-4); return clamp(0.5 - d / w, 0.0, 1.0); }';
 
-function makeShadowMat() {   // blob (type 0) and the pot's soft ring (type 1); #3A2418
-  return stencilSkip(new ShaderMaterial({
-    vertexShader: SH_GROUND_V,
-    fragmentShader: `varying vec2 vUv; varying vec4 vM;
-void main() {
-  float r = length(vUv); float a;
-  if (vM.y < 0.5) a = 0.28 * (1.0 - smoothstep(0.2, 1.0, r));
-  else a = 0.35 * (1.0 - smoothstep(0.0, 0.2, abs(r - 0.74))) * (1.0 - smoothstep(0.9, 1.0, r));
-  a *= vM.x; if (a < 0.004) discard;
-  gl_FragColor = vec4(0.227, 0.141, 0.094, a);
-}`,
-    transparent: true, depthWrite: false,
-  }));
-}
-function makeFlatMat() {   // halo (0) · dashed gate outline (1) · gull warn (2) · SIZE UP shock ring (3)
+function makeDecalMat() {
+  // DECISION (11-04, perf): blob shadows, the pot's ring shadow and every flat marker share ONE instanced pool and
+  // one draw (was two): vM = (type, phase, alpha, extra). Shadows are written first, flats after, so instance
+  // order = paint order. Types: 10 blob · 11 pot ring · 0 halo · 1 gate · 2 gull telegraph (extra = warn) · 3 shock.
   return stencilSkip(new ShaderMaterial({
     uniforms: { uTime: U.time },
     vertexShader: SH_GROUND_V,
@@ -183,7 +201,11 @@ function makeFlatMat() {   // halo (0) · dashed gate outline (1) · gull warn (
 ${COV}
 void main() {
   float r = length(vUv); vec4 c;
-  if (vM.x < 0.5) {
+  if (vM.x > 9.5) {
+    float a = vM.x < 10.5 ? 0.28 * (1.0 - smoothstep(0.2, 1.0, r))
+      : 0.35 * (1.0 - smoothstep(0.0, 0.2, abs(r - 0.74))) * (1.0 - smoothstep(0.9, 1.0, r));
+    c = vec4(0.227, 0.141, 0.094, a);
+  } else if (vM.x < 0.5) {
     float pu = 0.5 + 0.5 * sin(uTime * 7.54 + vM.y);
     float ring = cov(abs(r - 0.8) - 0.1);
     float fill = (1.0 - smoothstep(0.15, 0.8, r)) * 0.22;
@@ -193,7 +215,12 @@ void main() {
     float dash = step(0.45, fract(ang * 14.0 / 6.2832));
     c = vec4(1.0, 0.98, 0.94, cov(abs(r - 0.86) - 0.05) * dash * 0.9);
   } else if (vM.x < 2.5) {
-    c = vec4(0.227, 0.141, 0.094, (1.0 - smoothstep(0.72, 0.84, r)) * 0.3 + cov(abs(r - 0.8) - 0.05) * 0.45);
+    // gull telegraph: a dark shadow disc growing with warn (0.35 R → R over 1.6 s) + a spinning stamp-red dashed ring
+    float w = clamp(vM.w, 0.0, 1.0), rf = 0.8 * mix(0.35, 1.0, w);
+    float aD = max((1.0 - smoothstep(rf - 0.08, rf, r)) * (0.2 + 0.22 * w), cov(abs(r - rf) - 0.035) * 0.55);
+    float ang = atan(vUv.y, vUv.x) - uTime * 1.6;
+    float aR = cov(abs(r - 0.84) - 0.055) * step(0.4, fract(ang * 12.0 / 6.2832)) * (0.62 + 0.38 * sin(uTime * (8.0 + 10.0 * w)));
+    c = vec4(mix(vec3(0.227, 0.141, 0.094), vec3(0.898, 0.282, 0.231), aR / max(aR + aD, 1e-3)), max(aD, aR));
   } else {
     float p = vM.w;
     c = vec4(1.0, 0.953, 0.769, cov(abs(r - 0.82) - 0.12 * (1.0 - p) - 0.01) * (1.0 - p));
@@ -247,12 +274,16 @@ void main() {
   });
 }
 function makeStewMat() {   // glowing stew: radial #FFD36E → #FF8A2A → #C4501A, swirling herb flecks, 3 bubbles
+  // DECISION (11-04, perf): the pit wall and the stew are one mesh + one draw (aPit 1 = pit, flat sRGB aCol;
+  // 0 = stew). BackSide for both: the stew disc is flipped (faces −y) so from above we see its back face.
   return stencilOnly(new ShaderMaterial({
     uniforms: { uTime: U.time, uDim: { value: 1 } },
-    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; uniform float uDim; varying vec2 vP;
+    vertexShader: `attribute vec3 aCol; attribute float aPit; varying vec2 vP; varying vec3 vCol; varying float vPit;
+void main() { vP = position.xz; vCol = aCol; vPit = aPit; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float uTime; uniform float uDim; varying vec2 vP; varying vec3 vCol; varying float vPit;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
+  if (vPit > 0.5) { gl_FragColor = vec4(vCol, 1.0); return; }
   float r = length(vP);
   vec3 col = mix(vec3(1.0, 0.827, 0.431), vec3(1.0, 0.541, 0.165), smoothstep(0.05, 0.6, r));
   col = mix(col, vec3(0.769, 0.314, 0.102), smoothstep(0.55, 0.98, r));
@@ -276,7 +307,88 @@ void main() {
   col += vec3(1.0, 0.95, 0.8) * (1.0 - smoothstep(0.0, 0.3, length(vP - vec2(-0.3, -0.32)))) * 0.22;
   gl_FragColor = vec4(col * uDim, 1.0);
 }`,
+    side: BackSide,
   }));
+}
+function makeGullMat() {
+  // DECISION (11-04, perf): every gull is one instance of one merged mesh (body + both wings, aWing ±1 on wing
+  // vertices); the flap is a vertex rotation about each wing's hinge (pivots ±0.2, 0.38), aGf = (phase, amp, rate).
+  const m = new MeshLambertMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = U.time;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aWing;\nattribute vec3 aGf;\nuniform float uTime;')
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+float spA = aWing * aGf.y * sin(uTime * aGf.z + aGf.x); float spC = cos(spA), spS = sin(spA);
+objectNormal.xy = vec2(spC * objectNormal.x - spS * objectNormal.y, spS * objectNormal.x + spC * objectNormal.y);`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+{ vec2 spP = vec2(aWing * 0.2, 0.38), spQ = transformed.xy - spP;
+  transformed.xy = spP + vec2(spC * spQ.x - spS * spQ.y, spS * spQ.x + spC * spQ.y); }`);
+  };
+  m.customProgramCacheKey = () => 'sp-gull-v1';
+  return m;
+}
+function makeBeltMat(tex) {
+  // DECISION (11-04): belt surfaces are one boot-created mesh; arrows scroll in the vertex shader per belt speed
+  // (aSpd = |v| / BELT_PERIOD texture periods per second), so no per-frame texture offset and any belt count.
+  const m = stencilSkip(new MeshLambertMaterial({ vertexColors: true, map: tex }));
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = U.time;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aSpd;\nuniform float uTime;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv.y -= mod(uTime * aSpd, 1.0);\n#endif');
+  };
+  m.customProgramCacheKey = () => 'sp-belt-v1';
+  return m;
+}
+function patchStatic(m) {
+  // DECISION (11-04): Harbour water is part of the merged static layer (uv.x > 500 marks sea vertices, which skip
+  // the ground map): two crossed sine swells shade it, crests and a wobbling foam band at the board edge go to
+  // #E8FBFF. No extra mesh or draw call; the sea plane sits at SEA_Y under the pier deck.
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = U.time; sh.uniforms.uBC = { value: uBC }; sh.uniforms.uBH = { value: uBH };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vWat;\nvarying vec3 vWp;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWat = step(500.0, uv.x);\nvWp = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform vec2 uBC;\nuniform vec2 uBH;\nvarying float vWat;\nvarying vec3 vWp;')
+      .replace('#include <map_fragment>', 'if (vWat < 0.5) {\n#include <map_fragment>\n}')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+if (vWat > 0.5) {
+  vec2 p = vWp.xz;
+  float hw = 0.5 + 0.25 * sin(p.x * 1.3 + uTime * 1.1) * sin(p.y * 0.9 - uTime * 0.8) + 0.25 * sin((p.x + p.y) * 2.1 - uTime * 1.7);
+  diffuseColor.rgb *= 0.92 + 0.14 * hw;
+  vec2 q = abs(p - uBC) - uBH; float dB = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+  float foam = (1.0 - smoothstep(0.05, 0.55 + 0.15 * sin(uTime * 2.0 + p.x * 3.1 + p.y * 2.3), dB)) * 0.8;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.807, 0.965, 1.0), max(smoothstep(0.84, 0.98, hw) * 0.35, foam));
+}`);
+  };
+  m.customProgramCacheKey = () => 'sp-static-v1';
+  return m;
+}
+function makeWipeMat() {
+  // DECISION (11-04): the Feast steam wipe is a full-screen clip-space quad (no camera): a noisy cream steam front
+  // sweeps left → right, covers the screen at 0.3 s (when Core swaps the course) and clears by 0.6 s.
+  return new ShaderMaterial({
+    uniforms: { uT: { value: 0 }, uTime: U.time, uAsp: { value: 1 } },
+    vertexShader: 'varying vec2 vQ; void main() { vQ = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform float uT; uniform float uTime; uniform float uAsp; varying vec2 vQ;
+float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+float fbm(vec2 p) { return 0.5 * vn(p) + 0.25 * vn(p * 2.03 + 1.7) + 0.125 * vn(p * 4.01 + 3.1); }
+void main() {
+  vec2 p = vec2(vQ.x * uAsp, vQ.y);
+  float n = fbm(p * 2.2 + vec2(-uTime * 1.5, uTime * 0.4));
+  float front = -2.0 + 7.8 * min(uT, 0.5), back = -2.0 + 7.8 * max(uT - 0.5, 0.0);
+  float x = vQ.x + (n - 0.5) * 0.9;
+  float a = (1.0 - smoothstep(front - 0.35, front + 0.1, x)) * smoothstep(back - 0.1, back + 0.35, x);
+  vec3 col = mix(vec3(0.93, 0.89, 0.84), vec3(1.0, 0.98, 0.95), smoothstep(0.3, 0.75, n));
+  if (a < 0.005) discard;
+  gl_FragColor = vec4(col, a * 0.97);
+}`,
+    transparent: true, depthTest: false, depthWrite: false,
+  });
 }
 function makeEyeMat() {   // two view-space billboard discs: sclera, pupil+glint, lids, ^^, brows, blush
   return new ShaderMaterial({
@@ -374,6 +486,230 @@ function tableGeo(cx, cz) {   // #7A5236 table with a soft radial vignette (vert
   g.deleteAttribute('uv');
   return prep(g).translate(cx, -0.5, cz);
 }
+const _cA = new Color(), _cB = new Color();
+/** prep() + one flat colour (linear, like props.js), with an optional bottom-darkening ramp over `ao` u. */
+function tint(g, hex, ao = 0, aoY = 0, keepUv = false) {
+  if (!keepUv && g.attributes.uv) g.deleteAttribute('uv');
+  g = prep(g);
+  const p = g.attributes.position, c = g.attributes.color.array; _cA.set(hex);
+  for (let i = 0; i < p.count; i++) {
+    const f = ao > 0 ? 1 - 0.28 * (1 - sstep(aoY, aoY + ao, p.getY(i))) : 1;
+    c[i * 3] = _cA.r * f; c[i * 3 + 1] = _cA.g * f; c[i * 3 + 2] = _cA.b * f;
+  }
+  return g;
+}
+function box(w, h, d, hex, x, y, z) { return tint(new BoxGeometry(w, h, d), hex).translate(x, y, z); }
+function quadUp(w, d, hex, x, y, z, ry = 0) { return tint(new PlaneGeometry(w, d).rotateX(-PI / 2), hex).rotateY(ry).translate(x, y, z); }
+function quadFront(w, h, hex, x, y, z) { return tint(new PlaneGeometry(w, h), hex).translate(x, y, z); }   // faces +z
+function hs32(s) { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; }
+
+/** Market: cobbled street at table height (ground uv continues the board's cobble), vignette to the fog. */
+function streetGeo(cx, cz, town) {
+  const g = new PlaneGeometry(200, 200, 40, 40).rotateX(-PI / 2).toNonIndexed();
+  const p = g.attributes.position, n = p.count, col = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  const A = new Color('#A99272'), B = new Color('#8F7A5E'), T = props.GROUND_TILE || 4;
+  for (let i = 0; i < n; i++) {
+    const t = sstep(9, 46, Math.hypot(p.getX(i), p.getZ(i)));
+    col[i * 3] = lerp(A.r, B.r, t); col[i * 3 + 1] = lerp(A.g, B.g, t); col[i * 3 + 2] = lerp(A.b, B.b, t);
+    uv[i * 2] = p.getX(i) / T; uv[i * 2 + 1] = p.getZ(i) / T;
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3)); g.setAttribute('uv', new BufferAttribute(uv, 2));
+  return prep(g).translate(cx, -0.5, cz);
+}
+/** Harbour: the sea (uv.x > 500 flags water for the static shader), deeper toward the horizon. */
+function seaGeo(cx, cz) {
+  const g = new PlaneGeometry(240, 240, 48, 48).rotateX(-PI / 2).toNonIndexed();
+  const p = g.attributes.position, n = p.count, col = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  const A = new Color('#2AA7C9'), B = new Color('#1E8FB3');
+  for (let i = 0; i < n; i++) {
+    const x = p.getX(i) + cx, z = p.getZ(i) + cz, t = sstep(12, 60, Math.hypot(p.getX(i), p.getZ(i)));
+    col[i * 3] = lerp(A.r, B.r, t); col[i * 3 + 1] = lerp(A.g, B.g, t); col[i * 3 + 2] = lerp(A.b, B.b, t);
+    uv[i * 2] = 1000 + x * 0.5; uv[i * 2 + 1] = z * 0.5;
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3)); g.setAttribute('uv', new BufferAttribute(uv, 2));
+  return prep(g).translate(cx, SEA_Y, cz);
+}
+/** One toy shopfront, front face on z = 0 facing +z, base at y = −0.5 (street level). ~80 tris. */
+function facade(w, H, wall, rng) {
+  const out = [], y0 = -0.5, dark = '#4A3B52', cream = '#FFF1DC';
+  out.push(tint(new BoxGeometry(w, H, 2.5), wall, 1.2, y0).translate(0, y0 + H / 2, -1.25));
+  out.push(box(w + 0.16, 0.2, 0.3, wall === cream ? '#E6D6BA' : cream, 0, y0 + H - 0.1, 0.05));   // cornice
+  // shop floor: door + window under a striped awning
+  const doorX = (rng() < 0.5 ? -1 : 1) * (w / 2 - 0.55);
+  out.push(quadFront(0.62, 1.15, '#6A452C', doorX, y0 + 0.58, 0.012));
+  out.push(quadFront(Math.max(0.8, w - 1.9), 0.8, dark, -doorX * 0.35, y0 + 0.75, 0.012));
+  const ns = Math.max(4, Math.round(w / 0.42)), aw = new PlaneGeometry(w + 0.1, 0.95, ns, 1).rotateX(-PI / 2).rotateX(0.45).toNonIndexed();
+  const vl = new PlaneGeometry(w + 0.1, 0.2, ns, 1).toNonIndexed();
+  for (const [g, y, z] of [[aw, y0 + 1.55, 0.42], [vl, y0 + 1.27, 0.83]]) {
+    const c = new Float32Array(g.attributes.position.count * 3);
+    for (let v = 0; v < g.attributes.position.count; v++) { const k = Math.floor(v / 6) % ns; _cA.set(k % 2 ? cream : '#2FB5A5'); c[v * 3] = _cA.r; c[v * 3 + 1] = _cA.g; c[v * 3 + 2] = _cA.b; }
+    g.setAttribute('color', new BufferAttribute(c, 3));
+    g.deleteAttribute('uv'); out.push(prep(g).translate(0, y, z));
+  }
+  // upper floors: two windows each with a cream sill
+  for (let fy = y0 + 2.2; fy + 0.9 < y0 + H - 0.2; fy += 1.25) {
+    for (const sx of [-0.27, 0.27]) {
+      const x = sx * w;
+      out.push(quadFront(0.5, 0.7, dark, x, fy + 0.35, 0.012));
+      out.push(box(0.64, 0.07, 0.12, cream, x, fy - 0.02, 0.05));
+    }
+  }
+  return out;
+}
+/** Market Street backdrop: shopfronts ~2.5 u off the far edge and both flanks (never the near side). */
+function marketBackdrop(parts, x0, x1, z0, z1, rng) {
+  const walls = ['#C4643F', '#FFD3A6', '#7A4C9E', '#FF7A59', '#FFF1DC'];
+  const row = (len, place) => {
+    for (let s = 0; s < len;) {
+      const w = 2.6 + rng() * 1.6, H = 3.5 + rng() * 3.0, wall = walls[(rng() * walls.length) | 0];
+      if (s + w > len + 1) break;
+      for (const g of facade(w, H, wall, rng)) parts.push(place(g, s + w / 2));
+      s += w + 0.05;
+    }
+  };
+  const far = z0 - 2.5, L = x1 - x0 + 12;
+  row(L, (g, u) => g.translate(x0 - 6 + u, 0, far));
+  const fl = (z1 - 1) - (z0 - 2.5);
+  row(fl, (g, u) => g.rotateY(PI / 2).translate(x0 - 2.5, 0, far + u));
+  row(fl, (g, u) => g.rotateY(-PI / 2).translate(x1 + 2.5, 0, far + u));
+}
+/** Harbour Pier: pilings just outside the deck edge and a few toy sailboats out at sea. */
+function harbourBackdrop(parts, x0, x1, z0, z1, rng) {
+  const pile = (x, z) => {
+    parts.push(tint(new CylinderGeometry(0.16, 0.17, 1.02, 8, 1, true), '#7E5636', 0.5, -0.9).translate(x, -0.39, z));
+    parts.push(tint(new CircleGeometry(0.16, 8).rotateX(-PI / 2), '#A87A47').translate(x, 0.12, z));
+  };
+  const o = 0.2;
+  for (let x = x0 + 0.6; x <= x1 - 0.6 + 1e-6; x += (x1 - x0 - 1.2) / Math.max(1, Math.round((x1 - x0 - 1.2) / 2.6))) { pile(x, z0 - o); pile(x, z1 + o); }
+  for (let z = z0 + 0.6; z <= z1 - 0.6 + 1e-6; z += (z1 - z0 - 1.2) / Math.max(1, Math.round((z1 - z0 - 1.2) / 2.6))) { pile(x0 - o, z); pile(x1 + o, z); }
+  const nb = 3 + (rng() < 0.5 ? 1 : 0);
+  for (let k = 0; k < nb; k++) {
+    const side = k % 3, s = 0.9 + rng() * 0.5;
+    const bx = side === 0 ? lerp(x0 - 4, x1 + 4, (k + rng()) / nb) : side === 1 ? x0 - 6 - rng() * 6 : x1 + 6 + rng() * 6;
+    const bz = side === 0 ? z0 - 7 - rng() * 10 : lerp(z0 - 4, (z0 + z1) / 2, rng());
+    const ry = rng() * TAU, hull = rng() < 0.6 ? '#E04F4F' : '#FFFFFF';
+    const b = [
+      tint(new CylinderGeometry(0.5, 0.36, 0.42, 6, 1), hull, 0.3, -0.21).scale(1, 1, 2.4).translate(0, 0.05, 0),
+      tint(new CylinderGeometry(0.5, 0.5, 0.06, 6, 1), hull === '#FFFFFF' ? '#E04F4F' : '#FFFFFF').scale(1, 1, 2.4).translate(0, 0.27, 0),
+      tint(new CylinderGeometry(0.035, 0.035, 2.4, 5), '#F6ECD6').translate(0, 1.45, 0.1),
+    ];
+    const sail = new BufferGeometry(), sp = [0, 0.45, 0.2, 0, 2.55, 0.18, 0, 0.45, -0.95];
+    sail.setAttribute('position', new BufferAttribute(new Float32Array([...sp, sp[0], sp[1], sp[2], sp[6], sp[7], sp[8], sp[3], sp[4], sp[5]]), 3));
+    b.push(tint(sail, '#F6ECD6'));
+    for (const g of b) parts.push(g.scale(s, s, s).rotateY(ry).translate(bx, SEA_Y, bz));
+  }
+}
+/** Belt fallback (Art's beltGeometry contract): runs along local +z (length `along`), `across` wide on x. */
+function beltFallback(across, along) {
+  const fr = [], hw = across / 2 + 0.06, hl = along / 2;
+  for (const s of [-1, 1]) {
+    fr.push(box(0.1, 0.1, along + 0.12, '#2B2F3A', s * hw, 0.05, 0));
+    fr.push(box(0.12, 0.03, along + 0.14, '#FFCF3D', s * hw, 0.11, 0));
+  }
+  for (const e of [-1, 1]) fr.push(tint(new CylinderGeometry(0.06, 0.06, across + 0.08, 8).rotateZ(PI / 2), '#8A93A3').translate(0, 0.05, e * (hl - 0.02)));
+  const frame = mergeGeometries(fr, false); fr.forEach((g) => g.dispose());
+  const surface = new PlaneGeometry(across, along, 1, 1).rotateX(-PI / 2).toNonIndexed();
+  const p = surface.attributes.position, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getX(i) / across + 0.5; uv[i * 2 + 1] = p.getZ(i) / BELT_PERIOD; }
+  surface.setAttribute('uv', new BufferAttribute(uv, 2));
+  return { frame, surface: tint(surface, '#FFFFFF', 0, 0, true).translate(0, BELT_TOP, 0), fresh: true };
+}
+/** Hood fallback: a toy tunnel over a belt end, opening toward −z, footprint z ±0.22. */
+function hoodFallback(across, hex) {
+  const hw = across / 2 + 0.12, out = [];
+  for (const s of [-1, 1]) out.push(box(0.1, 0.5, 0.44, hex, s * hw, 0.25, 0));
+  out.push(box(2 * hw + 0.12, 0.1, 0.48, '#FFF1DC', 0, 0.53, 0));
+  out.push(box(2 * hw, 0.5, 0.06, hex, 0, 0.25, 0.19));
+  out.push(tint(new PlaneGeometry(2 * hw - 0.1, 0.44).rotateY(PI), '#2A2230').translate(0, 0.25, 0.155));   // dark inside, faces the opening
+  const g = mergeGeometries(out, false); out.forEach((o) => o.dispose()); return g;
+}
+/** Nest fallback (Art's nestGeometry contract): twig ring r 0.45, ~0.16 high, dark bowl. */
+function nestFallback() {
+  const out = [tint(new TorusGeometry(0.4, 0.09, 6, 18).rotateX(-PI / 2), '#8A5A33', 0.12, 0).translate(0, 0.08, 0),
+    tint(new CircleGeometry(0.38, 16).rotateX(-PI / 2), '#5E3B22').translate(0, 0.035, 0)];
+  const g = mergeGeometries(out, false); out.forEach((o) => o.dispose()); return g;
+}
+/** Splat fallback: a noisy flat blob + droplets, radius 1 (scaled by the stack's a). */
+function splatFallback(hex, rng) {
+  const g = new CircleGeometry(1, 14).rotateX(-PI / 2).toNonIndexed(), p = g.attributes.position;
+  const ph = rng() * TAU;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), r = Math.hypot(x, z);
+    if (r > 1e-4) { const a = Math.atan2(z, x), k = 0.78 + 0.16 * Math.sin(a * 5 + ph) + 0.08 * Math.sin(a * 11 + ph * 2); p.setX(i, x * k); p.setZ(i, z * k); }
+  }
+  const out = [tint(g, hex)];
+  for (let k = 0; k < 4; k++) { const a = ph + k * 1.7, r = 1.05 + 0.25 * rng(); out.push(tint(new CircleGeometry(0.1 + 0.08 * rng(), 7).rotateX(-PI / 2), hex).translate(Math.cos(a) * r, 0, Math.sin(a) * r)); }
+  const m = mergeGeometries(out, false); out.forEach((o) => o.dispose()); return m;
+}
+
+/** Pit wall (aPit 1, flat sRGB gradient gold → ink) + the stew disc (aPit 0, flipped to face −y), one geometry. */
+function pitStewGeo() {
+  const pg = new CylinderGeometry(0.97, 0.97, 1.7, 44, 6, true).translate(0, -0.85, 0).toNonIndexed();
+  const sd = new CircleGeometry(0.97, 48).rotateX(PI / 2).translate(0, -0.55, 0).toNonIndexed();
+  const stops = [[0, new Color('#F5B323')], [0.12, new Color('#E59A1F')], [0.33, new Color('#B4621C')], [1, new Color('#3A2418')]];
+  const np = pg.attributes.position.count, ns = sd.attributes.position.count, n = np + ns;
+  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), pit = new Float32Array(n), c = new Color();
+  pos.set(pg.attributes.position.array, 0); pos.set(sd.attributes.position.array, np * 3);
+  for (let i = 0; i < np; i++) {
+    const t = -pos[i * 3 + 1] / 1.7; let a = stops[0], b = stops[1];
+    for (let s = 1; s < stops.length; s++) { a = stops[s - 1]; b = stops[s]; if (t <= stops[s][0]) break; }
+    const u = clamp((t - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1), f = 0.84 + 0.16 * clamp(-pos[i * 3 + 2] / 0.97, -1, 1);
+    c.setRGB(lerp(a[1].r, b[1].r, u) * f, lerp(a[1].g, b[1].g, u) * f, lerp(a[1].b, b[1].b, u) * f);   // linear
+    col[i * 3] = linToS(c.r); col[i * 3 + 1] = linToS(c.g); col[i * 3 + 2] = linToS(c.b);
+    pit[i] = 1;
+  }
+  pg.dispose(); sd.dispose();
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setAttribute('aCol', new BufferAttribute(col, 3));
+  g.setAttribute('aPit', new BufferAttribute(pit, 1));
+  return g;
+}
+function linToS(v) { return v < 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 0.41666) - 0.055; }
+/** Gull body + both wings merged (wings moved to their hinges), aWing = 0 body · +1 left · −1 right. */
+function gullMergedGeo() {
+  if (!props.gullGeometry) return null;
+  const body = props.gullGeometry(), u = body.userData || {};
+  if (!u.wingL || !u.wingR) return null;
+  const pl = u.pivotL || [0.2, 0.38, 0], pr = u.pivotR || [-0.2, 0.38, 0];
+  const parts = [prep(body.clone()), prep(u.wingL.clone()).translate(pl[0], pl[1], pl[2]), prep(u.wingR.clone()).translate(pr[0], pr[1], pr[2])];
+  const g = mergeGeometries(parts, false);
+  const n0 = parts[0].attributes.position.count, n1 = parts[1].attributes.position.count, n = g.attributes.position.count;
+  const w = new Float32Array(n);
+  for (let i = n0; i < n; i++) w[i] = i < n0 + n1 ? 1 : -1;
+  g.setAttribute('aWing', new BufferAttribute(w, 1));
+  parts.forEach((p) => p.dispose());
+  return g;
+}
+/** Art's beltArrowTexture contract: 64² chevrons pointing to the canvas top (= +v = travel), repeat-wrapped. */
+function beltArrowFallback() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#3B3646'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#4A4458'; g.fillRect(0, 0, 4, 64); g.fillRect(60, 0, 4, 64);
+  g.strokeStyle = '#F5B323'; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(16, 42); g.lineTo(32, 24); g.lineTo(48, 42); g.stroke();
+  const t = new CanvasTexture(c); t.anisotropy = 4; return t;
+}
+function beltPlaceholder() {
+  const g = prep(new PlaneGeometry(0.01, 0.01).rotateX(-PI / 2).translate(0, -60, 0));
+  g.setAttribute('aSpd', new BufferAttribute(new Float32Array(g.attributes.position.count), 1));
+  return g;
+}
+/** A cake geometry for the cake InstancedMeshes: position/normal/color only (propMat's contract). */
+function cakeShell(src) {
+  const g = new BufferGeometry();
+  for (const n of ['position', 'normal', 'color']) if (src.attributes[n]) g.setAttribute(n, src.attributes[n]);
+  if (src.index) g.setIndex(src.index);
+  return g;
+}
+/** The Simmer lid hat (pot-local units, radius 0.42): a tin dome + a dark knob, origin at the lid's rim. */
+function lidGeo() {
+  const dome = tint(new SphereGeometry(0.42, 16, 6, 0, TAU, 0, PI / 2).scale(1, 0.5, 1), '#C9D3E0');
+  const lip = tint(new TorusGeometry(0.42, 0.03, 4, 20).rotateX(-PI / 2), '#AEB8C6');
+  const knob = tint(new SphereGeometry(0.075, 8, 5), '#3A2418').scale(1, 0.8, 1).translate(0, 0.24, 0);
+  const g = mergeGeometries([dome, lip, knob], false); [dome, lip, knob].forEach((o) => o.dispose()); return g;
+}
 
 // ------------------------------------------------------------------ icon atlas (8 × 8 cells of 96 px)
 const CELL = 96;
@@ -433,7 +769,13 @@ export async function initRender(cv, opts = {}) {
   // DECISION: the GDD's 0.85/1.1 intensities were tuned for three's legacy lighting; r187 is physical
   // (no ×π), so they read dark. Hemisphere 1.75 + sun 2.0 gives the same exposure. Tuned from screenshots.
   canvas = cv;
-  REC = !!opts.record || (typeof location !== 'undefined' && /[?&]record=1\b/.test(location.search));
+  // DECISION (11-04, §12.3): og = the right 54 % of the 1200×630 frame is the 3D hero (ui.js paints the left 46 %
+  // teal panel over the canvas), so the camera anchor is that half's centre at 60 % height. og and cover are stills
+  // (STILL): the camera follows the pot exactly, with no board clamp, so the hero never slides off its anchor.
+  const qs = typeof location !== 'undefined' ? location.search : '';
+  REC = !!opts.record || /[?&](?:record|og)=1\b|[?&]cover=(?:wide|tall|square)\b/.test(qs);
+  OGP = /[?&]og=1\b/.test(qs) && !/[?&]cover=/.test(qs);
+  STILL = OGP || /[?&]cover=(?:wide|tall|square)\b/.test(qs);
   renderer = new WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance', stencil: true });
   renderer.outputColorSpace = SRGBColorSpace;
   gl = renderer.getContext();
@@ -453,13 +795,12 @@ export async function initRender(cv, opts = {}) {
   buildAtlas();
   propMat = makePropMat();
   potMat = new MeshPhongMaterial({ vertexColors: true, specular: 0xfff0b0, shininess: 70, emissive: 0x4a2c00 });
-  gullMat = new MeshLambertMaterial({ vertexColors: true });
 
   // static layer (board, ground, surfaces, decor, table): one merged Mesh, rebuilt at loadLevel
   blankTex = new CanvasTexture(Object.assign(document.createElement('canvas'), { width: 4, height: 4 }));
   { const c = blankTex.image.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, 4, 4); }
   blankTex.colorSpace = SRGBColorSpace; blankTex.wrapS = blankTex.wrapT = RepeatWrapping;
-  staticMat = stencilSkip(new MeshLambertMaterial({ vertexColors: true, map: blankTex }));
+  staticMat = patchStatic(stencilSkip(new MeshLambertMaterial({ vertexColors: true, map: blankTex })));
   staticMesh = new Mesh(tableGeo(0, 0), staticMat);
   staticMesh.frustumCulled = false; scene.add(staticMesh);
 
@@ -469,24 +810,10 @@ export async function initRender(cv, opts = {}) {
   discMat.stencilWrite = true; discMat.stencilRef = 1; discMat.stencilFunc = AlwaysStencilFunc; discMat.stencilZPass = ReplaceStencilOp;
   rimDisc = new Mesh(new CircleGeometry(1, 56).rotateX(-PI / 2).translate(0, 0.001, 0), discMat);
   rimDisc.renderOrder = -2; rimDisc.frustumCulled = false;
-  const pg = new CylinderGeometry(0.97, 0.97, 1.7, 44, 6, true).translate(0, -0.85, 0);
-  {
-    const p = pg.attributes.position, n = p.count, col = new Float32Array(n * 3);
-    const stops = [[0, new Color('#F5B323')], [0.12, new Color('#E59A1F')], [0.33, new Color('#B4621C')], [1, new Color('#3A2418')]];
-    for (let i = 0; i < n; i++) {
-      const t = -p.getY(i) / 1.7; let a = stops[0], b = stops[1];
-      for (let s = 1; s < stops.length; s++) if (t <= stops[s][0]) { a = stops[s - 1]; b = stops[s]; break; } else { a = stops[s - 1]; b = stops[s]; }
-      const u = clamp((t - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1), f = 0.84 + 0.16 * clamp(-p.getZ(i) / 0.97, -1, 1);
-      col[i * 3] = lerp(a[1].r, b[1].r, u) * f; col[i * 3 + 1] = lerp(a[1].g, b[1].g, u) * f; col[i * 3 + 2] = lerp(a[1].b, b[1].b, u) * f;
-    }
-    pg.setAttribute('color', new BufferAttribute(col, 3));
-  }
-  pit = new Mesh(pg, stencilOnly(new MeshBasicMaterial({ vertexColors: true, side: BackSide })));
-  pit.renderOrder = -1; pit.frustumCulled = false;
   stewMat = makeStewMat();
-  stew = new Mesh(new CircleGeometry(0.97, 48).rotateX(-PI / 2).translate(0, -0.55, 0), stewMat);
-  stew.renderOrder = -1; stew.frustumCulled = false;
-  holeG.add(rimDisc, pit, stew);
+  pitStew = new Mesh(pitStewGeo(), stewMat);
+  pitStew.renderOrder = -1; pitStew.frustumCulled = false;
+  holeG.add(rimDisc, pitStew);
 
   potRoot = new Group(); scene.add(potRoot);
   warmGlow = new Mesh(new PlaneGeometry(0.01, 0.01), props.potGlowMaterial ? props.potGlowMaterial() : new MeshBasicMaterial());
@@ -518,17 +845,39 @@ export async function initRender(cv, opts = {}) {
     m.instanceMatrix.setUsage(DynamicDrawUsage);
     m.count = 0; m.visible = false; m.frustumCulled = false;
     const ud = base.userData || {};
-    m.userData = { K, fx, cap, catA: ud.fp || K.a, h: ud.h || K.h || K.a, sway: SWAY.has(K.id) ? 1 : 0 };
+    m.userData = { K, fx, cap, catA: ud.fp || K.a, h: ud.h || K.h || K.a, sway: SWAY.has(K.id) ? 1 : 0, top: ud.top, slots: ud.slots };
     scene.add(m); kindMesh[K.i] = m;
   }
 
-  // shadows, markers, particles
-  { const g = quadXZ(); shA = instAttr(g, 'aM', ITEM_MAX + 4, 4); shMesh = pool(g, makeShadowMat(), ITEM_MAX + 4, 1); }
-  { const g = quadXZ(); flatA = instAttr(g, 'aM', 96, 4); flatMk = pool(g, makeFlatMat(), 96, 2); }
+  // decals (blob shadows + flat markers, one pool), billboards, particles
+  { const g = quadXZ(); decA = instAttr(g, 'aM', DEC_MAX, 4); decMesh = pool(g, makeDecalMat(), DEC_MAX, 1); }
   { const g = new PlaneGeometry(1, 1); bbP = instAttr(g, 'aP', 48, 4); bbM = instAttr(g, 'aM', 48, 4); bbMk = pool(g, makeBillboardMat(), 48, 8); }
   { const g = new PlaneGeometry(1, 1); fxP = instAttr(g, 'aP', FX_MAX, 4); fxC = instAttr(g, 'aC', FX_MAX, 4); fxR = instAttr(g, 'aR', FX_MAX, 4); fxMesh = pool(g, makeFxMat(), FX_MAX, 9); }
 
-  try { if (props.gullGroup) { gullG = props.gullGroup(gullMat); gullG.visible = false; gullG.traverse((o) => { o.frustumCulled = false; }); scene.add(gullG); } } catch (e) { gullG = null; }
+  // twists (L21+): every mesh/material/instanced attribute exists from boot; loadLevel only swaps geometry
+  gullMat = makeGullMat();
+  try {
+    const g = gullMergedGeo();
+    if (g) { gullA = instAttr(g, 'aGf', 4, 3); gullMesh = pool(g, gullMat, 4, 0); gullMesh.visible = false; }
+  } catch (e) { gullMesh = null; gullA = null; }
+  beltTex = props.beltArrowTexture ? props.beltArrowTexture() : beltArrowFallback();
+  beltTex.wrapS = beltTex.wrapT = RepeatWrapping; beltTex.colorSpace = SRGBColorSpace;
+  beltMat = makeBeltMat(beltTex);
+  beltMesh = new Mesh(beltPlaceholder(), beltMat); beltMesh.visible = false; beltMesh.frustumCulled = false; scene.add(beltMesh);
+  {
+    const mk = () => {
+      const g = cakeShell(props.bossTierGeometry ? props.bossTierGeometry('boss-weddingcake', 0) : new BoxGeometry(1, 1, 1));
+      const fx = instAttr(g, 'aFx', 1, 4), m = new InstancedMesh(g, propMat, 1);
+      m.instanceMatrix.setUsage(DynamicDrawUsage); m.count = 0; m.visible = false; m.frustumCulled = false; m.userData.fx = fx;
+      scene.add(m); return m;
+    };
+    cakeRest = mk(); cakeTop = mk();
+  }
+  splatMesh = new Mesh(new PlaneGeometry(0.01, 0.01).rotateX(-PI / 2).translate(0, -60, 0), staticMat);
+  splatMesh.visible = false; splatMesh.frustumCulled = false; scene.add(splatMesh);
+  lidMesh = new Mesh(lidGeo(), potMat); lidMesh.visible = false; lidMesh.frustumCulled = false; potRoot.add(lidMesh);
+  wipeMesh = new Mesh(new PlaneGeometry(2, 2), makeWipeMat());
+  wipeMesh.visible = false; wipeMesh.frustumCulled = false; wipeMesh.renderOrder = 20; scene.add(wipeMesh);
 
   // context loss: three restores its own GL state; game.js refills the level on restore
   ctxHandlers = {
@@ -555,10 +904,14 @@ export async function warmUp() {
   if (!renderer) return;
   const saved = [];
   const keep = (o) => saved.push([o, o.visible, o.count]);
-  for (const m of kindMesh) if (m) { keep(m); m.visible = true; if (m.count < 1) { m.count = 1; _m.makeTranslation(0, -80, 0); m.setMatrixAt(0, _m); m.instanceMatrix.needsUpdate = true; } }
-  for (const m of [shMesh, flatMk, bbMk, fxMesh]) { keep(m); m.visible = true; if (m.count < 1) m.count = 1; }
-  keep(warmGlow); warmGlow.visible = true;
-  if (gullG) { keep(gullG); gullG.visible = true; }
+  const one = (m) => {
+    keep(m); m.visible = true;
+    if (m.count < 1) { m.count = 1; _m.makeTranslation(0, -80, 0); m.setMatrixAt(0, _m); m.instanceMatrix.needsUpdate = true; }
+  };
+  for (const m of kindMesh) if (m) one(m);
+  for (const m of [gullMesh, cakeRest, cakeTop]) if (m) one(m);
+  for (const m of [decMesh, bbMk, fxMesh]) { keep(m); m.visible = true; if (m.count < 1) m.count = 1; }
+  for (const o of [warmGlow, beltMesh, splatMesh, lidMesh, wipeMesh]) if (o) { keep(o); o.visible = true; }
   // Without KHR_parallel_shader_compile, three logs a console warning from compileAsync; compile synchronously instead.
   try {
     if (renderer.compileAsync && renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
@@ -571,13 +924,19 @@ export async function warmUp() {
 // ------------------------------------------------------------------ level / skin
 /** Fills the static layer for this level (one merged Mesh) and resets per-level render state. */
 export function loadLevel(L, skinId) {
+  // DECISION (11-04): each town sets its own hemisphere + sun (LIGHT). Per-level twist state (splats, the Simmer lid
+  // hat, the boss glance, the cake build, crack timers, gull smoothing) resets here; a running Feast steam wipe keeps
+  // going across the swap (Core reloads the course while the wipe covers the screen).
+  // DECISION (11-04): the kinds a level uses include stack contents (it.stack), so their pools are drawn.
   if (!renderer || !L) return;
   LV = L; W = null;
   const town = TOWN[L.town] ? L.town : 'picnic';
   buildStatic(L, town);
   if (town !== curTown) {
-    const T = TOWN[town];
+    const T = TOWN[town], Lt = LIGHT[town] || LIGHT.picnic;
     scene.background.set(T.sky); fog.color.set(T.fog);
+    hemi.color.set(Lt.sky); hemi.groundColor.set(Lt.gnd); hemi.intensity = Lt.hi;
+    sun.color.set(Lt.sun); sun.intensity = Lt.si;
     let tex = null;
     try { tex = props.groundTexture(town); } catch (e) { tex = null; }
     if (groundTex && groundTex !== tex) groundTex.dispose();
@@ -587,42 +946,126 @@ export function loadLevel(L, skinId) {
     curTown = town;
   }
   for (const K of KINDS) if (K.ing && (K.town === town || K.town === 'all') && iconCell[K.i] > 0 && K.icon) loadIcon(iconCell[K.i], 'art/' + K.icon + '.webp', true);
-  // kinds present in this level
+  // kinds present in this level (stack contents included)
   for (const c of used) if (kindMesh[c]) { kindMesh[c].visible = false; kindMesh[c].count = 0; }
   const set = new Set();
-  for (const it of L.items || []) { const c = KIND_ID[it.kind]; if (c !== undefined && kindMesh[c]) set.add(c); }
+  for (const it of L.items || []) {
+    for (const k of [it.kind].concat(Array.isArray(it.stack) ? it.stack : [])) { const c = KIND_ID[k]; if (c !== undefined && kindMesh[c]) set.add(c); }
+  }
   used = [...set];
   setSkin(skinId || skin || 'sunny');
   // reset moods, fx, camera
   resetMood();
   for (let i = 0; i < FX_MAX; i++) fl[i] = 0;
   fxN = 0; fxMesh.count = 0; fxMesh.visible = false;
-  reveal = null; punchT = 0; bossCamT = -1;
+  reveal = null; punchT = 0; bossCamT = -1; recWinT = -1;
   const sp = L.spawn || { x: 0, z: 0 }, r0 = +L.r0 || 0.3;
   pot.x = +sp.x || 0; pot.z = +sp.z || 0; pot.r = r0; pot.rVis = r0;
   cam.x = pot.x; cam.z = pot.z; cam.vx = cam.vz = 0; cam.rCam = r0;
+  // twists
+  splats.length = 0; rebuildSplats();
+  lid.on = false; lid.pop = lid.jig = lid.steamT = 0; lidMesh.visible = false;
+  glance = null; bossRing = null; potLift = 0; truckSq = 0; truckStop = false; truckYaw = 0;
+  cakeKey = ''; cakeH = 0;
+  for (const m of [cakeRest, cakeTop]) { m.count = 0; m.visible = false; }
+  crackT.fill(0); prevCrack.fill(0); gOn.fill(0);
+  if (gullMesh) { gullMesh.count = 0; gullMesh.visible = false; }
 }
 
 function buildStatic(L, town) {
   // DECISION: off-board decor on the near side (z > z1, toward the camera) is skipped: at 55° pitch it sits between
   // the camera and the play area and reads as a big blurry blob over the bottom HUD (seen at 390×844).
+  // DECISION (11-04, §7.2–§7.3): the ground is per town: Picnic the wooden table, Market a cobbled street with toy
+  // shopfront rows ~2.5 u past the far edge and both flanks (never the near side), Harbour the sea (water beyond every
+  // board edge, swell + edge foam in patchStatic) with pilings and a few sailboats. Off-board decor sits at street
+  // level (−0.5) or at the waterline in Harbour. Everything static merges into the one mesh (D25: one draw).
+  // DECISION (11-04, z-fight): overlapping surfaces step up 0.006 u per overlap level (cap 2) in list order, so a
+  // later blanket always sits on the one under it (no coplanar flicker); a surface with its own s.y keeps it.
+  // DECISION (11-04): belt frames + both end hoods, the food truck's faint dashed loop (with a dashed circle at each
+  // stop) and the gull roost (post, perch, ground nest where stolen food lands) are static too; only the belt
+  // surfaces (scrolling arrows) are a separate boot-created mesh whose geometry is swapped here.
   const x0 = num(L.x0, -(L.W || 10) / 2), x1 = num(L.x1, (L.W || 10) / 2), z0 = num(L.z0, -(L.D || 10) / 2), z1 = num(L.z1, (L.D || 10) / 2);
   const Wd = num(L.W, x1 - x0), Dd = num(L.D, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  const parts = [tableGeo(cx, cz)], fresh = [];
-  try { const b = props.boardGeometry(Wd, Dd, town); fresh.push(b); parts.push(prep(b.clone()).translate(cx, 0, cz)); } catch (e) { /* board missing: table only */ }
-  for (const s of L.surfaces || []) {
+  const rng = mulberry32(hs32('sp' + (L.n ?? L.id ?? '') + town));
+  const parts = [town === 'market' ? streetGeo(cx, cz, town) : town === 'harbour' ? seaGeo(cx, cz) : tableGeo(cx, cz)], fresh = [];
+  try { const b = props.boardGeometry(Wd, Dd, town); fresh.push(b); parts.push(prep(b.clone()).translate(cx, 0, cz)); } catch (e) { /* board missing: ground only */ }
+  if (town === 'market') marketBackdrop(parts, x0, x1, z0, z1, rng);
+  else if (town === 'harbour') harbourBackdrop(parts, x0, x1, z0, z1, rng);
+  const surf = L.surfaces || [], sb = [], lvl = [];
+  for (let k = 0; k < surf.length; k++) {
+    const s = surf[k], cr = Math.abs(Math.cos(s.rot || 0)), sr = Math.abs(Math.sin(s.rot || 0));
+    const hx = ((+s.w || 1) * cr + (+s.d || 1) * sr) / 2, hz = ((+s.w || 1) * sr + (+s.d || 1) * cr) / 2;
+    const bx = [s.x - hx, s.x + hx, s.z - hz, s.z + hz];
+    let lv = 0;
+    for (let j = 0; j < k; j++) { const o = sb[j]; if (o[0] < bx[1] - 1e-3 && o[1] > bx[0] + 1e-3 && o[2] < bx[3] - 1e-3 && o[3] > bx[2] + 1e-3) lv = Math.max(lv, lvl[j] + 1); }
+    sb.push(bx); lvl.push(Math.min(2, lv));
     try {
       const g = props.surfaceGeometry(s.type, s.w, s.d, s.color, town); fresh.push(g);
-      parts.push(prep(g.clone()).rotateY(s.rot || 0).translate(s.x, 0, s.z));
+      parts.push(prep(g.clone()).rotateY(s.rot || 0).translate(s.x, typeof s.y === 'number' ? s.y : lvl[k] * 0.006, s.z));
     } catch (e) { /* skip one bad surface */ }
   }
+  const dy = town === 'harbour' ? SEA_Y - 0.05 : -0.5;
   for (const d of L.decor || []) {
     if (d.z > z1 + 0.2) continue;
     try {
       const g = prep(props.geometryFor(d.kind).clone()), s = d.s || 1;
       const inside = d.x > x0 && d.x < x1 && d.z > z0 && d.z < z1;
-      parts.push(g.scale(s, s, s).rotateY(d.rot || 0).translate(d.x, inside ? 0 : -0.5, d.z));
+      parts.push(g.scale(s, s, s).rotateY(d.rot || 0).translate(d.x, inside ? 0 : dy, d.z));
     } catch (e) { /* skip */ }
+  }
+  // belts: frame + hoods static, surfaces into beltMesh (aSpd per vertex)
+  const bs = [], hoodHex = HOOD[town] || HOOD.picnic;
+  for (const b of L.belts || []) {
+    const len = +b.w || 4, wid = +b.d || 1.4, v = b.v != null ? +b.v : 1.2;
+    const th = (+b.rot || 0) + PI / 2 + (v < 0 ? PI : 0);   // local +z = travel (cos rot, −sin rot) · sign(v)
+    let bg = null;
+    try { bg = props.beltGeometry ? props.beltGeometry(wid, len, town) : null; } catch (e) { bg = null; }
+    if (!bg || !bg.frame || !bg.surface) bg = beltFallback(wid, len);
+    parts.push(prep(bg.frame.clone()).rotateY(th).translate(b.x, 0, b.z));
+    const sg = prep(bg.surface.clone()).rotateY(th).translate(b.x, 0, b.z);
+    sg.setAttribute('aSpd', new BufferAttribute(new Float32Array(sg.attributes.position.count).fill(Math.abs(v) / BELT_PERIOD), 1));
+    bs.push(sg);
+    if (bg.fresh) { bg.frame.dispose(); bg.surface.dispose(); }
+    let hg = null;
+    try { hg = props.hoodGeometry ? props.hoodGeometry(wid, town) : null; } catch (e) { hg = null; }
+    const hf = !hg; if (hf) hg = hoodFallback(wid, hoodHex);
+    const dx = Math.sin(th), dz = Math.cos(th), off = len / 2 - 0.22;
+    parts.push(prep(hg.clone()).rotateY(th).translate(b.x + dx * off, 0, b.z + dz * off));          // in: opening upstream
+    parts.push(prep(hg.clone()).rotateY(th + PI).translate(b.x - dx * off, 0, b.z - dz * off));     // out: opening downstream
+    if (hf) hg.dispose();
+  }
+  {
+    const old = beltMesh.geometry;
+    let g = null;
+    if (bs.length) { try { g = mergeGeometries(bs, false); } catch (e) { g = null; } }
+    for (const p of bs) if (p !== g) p.dispose();
+    beltMesh.geometry = g || beltPlaceholder(); beltMesh.visible = !!g;
+    if (old && old !== beltMesh.geometry) old.dispose();
+  }
+  // the food truck's loop: faint dashes (0.5 on, 0.4 off) and a dashed circle at each stop
+  const tp = L.truckPath || [];
+  if (tp.length >= 2) {
+    _cB.set('#FFFFFF'); _cA.set((props.GROUND_BASE && props.GROUND_BASE[town]) || '#FFF1DC').lerp(_cB, 0.4);
+    const col = '#' + _cA.getHexString();
+    for (let k = 0; k < tp.length; k++) {
+      if (tp.length === 2 && k === 1) break;   // a two-point loop is one back-and-forth line
+      const p = tp[k], q = tp[(k + 1) % tp.length], ddx = q.x - p.x, ddz = q.z - p.z, len = Math.hypot(ddx, ddz);
+      if (len < 0.6) continue;
+      const ry = Math.atan2(ddx, ddz), ux = ddx / len, uz = ddz / len;
+      for (let s = 0.3; s + 0.5 <= len - 0.3 + 1e-6; s += 0.9) parts.push(quadUp(0.12, 0.5, col, p.x + ux * (s + 0.25), 0.035, p.z + uz * (s + 0.25), ry));
+    }
+    for (const p of tp) if (p.stop) for (let k = 0; k < 14; k++) { const an = (k / 14) * TAU; parts.push(quadUp(0.1, 0.2, col, p.x + Math.cos(an) * 0.8, 0.035, p.z + Math.sin(an) * 0.8, -an)); }
+  }
+  // gull roost: a post with a perch at GULL_Y (≈3) over a ground nest where stolen food lands (spiral r 0.35 + 0.18 k)
+  if (L.roost) {
+    const rx = +L.roost.x, rz = +L.roost.z;
+    let ng = null;
+    try { ng = props.nestGeometry ? props.nestGeometry() : null; } catch (e) { ng = null; }
+    const nf = !ng; if (nf) ng = nestFallback();
+    parts.push(prep(ng.clone()).scale(1.7, 1.2, 1.7).translate(rx, 0, rz));
+    parts.push(tint(new CylinderGeometry(0.085, 0.1, 2.95, 7), '#8A5A33', 0.8, 0).translate(rx, 1.475, rz));
+    parts.push(tint(new CylinderGeometry(0.26, 0.2, 0.08, 10), '#A87A47').translate(rx, 2.95, rz));
+    if (nf) ng.dispose();
   }
   let merged = null;
   try { merged = mergeGeometries(parts, false); } catch (e) { merged = null; }
@@ -633,6 +1076,23 @@ function buildStatic(L, town) {
   staticMesh.geometry = merged;
   if (old && old !== merged) old.dispose();
   BB = { x0, x1, z0, z1 };
+  uBC.set(cx, cz); uBH.set(Wd / 2, Dd / 2);
+}
+/** Crack splats: one merged geometry on the static material, swapped when a stack spills. */
+function rebuildSplats() {
+  const old = splatMesh.geometry, parts = [];
+  for (const s of splats) {
+    let g = null;
+    try { g = props.splatGeometry ? prep(props.splatGeometry(s.kind).clone()) : null; } catch (e) { g = null; }
+    if (!g) g = splatFallback(s.col, mulberry32(s.seed));
+    parts.push(g.scale(s.r, 1, s.r).rotateY(s.rot).translate(s.x, s.y, s.z));
+  }
+  let g = null;
+  if (parts.length) { try { g = mergeGeometries(parts, false); } catch (e) { g = null; } }
+  for (const p of parts) if (p !== g) p.dispose();
+  splatMesh.geometry = g || new PlaneGeometry(0.01, 0.01).rotateX(-PI / 2).translate(0, -60, 0);
+  splatMesh.visible = !!g;
+  if (old && old !== splatMesh.geometry) old.dispose();
 }
 function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
 
@@ -664,8 +1124,11 @@ export function setSkin(id) {
 
 // ------------------------------------------------------------------ resize / tier / stats
 export function resize(w, h, playRect) {
+  // DECISION (11-04, §12.3): in ?og=1 the play rect is the right 54 % panel (pot at its centre, 60 % height),
+  // whatever the landscape HUD layout says: the og view has no HUD, only the teal panel on the left.
   cssW = Math.max(1, w | 0 || 1); cssH = Math.max(1, h | 0 || 1);
   if (playRect) play = { ...playRect };
+  if (OGP) { const x0 = Math.round(cssW * 0.46); play = { x: x0, y: 0, w: cssW - x0, h: cssH, cx: (x0 + cssW) / 2, cy: cssH * 0.6 }; }
   if (!(play.cx >= 0)) play.cx = cssW / 2;
   if (!(play.cy >= 0)) play.cy = cssH * 0.6;
   dpr = REC ? 1 : clamp(dpr, DPR_MIN, dprCap());
@@ -725,6 +1188,9 @@ function clampGoal(gx, gz, wv, yaw, pitch, ax, ay) {
   // in view as the diorama edge. Far side and flanks keep 2 u.
   // DECISION: in depth, when the whole board fits (swapped bounds), pin the board's near edge to the bottom of the
   // play rect: any other goal shows a flat table band under the board; the spare depth goes to the far side.
+  // DECISION (11-04, record): REC never clamps in depth. Both the far-edge clamp and the near-edge pin left the big
+  // pot at the far end (the cake's spot) at ~40 % height, under the centred ORDER UP ticket at 20 s; the video keeps
+  // the pot on its anchor (60 %) and lets table show past the far edge instead. x still clamps as in play.
   const b = BB; if (!b) return [gx, gz];
   placeCamera(gx, gz, wv, yaw, pitch, ax, ay);
   let mnx = 1e9, mxx = -1e9, mnz = 1e9, mxz = -1e9;
@@ -742,7 +1208,7 @@ function clampGoal(gx, gz, wv, yaw, pitch, ax, ay) {
     if (L0 > L1) return pinNear ? L1 : clamp(g, L1, L0);
     return clamp(g, L0, L1);
   };
-  return [lo(b.x0, b.x1, mnx, mxx, gx, 2, false), lo(b.z0, b.z1, mnz, mxz, gz, 0.6, true)];
+  return [lo(b.x0, b.x1, mnx, mxx, gx, 2, false), REC ? gz : lo(b.z0, b.z1, mnz, mxz, gz, 0.6, true)];
 }
 function springTo(gx, gz, dt) {   // critically damped, ω = 9 (exact step, stable for any dt)
   const w = 9, e = Math.exp(-w * dt);
@@ -757,9 +1223,30 @@ function followWv() {
   return wv;
 }
 function updateCamera(dt) {
+  // DECISION (11-04, §12.3): og/cover stills follow the pot exactly (no board clamp) and skip every camera ease
+  // (radius, pitch, anchor): modes.js paints only the last ~30 of the 1,092 og steps, so an eased camera was caught
+  // mid-zoom and 120 px left of the anchor. og zooms to 0.8 × the follow width (the pot spans ~55 % of the panel).
+  // Record snaps the anchor too (its play rect never changes; it started 70 px off and eased in over the hook).
+  // DECISION (11-04, §12.2 21.5–23.5 s): in record mode the camera pulls straight up 2.0 s after the win, over 2.0 s:
+  // pitch 55° → 78° and the view widens until the board's near edge reaches the play-rect bottom (capped at 1.8 ×),
+  // with the goal and anchor kept on the pot, so the pot stays below the centred ORDER UP ticket while the board
+  // shows eaten bare. Counted in painted frames only. loadLevel / levelStart reset it (the 24.5 s loop).
+  // DECISION (11-04): the boss ② glance (35 % of the way to the boss) is scaled down so the pot stays within 70 % of
+  // the room between its anchor and the play-rect edge, and the view widens 12 % at the glance peak: on L28 the full
+  // 35 % pushed the pot off the bottom of a 390×844 screen for ~0.6 s while the player still steers.
   const land = cssW > cssH;
-  cam.rCam += (pot.r - cam.rCam) * ek(dt, 0.45);
-  let wv = followWv(), yawT = 0, pitchT = 55 * D2R, ax = play.cx, ay = play.cy;
+  if (STILL) cam.rCam = pot.r; else cam.rCam += (pot.r - cam.rCam) * ek(dt, 0.45);
+  let wv = followWv() * (OGP ? 0.8 : 1), yawT = 0, pitchT = 55 * D2R, ax = play.cx, ay = play.cy;
+  let pull = 0;
+  if (recWinT >= 0 && REC && !STILL && !titleOn) {
+    recWinT += dt;
+    pull = inOut(clamp((recWinT - 2.0) / 2.0, 0, 1));
+    if (pull > 0 && BB) {
+      const lowPx = Math.max(80, (play.h > 1 ? play.y + play.h : cssH) - ay), dz = Math.max(1, BB.z1 + 1 - pot.z);
+      const fit = cssW * dz * Math.sin(78 * D2R) / lowPx * 1.05;
+      pitchT = lerp(pitchT, 78 * D2R, pull); wv = lerp(wv, Math.max(wv, Math.min(fit, wv * 1.8)), pull);
+    }
+  }
   if (titleOn) {
     titleT += dt;
     cam.yaw += 0.12 * dt; yawT = cam.yaw; pitchT = 48 * D2R; wv = land ? 15 : 7.5; ay = cssH * 0.5;
@@ -769,7 +1256,8 @@ function updateCamera(dt) {
   }
   cam.pitch += (pitchT - cam.pitch) * ek(dt, 0.35);
   cam.ax += (ax - cam.ax) * ek(dt, 0.25); cam.ay += (ay - cam.ay) * ek(dt, 0.25);
-  if (Math.abs(cam.ax - ax) > cssW || !(cam.ax > -1e8)) { cam.ax = ax; cam.ay = ay; }
+  if (Math.abs(cam.ax - ax) > cssW || !(cam.ax > -1e8) || REC) { cam.ax = ax; cam.ay = ay; }
+  if (STILL) cam.pitch = pitchT;
   if (punchT > 0) { punchT = Math.max(0, punchT - dt); wv *= 1 + 0.08 * (1 - (1 - punchT / 0.5) ** 2) * (punchT > 0 ? 1 : 0); }
   if (bossCamT >= 0) {
     bossCamT += dt;
@@ -779,8 +1267,22 @@ function updateCamera(dt) {
     shakeX = (rnd() * 2 - 1) * amp; shakeZ = (rnd() * 2 - 1) * amp;
     if (t > 0.9) { bossCamT = -1; shakeX = shakeZ = 0; }
   }
+  let fx0 = pot.x, fz0 = pot.z;
+  if (glance && !titleOn) {   // two-course boss ② glance: 35 % toward the boss and back over 1.2 s (pot kept in view)
+    glance.t += dt;
+    const k = glance.t >= 1.2 ? 0 : Math.sin(PI * glance.t / 1.2);
+    wv *= 1 + 0.12 * k;
+    const dx = (glance.x - pot.x) * 0.35, dz = (glance.z - pot.z) * 0.35, pxu = cssW / wv, sp = Math.max(0.3, Math.sin(cam.pitch));
+    const pb = play.h > 1 ? play.y + play.h : cssH, pt = play.h > 1 ? play.y : 0, pl = play.w > 1 ? play.x : 0, pr = play.w > 1 ? play.x + play.w : cssW;
+    const roomX = 0.7 * Math.max(40, Math.min(cam.ax - pl, pr - cam.ax)) / pxu;
+    const roomZ = 0.7 * Math.max(40, dz < 0 ? pb - cam.ay : cam.ay - pt) / (pxu * sp);
+    const s = Math.min(1, roomX / Math.max(1e-3, Math.abs(dx)), roomZ / Math.max(1e-3, Math.abs(dz)));
+    fx0 += dx * s * k; fz0 += dz * s * k;
+    if (glance.t >= 1.2) glance = null;
+  }
   cam.wv = wv;
-  let [gx, gz] = titleOn ? (BB ? [(BB.x0 + BB.x1) / 2, (BB.z0 + BB.z1) / 2] : [pot.x, pot.z]) : clampGoal(pot.x, pot.z, wv, yawT, cam.pitch, cam.ax, cam.ay);
+  let [gx, gz] = titleOn ? (BB ? [(BB.x0 + BB.x1) / 2, (BB.z0 + BB.z1) / 2] : [pot.x, pot.z])
+    : STILL ? [fx0, fz0] : clampGoal(fx0, fz0, wv, yawT, cam.pitch, cam.ax, cam.ay);
   if (reveal) {
     reveal.t += dt;
     const t = reveal.t;
@@ -792,7 +1294,7 @@ function updateCamera(dt) {
       return;
     }
   }
-  if (titleOn) { cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0; } else springTo(gx, gz, dt);
+  if (titleOn || STILL) { cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0; } else springTo(gx, gz, dt);
   placeCamera(cam.x + shakeX, cam.z + shakeZ, wv, yawT, cam.pitch, cam.ax, cam.ay);
 }
 
@@ -870,6 +1372,10 @@ export function onFx(ev, data) {
   else if (typeof data === 'string' && typeof ev !== 'string') { const t = data; data = ev; ev = t; }
   if (!renderer || typeof ev !== 'string') return;
   const d = data || {};
+  // DECISION (11-04): Sim sends some beats under two names (courseDone+course, tier+cakeTier, gull+gullWarn);
+  // both map to one canonical name and fire once per frame per item (evSeen clears at the start of update).
+  const cn = EV_ALIAS[ev] || (ALIASED.has(ev) ? ev : null);
+  if (cn) { const key = cn + ':' + (d.i ?? ''); if (evSeen.has(key)) return; evSeen.add(key); ev = cn; }
   switch (ev) {
     case 'bite': {
       mood.biteT = 0.18; mood.sqzT = 0.1;
@@ -907,21 +1413,39 @@ export function onFx(ev, data) {
     }
     case 'win': {
       mood.celebrateT = 0; mood.happyT = 1.6; mood.worried = false;
+      if (REC && !STILL) recWinT = 0;
       spawn(pot.x, 0.3 + pot.rVis * 0.3, pot.z, 0, 1.0, 0, 1.3, Math.max(0.16, 0.35 * pot.rVis), '#FF6F8E', 3, -0.2, 0.6);
       sparkleRing(10, '#FFE27A', 2.2);
       break;
     }
     case 'fail': mood.sad = true; mood.worried = false; break;
     case 'lowTime': mood.worried = true; break;
-    case 'refuse': case 'shove': mood.squintT = 0.3; break;
-    case 'boil': mood.squintT = 0.3; burst(pot.x, 0.1, pot.z, 6, '#FFFFFF', { speed: 0.3, up: 1.2, size: 0.12 * Math.max(0.6, pot.rVis), shape: 4, grav: -0.4, grow: 1.5, life: 0.9, a: 0.6 }); break;
-    case 'crack': { const [x, z] = itemXZ(d.i); burst(x, 0.15, z, 12, ['#FFF6E6', '#FFE14D', '#F4A493'], { speed: 1.2, up: 1.6, size: 0.06, shape: 0, life: 0.7 }); break; }
+    case 'refuse': case 'shove': {
+      // DECISION (11-04, §4.5 Simmer): the lid hat appears on the pot the first time a refusal happens on a capped
+      // level and jiggles on every later refusal / shove.
+      mood.squintT = 0.3;
+      if (W && W.cap > 0 && !lid.on) { lid.on = true; lid.pop = 0.3; }
+      if (lid.on) lid.jig = 0.35;
+      break;
+    }
+    case 'boil':
+      mood.squintT = 0.3; if (lid.on) lid.jig = 0.35;
+      burst(pot.x, 0.1 + potLift, pot.z, 6, '#FFFFFF', { speed: 0.3, up: 1.2, size: 0.12 * Math.max(0.6, pot.rVis), shape: 4, grav: -0.4, grow: 1.5, life: 0.9, a: 0.6 });
+      break;
+    case 'crack': {
+      const i = d.i;
+      if (W && i >= 0 && i < W.n) startCrack(i);
+      const [x, z] = itemXZ(i), id = W && i >= 0 && W.kindNames ? W.kindNames[W.kind[i]] : '';
+      burst(x, 0.15, z, 12, ['#FFF6E6', SPLAT[id] || '#FFE14D', '#F4A493'], { speed: 1.2, up: 1.6, size: 0.06, shape: 0, life: 0.7 });
+      break;
+    }
     case 'wobble': if (d.i >= 0 && d.i < ITEM_MAX) wobT[d.i] = 0.4; break;
     case 'sizzle': sparkleRing(8, '#FFB347', 1.6); burst(pot.x, 0.1, pot.z, 4, '#FFFFFF', { speed: 0.2, up: 1.0, size: 0.1 * Math.max(0.6, pot.rVis), shape: 4, grav: -0.5, grow: 1.6, life: 1.0, a: 0.55 }); break;
     case 'chain': if ((d.n | 0) >= 3) sparkleRing(3, '#FFF3C4', 1.0); break;
     case 'start': reveal = null; break;
     case 'levelStart': {
       resetMood();
+      lid.on = false; lid.pop = lid.jig = lid.steamT = 0; glance = null; bossRing = null; recWinT = -1;
       const w = d.w || W;
       if (!d.retry && w && w.tickets && w.tickets.length) {
         const b = w.tickets[w.ti | 0] && w.tickets[w.ti | 0].boss;
@@ -932,28 +1456,91 @@ export function onFx(ev, data) {
       }
       break;
     }
-    case 'spawn': if (d.i >= 0 && d.i < ITEM_MAX) popT[d.i] = 0.25; break;
+    case 'course': {
+      // DECISION (11-04): two-course boss ② reveal = a pop, a shock ring on the boss and a 1.2 s camera glance
+      // (35 % of the way toward it and back); no input lock. A Feast course end (no new boss) does nothing here.
+      const w = W;
+      if (!w || !w.tickets) break;
+      const tk = w.tickets[w.ti | 0], b = tk ? tk.boss : -1;
+      if (b >= 0 && b < w.n && w.st[b] === 0) {
+        const x = w.ix[b], z = w.iz[b], a = w.ia[b];
+        popT[b] = 0.25; bossRing = { t: 0, x, z, R: 1.3 * a }; glance = { t: 0, x, z };
+        burst(x, (itemCat ? itemTop(b) : 1) + 0.2, z, 18, ['#FFE27A', '#FFF3C4', '#F5B323'], { speed: 1.5, up: 2.4, size: 0.1, shape: 2, grav: 3 });
+      }
+      break;
+    }
+    case 'cakeTier': {
+      const i = d.i;
+      if (i >= 0 && i < ITEM_MAX) popT[i] = 0.25;
+      const [x, z] = itemXZ(i);
+      burst(x, Math.max(0.4, cakeH * 0.8), z, 22, ['#FFF6E3', '#FF9EC4', '#FFFFFF', '#FFB3C7'], { speed: 1.7, up: 2.6, size: 0.08, shape: 0, life: 0.8 });
+      break;
+    }
+    case 'truckHorn': {
+      truckSq = 0.3;
+      const i = d.i >= 0 ? d.i : W && W.truck ? W.truck.i : -1;
+      if (W && i >= 0 && i < W.n) {
+        const a = W.ia[i], bx = W.ix[i] - Math.sin(truckYaw) * a * 0.95, bz = W.iz[i] - Math.cos(truckYaw) * a * 0.95;
+        burst(bx, 0.18, bz, 5, '#E9E4DA', { speed: 0.4, up: 0.6, size: 0.14, shape: 4, grav: -0.4, grow: 1.6, life: 0.7, a: 0.7 });
+      }
+      break;
+    }
+    case 'steal': {
+      const G = W && W.gulls && W.gulls[d.g | 0];
+      if (G) burst(G.x, G.y, G.z, 9, ['#FFFFFF', '#E6ECF2', '#C9D3E0'], { speed: 1.0, up: 0.8, size: 0.07, shape: 1, grav: 1.2, life: 1.0 });
+      break;
+    }
+    case 'nest': {
+      if (d.i >= 0 && d.i < ITEM_MAX) popT[d.i] = 0.25;
+      const [x, z] = itemXZ(d.i);
+      burst(x, 0.12, z, 8, ['#C8A15A', '#A87A47', '#E3C27A'], { speed: 0.8, up: 1.2, size: 0.05, shape: 1, grav: 5, life: 0.6 });
+      break;
+    }
+    case 'gullMiss': {
+      const G = W && W.gulls && W.gulls[d.g | 0];
+      if (G) burst(G.x, G.y, G.z, 6, '#FFF3C4', { speed: 0.8, up: 1.0, size: 0.08, shape: 2, grav: 2, life: 0.5 });
+      break;
+    }
+    case 'feastWipe': wipeT = 0; break;
+    case 'spawn':
+      if (d.i >= 0 && d.i < ITEM_MAX) {
+        popT[d.i] = 0.25;
+        const [x, z] = itemXZ(d.i);
+        burst(x, 0.1, z, 4, '#FFFFFF', { speed: 0.3, up: 0.9, size: 0.12, shape: 4, grav: -0.4, grow: 1.4, life: 0.6, a: 0.55 });
+      }
+      break;
     default: break;
   }
 }
 
 // ------------------------------------------------------------------ per-frame update
+function catOf(w, i, it) {
+  const id = w.kindNames ? w.kindNames[w.kind[i]] : undefined;
+  if (id !== undefined && KIND_ID[id] !== undefined) return KIND_ID[id];
+  return it && KIND_ID[it.kind] !== undefined ? KIND_ID[it.kind] : -1;
+}
 function bindWorld(w) {
   W = w;
   const n = Math.min(w.n | 0, ITEM_MAX);
-  const kmap = (w.kindNames || []).map((id) => (KIND_ID[id] !== undefined ? KIND_ID[id] : -1));
-  itemCat = new Int16Array(n); itemRot = new Float32Array(n); prevSt = new Uint8Array(n); prevHid = new Uint8Array(n);
+  itemCat = new Int16Array(n); itemRot = new Float32Array(n); prevSt = new Uint8Array(n); prevHid = new Uint8Array(n); prevKind = new Int16Array(n);
   const items = (w.level && w.level.items) || (LV && LV.items) || [];
   for (let i = 0; i < n; i++) {
     const it = items[i];
-    itemCat[i] = kmap[w.kind[i]] ?? (it ? KIND_ID[it.kind] ?? -1 : -1);
+    itemCat[i] = catOf(w, i, it);
     itemRot[i] = it && typeof it.rot === 'number' ? it.rot : 0;
-    prevSt[i] = w.st[i]; prevHid[i] = w.hid ? w.hid[i] : 0;
-    eGlow[i] = 0; eOcc[i] = 1; rollA[i] = 0; rollH[i] = 0; lastX[i] = w.ix[i]; lastZ[i] = w.iz[i];
+    prevSt[i] = w.st[i]; prevHid[i] = w.hid ? w.hid[i] : 0; prevKind[i] = w.kind[i];
+    eGlow[i] = 0; eOcc[i] = 1; rollA[i] = 0; rollH[i] = itemRot[i]; rollQ.fill(0, i * 4, i * 4 + 3); rollQ[i * 4 + 3] = 1; lastX[i] = w.ix[i]; lastZ[i] = w.iz[i];
+    prevCrack[i] = w.cracked && w.cracked[i] ? 1 : 0; crackT[i] = 0;
   }
   const set = new Set(used);
-  for (let i = 0; i < n; i++) if (itemCat[i] >= 0 && kindMesh[itemCat[i]]) set.add(itemCat[i]);
+  for (let i = 0; i < n; i++) {
+    if (itemCat[i] >= 0 && kindMesh[itemCat[i]]) set.add(itemCat[i]);
+    const so = w.stackOf && w.stackOf[i];
+    if (so) for (const k of so) { const c = KIND_ID[k]; if (c !== undefined && kindMesh[c]) set.add(c); }
+  }
   used = [...set];
+  truckYaw = w.truck && w.truck.i >= 0 ? +w.truck.ang || 0 : 0;
+  gOn.fill(0); cakeKey = '';
   if (w.level && w.level !== LV) LV = w.level;
 }
 function itemTop(i) {
@@ -972,13 +1559,75 @@ function segHitsCyl(ax, ay, az, bx, by, bz, cx, cz, rad, h) {
   return Math.min(y0, y1) < h && Math.max(y0, y1) > 0;
 }
 
+// ---- twist helpers: crack spill, splats, the wedding cake build
+const crDx = new Float32Array(ITEM_MAX), crDz = new Float32Array(ITEM_MAX);
+const CRACK_T = 0.45, SPLAT_MAX = 12, CAKE_BODY = 0.62;   // CAKE_BODY: bossTierGeometry body cylinder height per unit a
+function startCrack(i) {
+  if (!W || i < 0 || i >= ITEM_MAX || prevCrack[i]) return;
+  prevCrack[i] = 1; crackT[i] = CRACK_T;
+  const dx = W.ix[i] - pot.x, dz = W.iz[i] - pot.z, L = Math.hypot(dx, dz) || 1;
+  crDx[i] = dx / L; crDz[i] = dz / L;
+}
+function addSplat(i, x, z) {
+  // DECISION (11-04): a cracked stack leaves a splat in its spill colour 1.1 a past the stack (away from the pot),
+  // radius 0.6 a, merged into one static-material mesh (one extra draw only while splats exist; max 12, oldest out).
+  const id = W && W.kindNames ? W.kindNames[W.kind[i]] : '', a = W ? W.ia[i] : 0.5;
+  if (splats.length >= SPLAT_MAX) splats.shift();
+  splats.push({ x: x + crDx[i] * a * 1.1, y: 0.038, z: z + crDz[i] * a * 1.1, r: 0.6 * a, col: SPLAT[id] || '#FFF6E3', seed: hs32(id + ':' + i + ':' + splats.length), rot: rnd() * TAU, kind: id });
+  rebuildSplats();
+}
+function cakeBuild(Ck, key) {
+  // DECISION (11-04, L53): the cake is drawn from Art's per-tier geometry, not the 3-tier kind mesh: the remaining
+  // tiers stack bottom-up (tiers[k] scale, each sits on the body of the one below), the lower ones merged into
+  // cakeRest, the current (edible) top tier alone in cakeTop so it can glow. Rebuilt only when a tier is eaten.
+  cakeKey = key;
+  const n = Ck.n, rest = [];
+  let y = 0, top = null;
+  for (let k = n - 1; k >= Ck.tier; k--) {
+    const t = n === 1 ? 0 : Math.round((k * 2) / (n - 1)), src = props.bossTierGeometry('boss-weddingcake', t), ak = +Ck.tiers[k] || 1;
+    const hh = (src.userData && src.userData.h) || 0.7;
+    const g = prep(src.clone()).scale(ak, ak, ak).translate(0, y, 0);
+    if (k === Ck.tier) { top = g; cakeH = y + hh * ak; } else rest.push(g);
+    y += Math.min(hh, CAKE_BODY) * ak;
+  }
+  let rg = null;
+  if (rest.length) { try { rg = mergeGeometries(rest, false); } catch (e) { rg = null; } }
+  for (const g of rest) if (g !== rg) g.dispose();
+  swapCake(cakeRest, rg); swapCake(cakeTop, top);
+}
+function swapCake(m, g) {
+  if (!g) { m.userData.empty = true; return; }
+  g.deleteAttribute('uv'); g.setAttribute('aFx', m.userData.fx);
+  const old = m.geometry;
+  m.geometry = g; m.userData.empty = false;
+  if (old && old !== g) { old.deleteAttribute('aFx'); old.dispose(); }   // keep the boot-created instanced aFx alive
+}
+function cakePut(m, x, y, z, S, occ, glow, bossGlow) {
+  if (m.userData.empty) { m.count = 0; m.visible = false; return; }
+  _p.set(x, y, z); _s.set(S, S, S); _m.compose(_p, _q, _s); _m.toArray(m.instanceMatrix.array, 0);
+  const f = m.userData.fx.array; f[0] = glow; f[1] = occ; f[2] = bossGlow; f[3] = 0;
+  m.count = 1; m.visible = true; m.instanceMatrix.needsUpdate = true; m.userData.fx.needsUpdate = true;
+}
+
 /** Interpolates and writes every instance for this frame. Safe with w = null (title without a world). */
 export function update(w, dt, alpha = 1) {
   // DECISION: the title backdrop (GDD §9 "live three scene, slow orbit") needs food on the board even when the
   // caller passes no world: build an untouched world of the loaded level once (typed arrays only, no GPU objects).
   // DECISION: the boost uses each item's own apparent size (perspective depth vs the pot's), and T0 aims at
   // 12 px diameter (GDD minimum 10 px) because Art's contact scene showed T0 too small at r0 on 390×844.
+  // DECISION (11-04, twists): belt riders and the pot on a belt sit BELT_TOP up; a gull carries its item under
+  // its feet; nest items sit in the bowl; the truck turns smoothly to w.truck.ang and squashes on its horn;
+  // fragile pieces shiver every 2.5 s (a 0.5 s, 0.05 rad tremble) and stack contents ride their slots, falling
+  // off away from the pot over 0.45 s when the stack cracks. Gulls are one instanced mesh (≤ 4) with a fading
+  // blob shadow and the growing 1.6 s telegraph under the target.
+  // DECISION (11-04, Art relay): rolling kinds pivot about their centre (h / 2), not their base, and roll by
+  // distance / that radius. Balls (apple, orange, coconut) keep an accumulated orientation per item, so a turn
+  // never snaps them; the cheesewheel (WHEELS) yaws to its roll heading (≤ 90° turn, either way) and spins about
+  // its axle (local x), so it rolls like a wheel.
+  // DECISION (11-04): an item that jumps > 0.8 u in one step (belt wrap, Feast respawn) snaps instead of sliding
+  // across the board in the interpolated frames, and its roll does not count the jump.
   if (!renderer) return;
+  evSeen.clear();
   dt = clamp(+dt || 0, 0, 0.1);
   alpha = clamp(+alpha || 0, 0, 1);
   time += dt; U.time.value = time;
@@ -994,6 +1643,12 @@ export function update(w, dt, alpha = 1) {
   }
   const rT = titleOn ? Math.max(pot.r, 0.8) : pot.r;
   pot.rVis += (rT - pot.rVis) * ek(dt, 0.12);
+  let lift = 0;
+  if (w && w.belts) for (const b of w.belts) {
+    const dx = pot.x - b.x, dz = pot.z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0);
+    if (Math.abs(dx * c - dz * s) < b.w / 2 && Math.abs(dx * s + dz * c) < b.d / 2) { lift = BELT_TOP; break; }
+  }
+  potLift += (lift - potLift) * ek(dt, 0.06);
   updateCamera(dt);
   const rv = pot.rVis;
 
@@ -1005,19 +1660,30 @@ export function update(w, dt, alpha = 1) {
   const dPot = Math.max(0.1, (pot.x - cp.x) * fwx - cp.y * fwy + (pot.z - cp.z) * fwz);
   for (const c of used) kindCnt[c] = 0;
   let nSh = 0, nF = 0, nB = 0;
-  const shArr = shMesh.instanceMatrix.array, shM = shA.array, fArr = flatMk.instanceMatrix.array, fM = flatA.array;
+  const decArr = decMesh.instanceMatrix.array, decM = decA.array;
   const bP = bbP.array, bM = bbM.array;
   let look = null, lookPri = -1, lookD = 1e9;
+  for (const m of [cakeRest, cakeTop]) { m.count = 0; m.visible = false; }
+  truckSq = Math.max(0, truckSq - dt);
   if (w && itemCat) {
     const n = itemCat.length, st = w.st, tp = w.tp, ix = w.ix, iz = w.iz, ipx = w.ipx, ipz = w.ipz, ia = w.ia;
-    const fl8 = w.flags, glow = w.glow, hid = w.hid;
+    const fl8 = w.flags, glow = w.glow, hid = w.hid, Gs = w.gulls || [];
+    const TR = w.truck, trI = TR && TR.i >= 0 ? TR.i : -1;
+    if (trI >= 0) { const d = Math.atan2(Math.sin(TR.ang - truckYaw), Math.cos(TR.ang - truckYaw)); truckYaw += d * ek(dt, 0.12); }
+    const Ck = w.cake, ckI = Ck && Ck.i >= 0 && Ck.n > 0 && props.bossTierGeometry ? Ck.i : -1;
     const eyeY = 0.12 * rv;
     for (let i = 0; i < n; i++) {
+      if (prevKind[i] !== w.kind[i]) {   // Feast respawn: spawnItem rewrote this slot's kind
+        prevKind[i] = w.kind[i];
+        const nc = catOf(w, i, null);
+        itemCat[i] = nc; rollA[i] = 0; rollQ.fill(0, i * 4, i * 4 + 3); rollQ[i * 4 + 3] = 1; eGlow[i] = 0; lastX[i] = ix[i]; lastZ[i] = iz[i]; prevCrack[i] = 0; crackT[i] = 0;
+        if (nc >= 0 && kindMesh[nc] && used.indexOf(nc) < 0) { used.push(nc); kindCnt[nc] = 0; }
+      }
       const s = st[i];
       if (s === 2) {
         if (prevSt[i] === 1) {   // swallowed: crumbs fly out of the stew in the kind colour
           const K = KINDS[itemCat[i]] || null, tierN = K ? K.tier | 0 : 0;
-          burst(pot.x, 0.05, pot.z, Math.min(12, 3 + 2 * tierN), [K ? K.color : '#FFD36E', '#FFD36E', '#FF8A2A'], { speed: 0.6 + 0.4 * rv, up: 1.4 + rv, size: Math.max(0.03, 0.045 * Math.sqrt(rv) + 0.015 * tierN), life: 0.5 });
+          burst(pot.x, 0.05 + potLift, pot.z, Math.min(12, 3 + 2 * tierN), [K ? K.color : '#FFD36E', '#FFD36E', '#FF8A2A'], { speed: 0.6 + 0.4 * rv, up: 1.4 + rv, size: Math.max(0.03, 0.045 * Math.sqrt(rv) + 0.015 * tierN), life: 0.5 });
         }
         prevSt[i] = 2; continue;
       }
@@ -1027,41 +1693,64 @@ export function update(w, dt, alpha = 1) {
       prevSt[i] = s;
       const c = itemCat[i], m = c >= 0 ? kindMesh[c] : null;
       if (!m) continue;
-      const ud = m.userData, K = ud.K;
+      const ud = m.userData, K = ud.K, isCake = i === ckI;
       let x = ipx[i] + (ix[i] - ipx[i]) * alpha, z = ipz[i] + (iz[i] - ipz[i]) * alpha;
+      if (Math.abs(ix[i] - ipx[i]) + Math.abs(iz[i] - ipz[i]) > 0.8) { x = ix[i]; z = iz[i]; lastX[i] = x; lastZ[i] = z; }   // belt wrap / respawn: no smear
       const a = ia[i], dx = pot.x - x, dz = pot.z - z, dist = Math.hypot(dx, dz);
-      const boss = fl8[i] & F_BOSS, ing = fl8[i] & F_ING, open = glow[i] > 0;
+      const boss = fl8[i] & F_BOSS, ing = fl8[i] & F_ING, open = glow[i] > 0, belt = fl8[i] & F_BELT;
       // readability boost (render only, §7.4)
       const dI = Math.max(0.1, (x - cp.x) * fwx - cp.y * fwy + (z - cp.z) * fwz);
       const app = a * ppu * (dPot / dI);
       let boost = 1;
       if (ing && open && app < 7) boost = Math.min(2.5, 7 / Math.max(app, 1e-3));
       else if (K.tier === 0 && app < 6) boost = Math.min(1.6, 6 / Math.max(app, 1e-3));
-      let sc = (a / ud.catA) * boost, y = 0;
-      const h = ud.h * sc;
+      let sc = (a / ud.catA) * boost, y = 0, sy = 1;
+      if (isCake) { const key = Ck.n + ':' + Ck.tier + ':' + Ck.tiers.join(','); if (key !== cakeKey) cakeBuild(Ck, key); }
+      const h = isCake ? cakeH * sc * ud.catA / Math.max(1e-4, a) : ud.h * sc;
+      if (belt) y += BELT_TOP;
+      if (s === 3) y += 0.05;
+      if (s === 5) for (const G of Gs) if (G.i === i && G.st === 2) { x = G.x; z = G.z; y = Math.max(0, G.y - 0.12 - h); }
       // rotation: base yaw, rolling, wobble, tip
-      let yaw = itemRot[i];
+      const yaw = i === trI ? truckYaw : itemRot[i];
+      const rc = K.roll ? h * 0.5 : 0;   // rolling kinds pivot about their centre (see the compose below)
       if (K.roll) {
-        const mx = x - lastX[i], mz = z - lastZ[i], md = Math.hypot(mx, mz);
-        if (md > 1e-4 && md < 1) { rollH[i] = Math.atan2(mx, mz); rollA[i] += md / Math.max(0.05, a); }
-        _q.setFromAxisAngle(_up, rollH[i]); _ax.set(1, 0, 0); _q2.setFromAxisAngle(_ax, rollA[i]); _q.multiply(_q2);
-        _q2.setFromAxisAngle(_up, yaw - rollH[i]); _q.multiply(_q2);
+        const mx = x - lastX[i], mz = z - lastZ[i], md = Math.hypot(mx, mz), rr = Math.max(0.05, rc);
+        if (WHEELS.has(K.id)) {
+          if (md > 1e-4 && md < 1) {
+            let d = Math.atan2(mx, mz) - rollH[i]; d = Math.atan2(Math.sin(d), Math.cos(d));
+            if (d > PI / 2) d -= PI; else if (d < -PI / 2) d += PI;   // a wheel rolls either way: never turn > 90°
+            rollH[i] += d * Math.min(1, (md * 6) / rr);
+            rollA[i] += (mx * Math.sin(rollH[i]) + mz * Math.cos(rollH[i])) / rr;
+          }
+          _q.setFromAxisAngle(_up, rollH[i]); _ax.set(1, 0, 0); _q2.setFromAxisAngle(_ax, rollA[i]); _q.multiply(_q2);
+        } else {
+          _q.fromArray(rollQ, i * 4);
+          if (md > 1e-4 && md < 1) { _ax.set(mz / md, 0, -mx / md); _q2.setFromAxisAngle(_ax, md / rr); _q.premultiply(_q2).normalize(); _q.toArray(rollQ, i * 4); }
+          _q2.setFromAxisAngle(_up, yaw); _q.multiply(_q2);
+        }
       } else _q.setFromAxisAngle(_up, yaw);
       lastX[i] = x; lastZ[i] = z;
+      const cracked = (w.cracked && w.cracked[i]) || prevCrack[i];
+      if (cracked && !prevCrack[i]) startCrack(i);
       if (wobT[i] > 0) {
         wobT[i] = Math.max(0, wobT[i] - dt);
         _ax.set(1, 0, 0.4).normalize(); _q2.setFromAxisAngle(_ax, Math.sin(time * 38) * 0.16 * (wobT[i] / 0.4)); _q.premultiply(_q2);
+      } else if (fl8[i] & F_FRAGILE && s === 0 && !cracked) {
+        const ph = (time + i * 0.37) % 2.5;
+        if (ph < 0.5) { _ax.set(0.4, 0, 1).normalize(); _q2.setFromAxisAngle(_ax, Math.sin(ph * 50) * 0.05 * (1 - ph / 0.5)); _q.premultiply(_q2); }
       }
       if (popT[i] > 0) { popT[i] = Math.max(0, popT[i] - dt); const p = 1 - popT[i] / 0.25; sc *= p < 0.7 ? (p / 0.7) * 1.12 : 1.12 - 0.12 * ((p - 0.7) / 0.3); }
+      if (i === trI && truckSq > 0) { const p = 1 - truckSq / 0.3; sy = 1 + 0.12 * Math.sin(p * TAU) * (1 - p); }
       let shAlpha = 1;
       if (s === 1) {
         const p = clamp(tp[i], 0, 1), L = dist || 1;
         _ax.set(dz / L, 0, -dx / L);
         _q2.setFromAxisAngle(_ax, 70 * D2R * sstep(0, 0.6, p)); _q.premultiply(_q2);
-        y = -(h * 1.2 + 0.55 * rv) * sstep(0.3, 1, p);
+        y -= (h * 1.2 + 0.55 * rv) * sstep(0.3, 1, p);
         sc *= 1 - 0.45 * sstep(0.6, 1, p);
         shAlpha = 1 - sstep(0.1, 0.6, p);
       }
+      if (s === 5) shAlpha *= 1 - 0.75 * clamp(y / 4, 0, 1);
       if (rattleT[i] > 0) { rattleT[i] = Math.max(0, rattleT[i] - dt); }
       // edible rim light (fits and within 3r), occluder fade
       const eTarget = s !== 1 && dist < 3 * pot.r && edible(w, i) ? 1 : 0;
@@ -1076,65 +1765,114 @@ export function update(w, dt, alpha = 1) {
         if (hit) occ = 0.4;
       }
       eOcc[i] += (occ - eOcc[i]) * ek(dt, occ < eOcc[i] ? 0.05 : 0.1);
-      // instance
-      const k = kindCnt[c];
-      if (k < ud.cap) {
-        _p.set(x, y, z); _s.set(sc, sc, sc);
-        _m.compose(_p, _q, _s); _m.toArray(m.instanceMatrix.array, k * 16);
-        const f = ud.fx.array, o = k * 4;
-        f[o] = eGlow[i]; f[o + 1] = eOcc[i] > 0.995 ? 1 : eOcc[i]; f[o + 2] = boss && open ? 1 : 0; f[o + 3] = ud.sway;
-        kindCnt[c] = k + 1;
-      }
-      // blob shadow
-      if (nSh < ITEM_MAX && shAlpha > 0.01) {
-        const S = 2.2 * a * boost * (s === 1 ? 1 - 0.45 * sstep(0.6, 1, tp[i]) : 1), o = nSh * 16;
-        shArr[o] = S; shArr[o + 5] = S; shArr[o + 10] = S; shArr[o + 12] = x; shArr[o + 13] = 0.035; shArr[o + 14] = z; shArr[o + 15] = 1;
-        shArr[o + 1] = shArr[o + 2] = shArr[o + 3] = shArr[o + 4] = shArr[o + 6] = shArr[o + 7] = shArr[o + 8] = shArr[o + 9] = shArr[o + 11] = 0;
-        shM[nSh * 4] = shAlpha; shM[nSh * 4 + 1] = 0; nSh++;
-      }
-      if (s === 1) continue;
-      // markers: halo (open-line ingredient), gate outline, padlock (locked boss), icon (open line, within 6 u)
-      if (ing && open && nF < 95) {
-        const R = Math.max(1.6 * a * boost, 11 / ppu);
-        nF = flatInst(fArr, fM, nF, x, z, R, 0, i * 1.7, 1, 0);
-        if (dist < 6 && nB < 48 && iconCell[c] > 0) {
-          const bob = 0.04 * Math.sin(time * 5 + i);
-          nB = bbInst(bP, bM, nB, x, h + 0.08 + 10 / ppu + bob, z, 20 / ppu, 1, 1, iconCell[c]);
+      const oc = eOcc[i] > 0.995 ? 1 : eOcc[i];
+      // instance (the cake draws its own tier meshes instead of the 3-tier kind mesh)
+      if (isCake) {
+        const S = sc * ud.catA / Math.max(1e-4, a);
+        cakePut(cakeRest, x, y, z, S, oc, 0, 0);
+        cakePut(cakeTop, x, y, z, S, oc, eGlow[i], open ? 1 : 0.3);
+      } else {
+        const k = kindCnt[c];
+        if (k < ud.cap) {
+          _p.set(x, y, z); _s.set(sc, sc * sy, sc);
+          if (rc > 0) { _v.set(0, rc, 0).applyQuaternion(_q); _p.x -= _v.x; _p.y += rc - _v.y; _p.z -= _v.z; }
+          _m.compose(_p, _q, _s); _m.toArray(m.instanceMatrix.array, k * 16);
+          const f = ud.fx.array, o = k * 4;
+          f[o] = eGlow[i]; f[o + 1] = oc; f[o + 2] = boss && open ? 1 : 0; f[o + 3] = ud.sway;
+          kindCnt[c] = k + 1;
         }
       }
-      if (fl8[i] & F_GATE && nF < 95) nF = flatInst(fArr, fM, nF, x, z, 1.15 * a, 1, 0, 1, 0);
+      // stack contents on their slots; on a crack they tumble off away from the pot, then leave a splat
+      const so = w.stackOf && w.stackOf[i];
+      if (so && so.length && ud.slots && ud.top != null && (!cracked || crackT[i] > 0)) {
+        const t = cracked ? 1 - crackT[i] / CRACK_T : 0, ex = crDx[i], ez = crDz[i];
+        if (t > 0) { _ax.set(ez, 0, -ex); _q3.setFromAxisAngle(_ax, -t * 2.4); }
+        for (let j = 0; j < so.length && j < ud.slots.length; j++) {
+          const c2 = KIND_ID[so[j]], m2 = c2 !== undefined ? kindMesh[c2] : null;
+          if (!m2 || kindCnt[c2] >= m2.userData.cap) continue;
+          const u2 = m2.userData, sc2 = sc * u2.K.a / u2.catA, sl = ud.slots[j];
+          _v.set(sl[0] * sc, ud.top * sc, sl[1] * sc).applyQuaternion(_q);
+          let px = x + _v.x, py = y + _v.y, pz = z + _v.z;
+          if (t > 0) {
+            const out = t * (a * 1.2 + 0.12 * j);
+            px += ex * out; pz += ez * out; py = Math.max(0, py * (1 - t * t)) + Math.sin(PI * t) * 0.25 * a;
+            _q2.copy(_q3).multiply(_q);
+          } else _q2.copy(_q);
+          _p.set(px, py, pz); _s.set(sc2, sc2, sc2);
+          _m.compose(_p, _q2, _s); const k2 = kindCnt[c2]; _m.toArray(m2.instanceMatrix.array, k2 * 16);
+          const f2 = u2.fx.array; f2[k2 * 4] = 0; f2[k2 * 4 + 1] = oc; f2[k2 * 4 + 2] = 0; f2[k2 * 4 + 3] = 0;
+          kindCnt[c2] = k2 + 1;
+        }
+      }
+      if (crackT[i] > 0) { crackT[i] = Math.max(0, crackT[i] - dt); if (crackT[i] === 0) addSplat(i, x, z); }
+      // blob shadow (the cake's is its bottom tier)
+      if (nSh < DEC_SH - 6 && shAlpha > 0.01) {
+        const aS = isCake ? +Ck.tiers[Ck.n - 1] || a : a;
+        const S = 2.2 * aS * boost * (s === 1 ? 1 - 0.45 * sstep(0.6, 1, tp[i]) : 1);
+        nSh = shInst(decArr, decM, nSh, x, z, S, 10, shAlpha, 0.042 + (belt ? BELT_TOP : 0));
+      }
+      if (s === 1 || s === 5) continue;
+      // markers: halo (open-line ingredient), gate outline, padlock (locked boss), icon (open line, within 6 u)
+      if (ing && open) {
+        const R = Math.max(1.6 * a * boost, 11 / ppu);
+        nF = flatInst(fScr, fScrM, nF, x, z, R, 0, i * 1.7, 1, 0);
+        if (dist < 6 && nB < 48 && iconCell[c] > 0) {
+          const bob = 0.04 * Math.sin(time * 5 + i);
+          nB = bbInst(bP, bM, nB, x, y + h + 0.08 + 10 / ppu + bob, z, 20 / ppu, 1, 1, iconCell[c]);
+        }
+      }
+      if (fl8[i] & F_GATE) nF = flatInst(fScr, fScrM, nF, x, z, 1.15 * a, 1, 0, 1, 0);
       if (boss && !open && nB < 48) {
         const sz = Math.max(28 / ppu, 0.42 * a), rt = rattleT[i];
         const jx = rt > 0 ? Math.sin(time * 60) * 0.05 * sz * (rt / 0.4) : 0;
-        nB = bbInst(bP, bM, nB, x + jx, h + 0.35 + sz * 0.5, z, sz, 0, 1, 0);
+        nB = bbInst(bP, bM, nB, x + jx, y + h + 0.35 + sz * 0.5, z, sz, 0, 1, 0);
       }
       // look-at priority: open-line ingredient > open boss > edible item
       const pri = ing && open ? 3 : boss && open ? 2 : eTarget ? 1 : 0;
       if (pri > 0 && (pri > lookPri || (pri === lookPri && dist < lookD))) { lookPri = pri; lookD = dist; look = [x - pot.x, z - pot.z]; }
     }
   }
-  // the pot's soft ring shadow (type 1)
-  if (!titleOn) {
-    const S = 2.9 * rv, o = nSh * 16;
-    shArr.fill(0, o, o + 16); shArr[o] = S; shArr[o + 5] = S; shArr[o + 10] = S; shArr[o + 12] = pot.x; shArr[o + 13] = 0.03; shArr[o + 14] = pot.z; shArr[o + 15] = 1;
-    shM[nSh * 4] = 1; shM[nSh * 4 + 1] = 1; nSh++;
-  }
+  // the pot's soft ring shadow (type 11)
+  if (!titleOn) nSh = shInst(decArr, decM, nSh, pot.x, pot.z, 2.9 * rv, 11, 1, 0.04 + potLift);
   // SIZE UP shock ring (big beats only, D31)
   if (mood.shockT >= 0) {
     mood.shockT += dt;
     const p = mood.shockT / 0.5;
     if (p >= 1) mood.shockT = -1;
-    else nF = flatInst(fArr, fM, nF, pot.x, pot.z, rv * (1.1 + 1.3 * (1 - (1 - p) * (1 - p))), 3, 0, 1, p);
+    else nF = flatInst(fScr, fScrM, nF, pot.x, pot.z, rv * (1.1 + 1.3 * (1 - (1 - p) * (1 - p))), 3, 0, 1, p);
   }
-  // gulls (twist L41+): telegraph ring + the toy gull
-  if (gullG) {
-    const g = w && w.gulls && w.gulls[0];
-    gullG.visible = !!(g && typeof g.x === 'number');
-    if (gullG.visible) {
-      gullG.position.set(g.x, typeof g.y === 'number' ? g.y : 1.5, g.z); gullG.rotation.y = g.h || 0;
-      gullG.children.forEach((ch, k) => { if (/wing/i.test(ch.name)) ch.rotation.z = Math.sin(time * 14) * 0.5 * (k % 2 ? 1 : -1); });
-      if (g.warn && nF < 95) nF = flatInst(fArr, fM, nF, g.tx ?? g.x, g.tz ?? g.z, Math.max(0.5, pot.r * 1.2), 2, 0, 1, 0);
+  // two-course boss ② reveal ring
+  if (bossRing) {
+    bossRing.t += dt;
+    const p = bossRing.t / 0.6;
+    if (p >= 1) bossRing = null;
+    else nF = flatInst(fScr, fScrM, nF, bossRing.x, bossRing.z, bossRing.R * (0.7 + 0.6 * (1 - (1 - p) * (1 - p))), 3, 0, 1, p);
+  }
+  // gulls (L41+): one instanced mesh, banked/pitched toward the flight, flap per state, shadow + telegraph
+  if (gullMesh) {
+    const Gs = (w && w.gulls) || [], arr = gullMesh.instanceMatrix.array, ga = gullA.array;
+    let nG = 0;
+    for (let g = 0; g < Gs.length && nG < 4; g++) {
+      const G = Gs[g];
+      if (typeof G.x !== 'number') continue;
+      if (!gOn[g]) { gOn[g] = 1; gH[g] = G.h || 0; gY[g] = G.y; gBank[g] = 0; gPitch[g] = 0; }
+      const dh = Math.atan2(Math.sin((G.h || 0) - gH[g]), Math.cos((G.h || 0) - gH[g]));
+      gH[g] += dh * ek(dt, 0.12);
+      gBank[g] += (clamp(-dh * 1.6, -0.55, 0.55) - gBank[g]) * ek(dt, 0.15);
+      const vy = dt > 0 ? (G.y - gY[g]) / dt : 0; gY[g] = G.y;
+      gPitch[g] += (clamp(-vy * 0.14, -0.45, 0.45) - gPitch[g]) * ek(dt, 0.15);
+      _q.setFromAxisAngle(_up, gH[g]);
+      _ax.set(1, 0, 0); _q2.setFromAxisAngle(_ax, gPitch[g]); _q.multiply(_q2);
+      _ax.set(0, 0, 1); _q2.setFromAxisAngle(_ax, gBank[g]); _q.multiply(_q2);
+      _p.set(G.x, G.y, G.z); _s.set(1.2, 1.2, 1.2);
+      _m.compose(_p, _q, _s); _m.toArray(arr, nG * 16);
+      const sI = G.st | 0, amp = [0.06, 0.15, 0.5, 0.45][sI] ?? 0.2, rate = [3, 6, 14, 12][sI] ?? 6;
+      ga[nG * 3] = g * 1.3; ga[nG * 3 + 1] = amp; ga[nG * 3 + 2] = rate;
+      nG++;
+      nSh = shInst(decArr, decM, nSh, G.x, G.z, 0.9, 10, 1 - 0.75 * clamp(G.y / 4, 0, 1), 0.042);
+      if (sI === 1 && G.i >= 0 && w && G.i < w.n) nF = flatInst(fScr, fScrM, nF, G.tx, G.tz, Math.max(0.5, 1.3 * w.ia[G.i] + 0.2), 2, 0, 1, G.warn || 0);
     }
+    flush(gullMesh, [gullMesh.instanceMatrix, gullA], nG);
   }
   for (const c of used) {
     const m = kindMesh[c]; if (!m) continue;
@@ -1142,16 +1880,35 @@ export function update(w, dt, alpha = 1) {
     m.count = n; m.visible = n > 0;
     if (n) { m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, n * 16); m.instanceMatrix.needsUpdate = true; const f = m.userData.fx; f.clearUpdateRanges(); f.addUpdateRange(0, n * 4); f.needsUpdate = true; }
   }
-  shMesh.count = nSh; shMesh.visible = nSh > 0; shMesh.instanceMatrix.needsUpdate = true; shA.needsUpdate = true;
-  flatMk.count = nF; flatMk.visible = nF > 0; flatMk.instanceMatrix.needsUpdate = true; flatA.needsUpdate = true;
+  // decals: shadows first, then flats (instance order = paint order), one draw
+  decArr.set(fScr.subarray(0, nF * 16), nSh * 16); decM.set(fScrM.subarray(0, nF * 4), nSh * 4);
+  flush(decMesh, [decMesh.instanceMatrix, decA], nSh + nF);
   flush(bbMk, [bbP, bbM], nB);
+  // Feast steam wipe (0.6 s; Core swaps the course at the half-way cover)
+  if (wipeT >= 0) {
+    wipeT += dt / 0.6;
+    const u = wipeMesh.material.uniforms;
+    u.uT.value = Math.min(1, wipeT); u.uAsp.value = cssW / cssH;
+    wipeMesh.visible = wipeT < 1;
+    if (wipeT >= 1) wipeT = -1;
+  } else wipeMesh.visible = false;
 
   updatePot(dt, look);
   updateFx(dt);
 }
+/** Starts the Feast steam wipe (also started by the feastWipe bus event). */
+export function steamWipe() { wipeT = 0; }
+function shInst(arr, M, n, x, z, S, type, a, y) {
+  if (n >= DEC_SH) return n;
+  const o = n * 16;
+  arr.fill(0, o, o + 16); arr[o] = S; arr[o + 5] = S; arr[o + 10] = S; arr[o + 12] = x; arr[o + 13] = y; arr[o + 14] = z; arr[o + 15] = 1;
+  M[n * 4] = type; M[n * 4 + 1] = 0; M[n * 4 + 2] = a; M[n * 4 + 3] = 0;
+  return n + 1;
+}
 function flatInst(arr, M, n, x, z, R, type, phase, a, extra) {
+  if (n >= DEC_FL) return n;
   const S = (2 * R) / 0.8, o = n * 16;
-  arr.fill(0, o, o + 16); arr[o] = S; arr[o + 5] = S; arr[o + 10] = S; arr[o + 12] = x; arr[o + 13] = 0.045 + type * 0.002; arr[o + 14] = z; arr[o + 15] = 1;
+  arr.fill(0, o, o + 16); arr[o] = S; arr[o + 5] = S; arr[o + 10] = S; arr[o + 12] = x; arr[o + 13] = 0.05 + type * 0.002; arr[o + 14] = z; arr[o + 15] = 1;
   M[n * 4] = type; M[n * 4 + 1] = phase; M[n * 4 + 2] = a; M[n * 4 + 3] = extra;
   return n + 1;
 }
@@ -1184,10 +1941,10 @@ function updatePot(dt, look) {
   if (M.biteT > 0) { tdx = M.biteDx; tdz = M.biteDz; ang = 3 * D2R * Math.sin(PI * (1 - M.biteT / 0.18)); }
   if (M.squintT > 0 && M.tilt) { tdx = M.bumpDx; tdz = M.bumpDz; ang = 5 * D2R * Math.sin(PI * (1 - M.squintT / 0.3)); }
   if (M.squintT <= 0) M.tilt = 0;
-  potRoot.position.set(pot.x, yOff, pot.z);
+  potRoot.position.set(pot.x, yOff + potLift, pot.z);
   potRoot.scale.set(rv * over, rv * over * sy, rv * over);
   if (ang > 0) { _ax.set(tdz, 0, -tdx).normalize(); potRoot.quaternion.setFromAxisAngle(_ax, ang); } else potRoot.quaternion.identity();
-  holeG.position.set(pot.x, 0, pot.z); holeG.scale.setScalar(rv);
+  holeG.position.set(pot.x, potLift, pot.z); holeG.scale.setScalar(rv);
   // skin lights
   if (potExtras.lights) potExtras.lights.visible = Math.sin(time * TAU * 1.0) > -0.3;
   if (potExtras.lightsA) potExtras.lightsA.visible = Math.sin(time * TAU * 2) > 0;
@@ -1196,6 +1953,28 @@ function updatePot(dt, look) {
   // stew dim
   M.dim += ((M.sad ? 0.6 : 1) - M.dim) * ek(dt, 0.3);
   stewMat.uniforms.uDim.value = M.dim;
+  // Simmer lid hat (§4.5): perched on the back rim, tipped back like a hat, pops on, jiggles on refusals; while the
+  // pot boils over, steam puffs out from under it every 0.12 s.
+  // DECISION (11-04): the lid lives in pot-local units (child of potRoot), so it scales with the pot for free.
+  if (lid.on && !titleOn) {
+    lid.pop = Math.max(0, lid.pop - dt); lid.jig = Math.max(0, lid.jig - dt);
+    const boiling = W && W.boil > 0;
+    if (boiling) {
+      lid.jig = Math.max(lid.jig, 0.2);
+      lid.steamT -= dt;
+      if (lid.steamT <= 0) {
+        lid.steamT = 0.12;
+        const bx = -Math.sin(cam.yaw), bz = -Math.cos(cam.yaw);
+        burst(pot.x + bx * 0.45 * rv, (0.3 * rv) + potLift, pot.z + bz * 0.45 * rv, 2, '#FFFFFF', { speed: 0.25, up: 1.1, size: 0.1 * Math.max(0.6, rv), shape: 4, grav: -0.5, grow: 1.6, life: 0.8, a: 0.6 });
+      }
+    } else lid.steamT = 0;
+    const yaw = cam.yaw, j = Math.sin(time * 55) * 0.06 * (lid.jig / 0.35);
+    lidMesh.position.set(-Math.sin(yaw) * 0.62, 0.16 + Math.abs(j) * 0.5, -Math.cos(yaw) * 0.62);
+    _ax.set(Math.cos(yaw), 0, -Math.sin(yaw)); lidMesh.quaternion.setFromAxisAngle(_ax, -0.42 + j);
+    const p = 1 - lid.pop / 0.3, ps = lid.pop > 0 ? (p < 0.7 ? (p / 0.7) * 1.15 : 1.15 - 0.15 * ((p - 0.7) / 0.3)) : 1;
+    lidMesh.scale.setScalar(Math.max(0.01, ps));
+    lidMesh.visible = true;
+  } else lidMesh.visible = false;
 
   // eyes: blink (render RNG), squint, sleepy, sad, worried, happy, wide
   M.blinkIn -= dt;
@@ -1270,16 +2049,21 @@ export function dispose() {
     canvas.removeEventListener('webglcontextlost', ctxHandlers.lost, false);
     canvas.removeEventListener('webglcontextrestored', ctxHandlers.restored, false);
   }
-  scene.traverse((o) => {
-    if (o.isMesh && o.geometry && o !== staticMesh) { /* shared props geometries stay cached in props.js */ }
-  });
+  // shared props geometries stay cached in props.js; materials shared between meshes are disposed once below
   for (const m of kindMesh) if (m) { m.geometry.dispose(); m.dispose(); }
-  for (const m of [shMesh, flatMk, bbMk, fxMesh]) if (m) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }
+  for (const m of [decMesh, bbMk, fxMesh]) if (m) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }
+  for (const m of [gullMesh, cakeRest, cakeTop]) if (m) { m.geometry.dispose(); m.dispose(); }
+  for (const m of [beltMesh, splatMesh, lidMesh, warmGlow]) if (m) m.geometry.dispose();
+  if (wipeMesh) { wipeMesh.geometry.dispose(); wipeMesh.material.dispose(); }
   staticMesh.geometry.dispose(); staticMat.dispose();
   if (groundTex) groundTex.dispose();
+  if (beltTex) beltTex.dispose();
+  if (beltMat) beltMat.dispose();
   atlasTex.dispose(); blankTex.dispose(); propMat.dispose(); potMat.dispose(); stewMat.dispose(); eyeMat.dispose(); gullMat.dispose();
-  pit.geometry.dispose(); pit.material.dispose(); stew.geometry.dispose(); rimDisc.geometry.dispose(); rimDisc.material.dispose(); eyes.geometry.dispose();
+  pitStew.geometry.dispose(); rimDisc.geometry.dispose(); rimDisc.material.dispose(); eyes.geometry.dispose();
   renderer.dispose();
   renderer = null; scene = null; camera = null; W = null; LV = null; BB = null; curTown = null; skin = null; potG = null;
+  gullMesh = gullA = beltMesh = beltMat = beltTex = cakeRest = cakeTop = splatMesh = lidMesh = wipeMesh = null;
+  splats.length = 0; wipeT = -1; lid.on = false; cakeKey = '';
   kindMesh.length = 0; used = [];
 }

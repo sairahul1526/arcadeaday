@@ -1,11 +1,11 @@
 // Slurp Pot level verifier (GDD §5.3, §4.2). Levels role.
-// Usage: node tools/slurp-pot/verify.mjs [1-10] [--runs 100] [--write] [--daily 400] [--kindmax] [--quiet]
+// Usage: node tools/slurp-pot/verify.mjs [1-10 | 2,5,7-9] [--runs 100] [--xruns N] [--write] [--daily 400] [--kindmax] [--quiet]
 //   range     levels to check (default 1-10); 'rec' checks the REC level only
 //   --runs    casual / average / expert runs per level (GDD: 100)
 //   --write   writes spec.stats for the checked levels and kindMax into games/slurp-pot/levels-data.js
 //   --daily N also checks N days × 3 variants of the Daily Order (static gates 5, 6, greedy gate 1, casual ≥ 80 %)
 //   --kindmax recomputes kindMax only (implied by --write)
-// Exit code 1 when any checked level fails a gate. Report: studio/2026-11-03/levels/levels-report.txt.
+// Exit code 1 when any checked level fails a gate. Report: studio/2026-11-04/levels/levels-report.txt.
 import { writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,7 +18,7 @@ import { K_ING, ITEM_MAX, DAILY_START, STAR3 } from '../../games/slurp-pot/const
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 export const DATA_PATH = join(ROOT, 'games/slurp-pot/levels-data.js');
-export const REPORT_PATH = join(ROOT, 'studio/2026-11-03/levels/levels-report.txt');
+export const REPORT_PATH = join(ROOT, 'studio/2026-11-04/levels/levels-report.txt');
 const F = L.F;
 
 /** Writes games/slurp-pot/levels-data.js: one spec per line (JSON is valid JS), then REC and kindMax. */
@@ -71,20 +71,25 @@ function lumOf(town, color) {
   const e = all.find(q => q.color.toLowerCase() === String(color).toLowerCase());
   return e ? e.lum : NaN;
 }
-function surfUnder(lv, it) {
-  const m = it.a * 0.6;
-  for (let i = lv.surfaces.length - 1; i >= 0; i--) {
-    const s = lv.surfaces[i];
-    if (Math.abs(it.x - s.x) <= s.w / 2 - m + 2e-3 && Math.abs(it.z - s.z) <= s.d / 2 - m + 2e-3) return s;   // + output rounding
-  }
-  return null;
-}
-/** Contrast of a T0/T1 item where it sits (§4.2 + D33 gingham rule, same as levels.js groundOK). */
+/** Contrast of a T0/T1 item where it sits (§4.2 + D33 gingham rule, same as levels.js contrastOK / groundOK):
+ *  every surface under its inner square (half 0.6·a, 9 sample points) passes, and the ground passes when a sample
+ *  point is on bare ground. */
 export function contrastPass(lv, it) {
   const k = KIND[it.kind];
   if (!k || k.tier > 1 || isWall(it) || isBoss(it)) return true;
-  const s = surfUnder(lv, it);
-  if (s) return Math.abs(k.lum - lumOf(lv.town, s.color)) >= CONTRAST_MIN;
+  const m = it.a * 0.6;
+  let bare = false;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const px = it.x + i * m, pz = it.z + j * m;
+    let hit = false;
+    for (const s of lv.surfaces) {
+      if (Math.abs(px - s.x) > s.w / 2 + 1e-6 || Math.abs(pz - s.z) > s.d / 2 + 1e-6) continue;
+      hit = true;
+      if (Math.abs(k.lum - lumOf(lv.town, s.color)) < CONTRAST_MIN) return false;
+    }
+    if (!hit) bare = true;
+  }
+  if (!bare) return true;
   const g = SURF[lv.town].gingham;
   if (!g) return Math.abs(k.lum - SURF[lv.town].ground.lum) >= CONTRAST_MIN;
   if (k.hue <= 30 || k.hue >= 340) return false;
@@ -98,6 +103,32 @@ function spareRule(spec, line) {
   if (line.spare != null) return line.spare;
   const n = spec.n || 0, gated = line.place === 'pen' || line.place === 'stack';
   return n > 0 && n >= 20 && !gated && line.place !== 'roll' ? 0 : 1;
+}
+export const LADDER_MAX = 0.85;
+/** Smallest share f (0..∞) of each item's mass that still grows the pot from r0 to needR in fit order. */
+export function ladderFrac(lv, needR) {
+  const it = lv.items, zs = new Map((lv.zones || []).map(z => [z.id, z]));
+  const open = (id, r) => { for (let z = zs.get(id), k = 0; z && z.id > 0 && k < 16; z = zs.get(z.parent), k++) if (z.r && r < 0.97 * z.r - 1e-9) return false; return true; };
+  const reach = f => {
+    let r = lv.r0, mass = 0;
+    const used = new Uint8Array(it.length);
+    for (let pass = 0; pass < 400; pass++) {
+      let add = 0;
+      for (let i = 0; i < it.length; i++) {
+        const o = it[i];
+        if (used[i] || isBoss(o) || !L.canFit(r, o.a) || !open(o.zone, r)) continue;
+        used[i] = 1; add += ((o.flags & F.ING) ? K_ING : o.k) * o.a * o.a;
+      }
+      if (!add) break;
+      mass += f * add; r = Math.sqrt(lv.r0 * lv.r0 + 0.24 * mass);
+      if (r >= needR - 1e-9) return true;
+    }
+    return r >= needR - 1e-9;
+  };
+  if (!reach(1)) { let lo = 1, hi = 64; while (hi - lo > 0.01 && !reach(hi)) hi *= 2; return reach(hi) ? hi : 99; }
+  let lo = 0, hi = 1;
+  for (let k = 0; k < 20; k++) { const mid = (lo + hi) / 2; if (reach(mid)) hi = mid; else lo = mid; }
+  return hi;
 }
 /** Gate 5 (§4.2): returns { ok, fails: [text], m: { margin, food, kinds, items, decor, contrastBad, ... } }. */
 export function staticGates(lv, spec) {
@@ -147,6 +178,13 @@ export function staticGates(lv, spec) {
   for (const o of it) if (!isBoss(o)) sup += ((o.flags & F.ING) ? K_ING : o.k) * o.a * o.a;
   m.margin = sup / ((needR * needR - r0 * r0) / 0.24);
   if (spec.margin && (m.margin < spec.margin[0] - 0.005 || m.margin > spec.margin[1] + 0.005)) fails.push(`5 margin ${m.margin.toFixed(2)} outside [${spec.margin}]`);
+  // DECISION (11-04, no cliffs §4.4): the growth ladder. ladderFrac = the smallest share f of every item's mass
+  // with which the pot, eating in fit order (an item counts once it fits and its pen's gate piece fits), still
+  // reaches needR(boss). A tier gap (L2 11-04: 0.28 → 0.90 with nothing between, the pot stalls at r 0.94 of 1.44)
+  // shows as f > 1. Gate: f ≤ LADDER_MAX (0.85: the pot must not need almost every item; after levels.js
+  // bridgeGaps L1–L60 sit at 0.36–0.77).
+  m.ladder = ladderFrac(lv, needR);
+  if (m.ladder > LADDER_MAX + 1e-9) fails.push(`5 ladder: growth needs ${(100 * m.ladder).toFixed(0)} % of the mass in fit order (max ${(100 * LADDER_MAX).toFixed(0)} %; a size gap)`);
   // edible before the boss: every non-wall item fits at needR(boss) (else it is a fake supply)
   const tooBig = it.filter(o => !isWall(o) && !isBoss(o) && !L.canFit(needR, o.a)).length;
   if (tooBig) fails.push(`5 supply: ${tooBig} junk items never fit before the boss`);
@@ -188,6 +226,16 @@ export function staticGates(lv, spec) {
     if (ws.some(([, a]) => g.a * 1.2 > a + 1e-6)) gateBad++;
   }
   if (gateBad) fails.push(`5 gates: ${gateBad} gate pieces with gate.a·1.2 > wall.a`);
+  // surfaces never overlap (D33 z-fight, 11-04): all surfaces sit at y 0, so any shared area z-fights in Render
+  const S = lv.surfaces || [];
+  let sOver = 0;
+  for (let i = 0; i < S.length; i++) for (let j = i + 1; j < S.length; j++) {
+    const ox = Math.min(S[i].x + S[i].w / 2, S[j].x + S[j].w / 2) - Math.max(S[i].x - S[i].w / 2, S[j].x - S[j].w / 2);
+    const oz = Math.min(S[i].z + S[i].d / 2, S[j].z + S[j].d / 2) - Math.max(S[i].z - S[i].d / 2, S[j].z - S[j].d / 2);
+    if (ox > 2e-3 && oz > 2e-3) sOver++;
+  }
+  m.surfOverlap = sOver;
+  if (sOver) fails.push(`5 surfaces: ${sOver} overlapping surface pairs (z-fight)`);
   // food share
   m.food = it.filter(o => KIND[o.kind] && KIND[o.kind].food).length / it.length;
   if (m.food < 0.40) fails.push(`5 food share ${m.food.toFixed(2)} < 0.40`);
@@ -229,7 +277,9 @@ function many(lv, kind, runs, opts = {}) {
  * Bot runs for one expanded level. opts.runs = casual/average/expert runs (GDD 100); noise 20 seeds; planner 1
  * deterministic run (the planner has no noise: 20 seeds give 20 identical runs).
  */
-export function botStats(lv, spec, { runs = 100, kinds = ['casual', 'average', 'expert'] } = {}) {
+// DECISION (11-04): the expert bot costs ~2.5 s a run on a 60 s level (20× average), so the expert sample may be
+// smaller than the casual / average one (xruns; default = runs). Gates read percentages, so nothing else changes.
+export function botStats(lv, spec, { runs = 100, xruns = runs, kinds = ['casual', 'average', 'expert'] } = {}) {
   const st = {};
   const g = B.runLevel(lv, 'greedy', 1);
   st.greedy = { win: g.win, t: +g.tUsed.toFixed(2), stars: g.stars, pct: lv.timed === false ? null : +(100 * g.tUsed / lv.T).toFixed(1) };
@@ -238,7 +288,7 @@ export function botStats(lv, spec, { runs = 100, kinds = ['casual', 'average', '
   st.noise = pct(nw, 20);
   const p = B.runLevel(lv, 'planner', 1);
   st.planner = { win: p.win, t: +p.tUsed.toFixed(2), stars: p.stars, ratio: g.win && p.win ? +(p.tUsed / g.tUsed).toFixed(3) : null };
-  for (const k of kinds) { const r = many(lv, k, runs); st[k] = { win: +r.win.toFixed(1), s3: +r.s3.toFixed(1), near: r.near == null ? null : +r.near.toFixed(2), med: r.med == null ? null : +r.med.toFixed(1) }; }
+  for (const k of kinds) { const r = many(lv, k, k === 'expert' ? xruns : runs); st[k] = { win: +r.win.toFixed(1), s3: +r.s3.toFixed(1), near: r.near == null ? null : +r.near.toFixed(2), med: r.med == null ? null : +r.med.toFixed(1) }; }
   // bakeoff ratio (reported only): planner 3★ share / greedy 3★ share over the 20 noise seeds is the same as
   // the deterministic runs here, so it is planner 3★ (0/1) over greedy 3★ (0/1).
   st.bakeoff = g.stars === 3 ? (p.stars === 3 ? 1 : 0) : (p.stars === 3 ? Infinity : null);
@@ -265,14 +315,14 @@ export function botGates(spec, lv, st) {
 }
 
 /** Full check of one spec. Returns { n, lv, st, static, fails }. */
-export function verifySpec(spec, { runs = 100, bots = true } = {}) {
+export function verifySpec(spec, { runs = 100, xruns = runs, bots = true } = {}) {
   const lv = LV.genLevel(spec, spec.seed);
   const sg = staticGates(lv, spec);
   const fails = sg.fails.slice();
   if (!doomGate(lv)) fails.push('6 doomed at t = 0');
   fails.push(...determinismGate(spec, null));
   let st = null;
-  if (bots) { st = botStats(lv, spec, { runs }); fails.push(...botGates(spec, lv, st)); }
+  if (bots) { st = botStats(lv, spec, { runs, xruns }); fails.push(...botGates(spec, lv, st)); }
   return { n: spec.n, lv, st, static: sg.m, fails };
 }
 
@@ -326,6 +376,9 @@ export async function computeKindMax({ days = 400, specs = SPECS } = {}) {
   for (const s of specs) add(LV.genLevel(s, s.seed));
   add(LV.genLevel(REC, REC.seed));
   for (const key of dailyKeys(days)) for (const cur of DAILY_CURS) add(LV.getDaily(key, cur));
+  // DECISION (11-04, Render): every Feast course counts too (courses 1–6, cur 12 / 30 / 60, 20 seeds a town), stack
+  // contents included, since Render sizes its pools from kindMax.
+  for (const town of ['picnic', 'market', 'harbour']) for (let sd = 1; sd <= 20; sd++) for (const cur of [12, 30, 60]) for (let cc = 1; cc <= 6; cc++) add(LV.feastCourse(cc, town, sd, { cur }));
   let feast = false;
   try {
     const FE = await import('../../games/slurp-pot/feast.js');
@@ -369,21 +422,21 @@ export function report(lines, append = false) {
 async function main() {
   const args = process.argv.slice(2);
   const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
-  const runs = +(opt('--runs') || 100);
+  const runs = +(opt('--runs') || 100), xruns = +(opt('--xruns') || runs);
   const write = args.includes('--write');
   const quiet = args.includes('--quiet');
   const days = opt('--daily') != null ? +opt('--daily') : 0;
-  const rangeArg = args.find(a => /^(\d+(-\d+)?|rec|none)$/.test(a)) || '1-10';
-  const out = [`verify.mjs ${args.join(' ')} — runs ${runs} (casual/average/expert), greedy + 20 noise seeds, planner deterministic`];
+  const rangeArg = args.find(a => /^(\d+([-,]\d+)*|rec|none)$/.test(a)) || '1-10';
+  const out = [`verify.mjs ${args.join(' ')} — runs ${runs} (casual/average), expert ${xruns}, greedy + 20 noise seeds, planner deterministic`];
   let bad = 0;
   const specs = SPECS.map(s => JSON.parse(JSON.stringify(s)));
   if (rangeArg !== 'none') {
     let list;
     if (rangeArg === 'rec') list = [];
-    else { const [a, b] = rangeArg.split('-').map(Number); list = specs.filter(s => s.n >= a && s.n <= (b || a)); }
+    else list = specs.filter(s => rangeArg.split(',').some(p => { const [a, b] = p.split('-').map(Number); return s.n >= a && s.n <= (b || a); }));
     for (const s of list) {
       const t0 = performance.now();
-      const r = verifySpec(s, { runs });
+      const r = verifySpec(s, { runs, xruns });
       const line = rowText(s, r) + ` (${((performance.now() - t0) / 1000).toFixed(1)}s)`;
       out.push(line);
       if (!quiet) console.log(line);

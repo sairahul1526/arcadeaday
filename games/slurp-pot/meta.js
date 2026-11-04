@@ -1,4 +1,4 @@
-// Slurp Pot meta: save schema v1, migrate, deep fill, two-tab merge, coins, boosters, skins, daily + streak ladder + lids,
+// Slurp Pot meta: save schema v2, migrate, deep fill, two-tab merge, coins, boosters, skins, daily + streak ladder + lids,
 // Feast results, cookbook, score (GDD §3.9-§3.12, §6, §11.3, §13.3). Owner: Meta/QA role.
 // No storage API is touched here: everything goes through P (P.data, P.save, P.flush, P.best, P.readStored, P.onStoredChange).
 // meta.js never imports platform.js; game.js hands P to initMeta(P), so Node can import this file for tests.
@@ -43,13 +43,20 @@
 //   (default Infinity); the win card asks for 100 (need 0 = affordable now).
 // DECISION: buyBooster('lid') needs the daily unlocked (cur > DAILY_UNLOCK) and lids < LID_MAX; in-level boosters need
 //   their unlock level reached (or an earlier gift) and are capped at 99 held.
+// DECISION (v2, Wed): the save gains three TOP-LEVEL keys: seen (string flags: 'alldone', UI 'stuck:<id>' callouts, ...),
+//   dailyLines ({ key: star-line mask }) and feastTown. Top level on purpose: a v1 build's sanitize keeps unknown top-level
+//   keys but rebuilds nested objects from its own defaults, so an old tab open next to a new one cannot erase them.
+//   SAVE_V = 2; migrate turns v0 (proto), v1 and version-less saves into v2; merge unions seen/dailyLines, feastTown is a
+//   preference (newer ts).
+// DECISION: a town chest pays when its chapter is COMPLETE (all 20 levels >= 1 star, GDD §3.12), checked for every town
+//   on every level win, so a migrated or merged save that already completed a chapter gets its chest on the next win.
 
 import { PRICES, LID_MAX, BOOST_UNLOCK, BOOST_GIFT, DAILY_UNLOCK, FEAST_UNLOCK, DAILY_START, FEAST, LADDER, SKINS, TOWNS, LEVELS } from './consts.js';
 
 let P = null; // the platform layer, set by initMeta(P)
 
 // ---------- constants ----------
-export const SAVE_V = 1;
+export const SAVE_V = 2;
 export const BOOSTS = ['magnet', 'freeze', 'mega'];
 export const TOWN_LEVELS = 20;
 export const MILESTONE_EVERY = 15, MILESTONE_COINS = 60;
@@ -62,6 +69,8 @@ const IST_MS = 5.5 * 3600e3, DAY_MS = 86400e3;
 const KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SKIN_IDS = SKINS.map(s => s[0]);
 const STAT_KEYS = ['bites', 'bosses', 'plays', 'fails', 'ms', 'bestChain'];
+const SEEN_RE = /^[a-z0-9:_.-]{1,32}$/i, SEEN_MAX = 64;
+const popcount = m => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1);
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 // ---------- helpers ----------
@@ -103,11 +112,14 @@ function defaults() {
     set: { music: 0.7, sfx: 0.9, haptics: true, stick: null, mute: false },
     tut: 0,
     stats: { bites: 0, bosses: 0, plays: 0, fails: 0, ms: 0, bestChain: 0 },
+    seen: [],          // v2: one-time flags ('alldone', 'stuck:<id>', ...)
+    dailyLines: {},    // v2: { 'YYYY-MM-DD': mask } star lines met that day (bit0 serve, bit1 line 2, bit2 line 3), last 30
+    feastTown: '',     // v2: the Feast town last chosen ('' = the town of the current level)
   };
 }
 export const DEFAULT_SAVE = defaults();
 
-/** Normalises any value into a valid v1 save: every key present (deep fill), numbers clamped, unknown keys kept. */
+/** Normalises any value into a valid v2 save: every key present (deep fill), numbers clamped, unknown keys kept. */
 function sanitize(src) {
   const s = isObj(src) ? src : {};
   const o = defaults();
@@ -163,11 +175,27 @@ function sanitize(src) {
   }
   o.tut = int(s.tut, 0, 2 ** 30 - 1, 0);
   if (isObj(s.stats)) for (const k of STAT_KEYS) o.stats[k] = int(s.stats[k], 0, 1e12, 0);
+  // v2 keys
+  if (Array.isArray(s.seen)) o.seen = [...new Set(s.seen.filter(x => typeof x === 'string' && SEEN_RE.test(x)))].slice(-SEEN_MAX);
+  if (isObj(s.dailyLines)) {
+    for (const k of Object.keys(s.dailyLines).filter(isKey).sort().slice(-DAILY_KEEP)) {
+      const m = int(s.dailyLines[k], 0, 7, 0) | 1;
+      o.dailyLines[k] = m;
+      if (o.daily.won[k] !== undefined) o.daily.won[k] = Math.max(o.daily.won[k], popcount(m)); // stars >= lines met
+    }
+  }
+  o.feastTown = TOWNS.includes(s.feastTown) ? s.feastTown : '';
   return o;
 }
 
-/** P.init calls this only when the stored v < 1. Prototype save { v:0, best, lv } -> levels 1..lv-1 beaten with 1 star. */
+/**
+ * P.init calls this only when the stored v < version. Prototype save { v:0, best, lv } -> levels 1..lv-1 beaten with 1 star;
+ * v1 (and any other object) -> sanitize, which deep-fills the v2 keys (seen [], dailyLines {}, feastTown '').
+ */
 export function migrate(old) {
+  // DECISION: one path for every older version: v0/version-less proto -> stars; v1 -> sanitize (fills v2 keys, keeps
+  //   unknown keys); the result is always stamped SAVE_V. initMeta repeats the sanitize, so a v1 save passed through a
+  //   P.init that still says version 1 ends up identical.
   if (!isObj(old)) return sanitize(null);
   const proto = old.v === 0 || (old.v === undefined && 'lv' in old && !Array.isArray(old.stars));
   if (proto) {
@@ -206,6 +234,9 @@ export function merge(a, b) {
   m.chests = TOWNS.filter(t => A.chests.includes(t) || B.chests.includes(t));
   m.giftsClaimed = Math.max(A.giftsClaimed, B.giftsClaimed);
   m.tut = A.tut | B.tut;
+  m.seen = [...new Set([...A.seen, ...B.seen])];
+  m.dailyLines = {};
+  for (const k of new Set([...Object.keys(A.dailyLines), ...Object.keys(B.dailyLines)])) m.dailyLines[k] = (A.dailyLines[k] | 0) | (B.dailyLines[k] | 0);
   for (const k of STAT_KEYS) m.stats[k] = Math.max(A.stats[k], B.stats[k]);
   const won = {};
   for (const k of new Set([...Object.keys(A.daily.won), ...Object.keys(B.daily.won)])) won[k] = Math.max(A.daily.won[k] | 0, B.daily.won[k] | 0);
@@ -323,6 +354,29 @@ export function nextMilestone() {
   return { have, need: Math.min(max, (Math.floor(have / MILESTONE_EVERY) + 1) * MILESTONE_EVERY) };
 }
 export const qaOldSave = () => ({ save: '{"v":0,"best":120,"lv":3}', progress: 2 });
+/** true when all 60 levels have at least one star. */
+export const allDone = () => !!D() && D().stars.every(v => v > 0);
+
+// ---------- one-time flags ----------
+/**
+ * seen(name) -> bool; seen(name, true) marks it and returns true only when it was not set before (so a caller can do
+ * `if (meta.seen('stuck:boss', true)) showCallout()`). Names match /^[a-z0-9:_.-]{1,32}$/i; at most 64 are kept.
+ */
+export function seen(name, set) {
+  // DECISION: flags are a de-duplicated string list (union on merge), not more tut bits: UI can add callout ids without
+  //   asking Meta for a bit, and an unknown name costs nothing. The 65th name drops the oldest.
+  const d = D();
+  if (!d || typeof name !== 'string' || !SEEN_RE.test(name)) return false;
+  const has = d.seen.includes(name);
+  if (!set) return has;
+  if (has) return false;
+  d.seen.push(name);
+  if (d.seen.length > SEEN_MAX) d.seen.splice(0, d.seen.length - SEEN_MAX);
+  save();
+  return true;
+}
+/** All 60 done and the All-done screen not shown yet (Core marks it with seen('alldone', true)). */
+export const allDoneFresh = () => allDone() && !seen('alldone');
 
 // ---------- coins ----------
 export const coins = () => (D() ? D().coins : 0);
@@ -436,29 +490,35 @@ function claimMilestones() {
   }
   return out;
 }
-function claimChest(n) {
-  const d = D();
-  const town = townOf(n);
-  if (!isFinale(n) || d.chests.includes(town)) return null;
-  d.chests = TOWNS.filter(t => d.chests.includes(t) || t === town);
-  const coinsN = CHEST_COINS[TOWNS.indexOf(town)];
-  d.coins = Math.min(MAX_COINS, d.coins + coinsN);
-  const boost = {};
-  for (const k of BOOSTS) { addBoost(d, k, CHEST_BOOST); boost[k] = CHEST_BOOST; }
-  return { town, coins: coinsN, boost };
+const townComplete = (d, ti) => { for (let i = 0; i < TOWN_LEVELS; i++) if (!(d.stars[ti * TOWN_LEVELS + i] > 0)) return false; return true; };
+/** Pays every complete chapter whose chest is unclaimed (GDD §3.12). Returns [{ town, coins, boost }]. */
+function claimChests() {
+  const d = D(), out = [];
+  TOWNS.forEach((town, ti) => {
+    if (d.chests.includes(town) || !townComplete(d, ti)) return;
+    d.chests = TOWNS.filter(t => d.chests.includes(t) || t === town);
+    const coinsN = CHEST_COINS[ti];
+    d.coins = Math.min(MAX_COINS, d.coins + coinsN);
+    const boost = {};
+    for (const k of BOOSTS) { addBoost(d, k, CHEST_BOOST); boost[k] = CHEST_BOOST; }
+    out.push({ town, coins: coinsN, boost });
+  });
+  return out;
 }
 /**
  * Records a level win (n = 1..60) and pays it. r = { stars (1..3), tLeft, chainBest }.
- * Returns { coins, newStars, first, stars, gifts:[{kind:'booster',k,n}], chest:{town,coins,boost}|null,
- *           milestone:{n,coins,boost}|null (the first one; `milestones` lists all), nextSkin }.
+ * Returns { coins, newStars, first, stars, gifts:[{kind:'booster',k,n}], chest:{town,coins,boost}|null (the first one;
+ *           `chests` lists all), milestone:{n,coins,boost}|null (the first one; `milestones` lists all), nextSkin,
+ *           allDone (true only on the win that completed all 60) }.
  * Everything returned is already credited; flushes the save at once.
  */
 export function levelResult(n, r = {}) {
   const d = D();
   n = int(n, 1, LEVELS, 0);
-  const none = { coins: 0, newStars: 0, first: false, stars: 0, gifts: [], chest: null, milestone: null, milestones: [], nextSkin: null };
+  const none = { coins: 0, newStars: 0, first: false, stars: 0, gifts: [], chest: null, chests: [], milestone: null, milestones: [], nextSkin: null, allDone: false };
   if (!d || !n) return none;
   const st = int(r.stars, 1, 3, 1);
+  const wasDone = allDone();
   const prev = d.stars[n - 1] | 0;
   const first = prev === 0;
   const newStars = Math.max(0, st - prev);
@@ -471,11 +531,11 @@ export function levelResult(n, r = {}) {
   d.stats.bestChain = Math.max(d.stats.bestChain, int(r.chainBest, 0, 1e6, 0));
   const gifts = unlockGifts();
   const milestones = claimMilestones();
-  const chest = claimChest(n);
+  const chests = claimChests();
   d.cur = Math.min(LEVELS + 1, d.stars.reduce((hi, v, i) => (v > 0 ? i + 1 : hi), 0) + 1);
   save(true);
   reportScore();
-  return { coins: pay, newStars, first, stars: st, gifts, chest, milestone: milestones[0] || null, milestones, nextSkin: nextSkin(100) };
+  return { coins: pay, newStars, first, stars: st, gifts, chest: chests[0] || null, chests, milestone: milestones[0] || null, milestones, nextSkin: nextSkin(100), allDone: !wasDone && allDone() };
 }
 
 // ---------- daily order ----------
@@ -560,11 +620,11 @@ export function lidCard(ack = false) {
   if (ack && was) { d.daily.lidCard = false; save(); }
   return was;
 }
-/** Today's daily state: { key, day, done, stars, streak, bestStreak, ladder:[7], tomorrow:{day,reward}, msToNext, unlocked, lids, lidCard, starPot }. */
+/** Today's daily state: { key, day, done, stars, mask (lines met today, union of runs, or null), streak, bestStreak, ladder:[7], tomorrow:{day,reward}, msToNext, unlocked, lids, lidCard, starPot }. */
 export function dailyStatus(key = dailyKey()) {
   const d = D();
   const now = Date.now();
-  if (!d) return { key, day: 1, done: false, stars: 0, streak: 0, bestStreak: 0, ladder: [], tomorrow: null, msToNext: msToNext(now), unlocked: false, lids: 0, lidCard: false, starPot: false };
+  if (!d) return { key, day: 1, done: false, stars: 0, mask: null, streak: 0, bestStreak: 0, ladder: [], tomorrow: null, msToNext: msToNext(now), unlocked: false, lids: 0, lidCard: false, starPot: false };
   const done = claimed(d, key);
   const streak = aliveStreak(d, key);
   const todayIdx = done ? (d.daily.ladder + 6) % 7 : streak > 0 ? d.daily.ladder : 0;
@@ -572,27 +632,70 @@ export function dailyStatus(key = dailyKey()) {
   const filled = done ? todayIdx + 1 : todayIdx;
   const ladder = LADDER.map((_, i) => ({ day: i + 1, reward: rewardOf(i, d), state: i < filled ? 'done' : i === filled ? (done ? 'next' : 'today') : 'future' }));
   return {
-    key, day: todayIdx + 1, done, stars: d.daily.won[key] | 0, streak, bestStreak: Math.max(d.daily.bestStreak, d.daily.streak),
+    key, day: todayIdx + 1, done, stars: d.daily.won[key] | 0, mask: d.dailyLines[key] !== undefined ? d.dailyLines[key] : null, streak, bestStreak: Math.max(d.daily.bestStreak, d.daily.streak),
     ladder, tomorrow: { day: nextIdx + 1, reward: rewardOf(nextIdx, d) }, msToNext: msToNext(now),
     unlocked: dailyUnlocked(), lids: d.daily.lids, lidCard: d.daily.lidCard, starPot: d.daily.starPot,
   };
 }
 /**
- * Pays a daily win once per IST key: 40 + 10 x stars + the ladder reward. Returns
- * { coins (the 40 + 10*stars part), reward (ladder descriptor, its coins credited too), streak, day, total, paid, replay }.
+ * PURE. Which of the Daily's 3 star lines a run met (GDD §3.12). lines = level.daily.lines from levels.getDaily:
+ * [{type:'win'}, {type:'eat',kind,n}|{type:'chain',n}|{type:'big',n}, {type:'left',share}|{type:'noBumps'}|{type:'noBoost'}|
+ * {type:'sizzle',n}]. run = { win, eaten:{ kind: n }, chainBest, big, left (share of T left, 0..1), bumps, boosts, sizzles }.
+ * Returns { mask (bit i = line i met), stars (= lines met), met:[b, b, b] }.
  */
-export function dailyResult(key, stars) {
+export function dailyStars(lines, run = {}) {
+  // DECISION: nothing counts without the win (stars 0, mask 0); a missing run field counts as not met, except bumps/boosts
+  //   which must be explicitly 0 (undefined = unknown = not met), so a caller that forgets to count can never give free stars.
+  const L = Array.isArray(lines) ? lines.slice(0, 3) : [{ type: 'win' }];
+  const r = isObj(run) ? run : {};
+  const n0 = v => (Number.isFinite(+v) ? +v : -1);
+  const ok = l => {
+    if (!isObj(l)) return false;
+    switch (l.type) {
+      case 'win': return r.win !== false;
+      case 'eat': return isObj(r.eaten) && n0(r.eaten[l.kind]) >= (l.n | 0);
+      case 'chain': return n0(r.chainBest) >= (l.n | 0);
+      case 'big': return n0(r.big) >= (l.n | 0);
+      case 'left': return n0(r.left) >= (+l.share || 0) - 1e-9;
+      case 'noBumps': return r.bumps === 0;
+      case 'noBoost': return r.boosts === 0;
+      case 'sizzle': return n0(r.sizzles) >= (l.n | 0);
+      default: return false;
+    }
+  };
+  if (r.win === false) return { mask: 0, stars: 0, met: [false, false, false] };
+  const met = [0, 1, 2].map(i => (i === 0 ? true : ok(L[i])));
+  const mask = met.reduce((m, b, i) => m | (b ? 1 << i : 0), 0);
+  return { mask, stars: popcount(mask), met };
+}
+const trimKeys = o => { for (const k of Object.keys(o).sort().slice(0, -DAILY_KEEP)) delete o[k]; };
+/**
+ * Pays a daily win once per IST key: 40 + 10 x stars + the ladder reward. mask (optional) = the star lines met (bit0
+ * serve, bit1 line 2, bit2 line 3); when given, stars = popcount(mask | 1). Returns { key, stars, mask, coins (the
+ * 40 + 10*stars part), reward (ladder descriptor, its coins credited too), streak, day, total, paid, replay }.
+ */
+export function dailyResult(key, stars, mask) {
+  // DECISION: dailyLines[key] is the UNION of the lines met over the day's runs, and the stamp's stars (daily.won[key])
+  //   = max(best run, lines in the union): a replay that meets the missing line completes the receipt (no coins, the day
+  //   already paid). Union keeps the merge rule monotone (two tabs can only add ticks).
   const d = D();
   if (!isKey(key)) key = dailyKey();
-  const s = int(stars, 1, 3, 1);
-  const out = { key, stars: s, coins: 0, reward: null, streak: 0, day: 0, total: 0, paid: false, replay: false };
+  const m = Number.isFinite(+mask) && mask !== null && mask !== '' && typeof mask !== 'boolean' ? ((mask | 0) & 7) | 1 : null;
+  const s = m !== null ? popcount(m) : int(stars, 1, 3, 1);
+  const out = { key, stars: s, mask: m, coins: 0, reward: null, streak: 0, day: 0, total: 0, paid: false, replay: false };
   if (!d) return out;
   out.streak = aliveStreak(d, key);
   if (!dailyUnlocked()) return out;
-  if (claimed(d, key)) { // replay for fun: no coins, but a better star count is kept
+  const keep = () => {
+    if (m !== null) { d.dailyLines[key] = (d.dailyLines[key] | 0) | m; trimKeys(d.dailyLines); }
+    d.daily.won[key] = Math.max(d.daily.won[key] | 0, s, m !== null ? popcount(d.dailyLines[key]) : 0);
+  };
+  if (claimed(d, key)) { // replay for fun: no coins, but a better result is kept
     out.replay = true;
     out.streak = d.daily.streak;
-    if ((d.daily.won[key] | 0) < s) { d.daily.won[key] = s; save(true); }
+    const before = JSON.stringify([d.daily.won[key], d.dailyLines[key]]);
+    if (d.daily.won[key] !== undefined) keep();
+    if (JSON.stringify([d.daily.won[key], d.dailyLines[key]]) !== before) save(true);
     return out;
   }
   reconcile(d, key);
@@ -606,8 +709,8 @@ export function dailyResult(key, stars) {
   d.daily.ladder = streak % 7;
   d.daily.last = key;
   d.daily.bestStreak = Math.max(d.daily.bestStreak, streak);
-  d.daily.won[key] = s;
-  for (const k of Object.keys(d.daily.won).sort().slice(0, -DAILY_KEEP)) delete d.daily.won[k];
+  keep();
+  trimKeys(d.daily.won);
   save(true);
   return { ...out, coins: base, reward, streak, day: idx + 1, total: base + (reward.coins || 0), paid: true };
 }
@@ -615,6 +718,23 @@ export function dailyResult(key, stars) {
 // ---------- feast ----------
 export const feastBest = () => (D() ? D().feast.best : 0);
 export const feastGhost = () => (D() ? D().feast.ghost.slice() : []);
+const townOpen = (d, ti) => d.cur > ti * TOWN_LEVELS; // town ti's first level is playable
+/**
+ * feastTown() -> the Feast town id; feastTown(t) stores t when it is an unlocked town (saved) and returns the town in use.
+ */
+export function feastTown(t) {
+  // DECISION: the default (nothing chosen, or the choice is no longer unlocked after a reset) is the town of the last
+  //   beaten level, the same rule game.js used before this API (cur 21 -> picnic until a Market level is beaten).
+  const d = D();
+  if (!d) return TOWNS[0];
+  if (t !== undefined) {
+    const ti = TOWNS.indexOf(t);
+    if (ti >= 0 && townOpen(d, ti) && d.feastTown !== t) { d.feastTown = t; save(); }
+  }
+  const fi = TOWNS.indexOf(d.feastTown);
+  if (fi >= 0 && townOpen(d, fi)) return d.feastTown;
+  return townOf(Math.max(1, Math.min(LEVELS, d.cur - 1)));
+}
 /** r = { tickets, times, bites, chainBest } from the Feast run. Returns { coins, pb, tickets, best, base, bonus }. */
 export function feastResult(r = {}) {
   const d = D();
@@ -639,7 +759,7 @@ export function feastResult(r = {}) {
 // ---------- cookbook ----------
 /**
  * { chapters:[{ town, index, mode:'current'|'done'|'tease'|'sealed', cards:[{ n, stars, state:'done'|'open'|'locked' }],
- *   beaten, complete, chest:boolean (claimed) }], stamps:[{key,stars}] (last 14 daily results, newest last), total, milestone }.
+ *   beaten, complete, chest:boolean (claimed) }], stamps:[{key,stars,mask}] (last 14 daily results, newest last), total, milestone }.
  * mode: 'done' = every card beaten, 'current' = the town the player is in, 'tease' = the next town (silhouettes on blank
  * pages), 'sealed' = further away.
  */
@@ -659,7 +779,7 @@ export function cookbook() {
     const mode = complete ? 'done' : index === here ? 'current' : index === here + 1 ? 'tease' : index < here ? 'done' : 'sealed';
     return { town, index, mode, cards, beaten: got, complete, chest: !!d && d.chests.includes(town) };
   });
-  const stamps = d ? Object.keys(d.daily.won).sort().slice(-14).map(key => ({ key, stars: d.daily.won[key] })) : [];
+  const stamps = d ? Object.keys(d.daily.won).sort().slice(-14).map(key => ({ key, stars: d.daily.won[key], mask: d.dailyLines[key] !== undefined ? d.dailyLines[key] : null })) : [];
   return { chapters, stamps, total: totalStars(), milestone: nextMilestone() };
 }
 

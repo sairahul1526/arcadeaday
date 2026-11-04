@@ -4,7 +4,7 @@
 // For each level it tries seed bumps (+7919, at most 40) and two margin targets, measures every bot once with the
 // timer lifted (T 999), then picks T inside goal.T ± 15 % and the candidate whose predicted §5.3 gates score best.
 // The pick is confirmed with verify.mjs (real T, --confirm runs per human bot). --write stores seed, T, margin and
-// stats in games/slurp-pot/levels-data.js. Every change is logged to studio/2026-11-03/levels/levels-report.txt.
+// stats in games/slurp-pot/levels-data.js. Every change is logged to studio/2026-11-04/levels/levels-report.txt.
 // DECISION: prediction treats the Sizzle bonus as min(sizzles, 0.10·T) and ignores the bots' last-20 s hurry; the
 // confirm run at the real T is what the report and the gates use.
 import { fork } from 'node:child_process';
@@ -61,11 +61,13 @@ function closeAt(r, T) {
   return r.tr[i][1] === 1;
 }
 /** Bot sample for a candidate level (timer lifted). */
-export function sample(lv, goalT, { runs = 30, noise = 10 } = {}) {
+// DECISION (11-04): the expert sample in the search is xruns (default 8): an expert run costs ~2.5 s on a 60 s level,
+// 20× an average run, and the search only ranks candidates; the confirm run measures the expert floor properly.
+export function sample(lv, goalT, { runs = 30, noise = 10, xruns = 8 } = {}) {
   const maxT = Math.max(90, goalT * 2.5);
   const S = { greedy: run(lv, 'greedy', 1, {}, maxT), planner: run(lv, 'planner', 1, {}, maxT), noise: [], casual: [], average: [], expert: [] };
   for (let s = 1; s <= noise; s++) S.noise.push(run(lv, 'greedy', 100 + s, { noiseDeg: 3 }, maxT));
-  for (const k of ['casual', 'average', 'expert']) for (let s = 1; s <= runs; s++) S[k].push(k === 'casual' ? runTrace(lv, k, s, maxT) : run(lv, k, s, {}, maxT));
+  for (const k of ['casual', 'average', 'expert']) for (let s = 1; s <= (k === 'expert' ? xruns : runs); s++) S[k].push(k === 'casual' ? runTrace(lv, k, s, maxT) : run(lv, k, s, {}, maxT));
   return S;
 }
 const winAt = (r, T, timed) => r.win && (!timed || r.t <= T + Math.min(r.sz, SIZZLE_CAP * T) + 1e-9);
@@ -75,7 +77,7 @@ const starsAt = (r, T, timed) => {
   const left = (T + Math.min(r.sz, SIZZLE_CAP * T) - r.t) / T;
   return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
 };
-const pctOf = (arr, f) => (100 * arr.filter(f).length) / arr.length;
+const pctOf = (arr, f) => (arr.length ? (100 * arr.filter(f).length) / arr.length : null);
 /** Predicted gate numbers at T. */
 export function predict(spec, S, T) {
   const timed = spec.timed !== false;
@@ -97,11 +99,12 @@ export function score(spec, p) {
   s += ((100 - p.noise) / 5) * 4;
   if (gw && timed) s += W.greedy * out(p.gPct, gw[0], gw[1]);
   if (band.plan && timed) s += p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);
-  if (band.avg3 && timed) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
+  if (band.avg3 && timed && p.average3 != null) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
   if (band.cas3 && timed) s += 0.5 * Math.max(0, p.casual3 - band.cas3);
   const ct = spec.goal && spec.goal.casual;
   if (ct != null) { const d = Math.abs(p.casual - ct); s += W.casual * Math.max(0, d - 7) + 0.05 * d; }
-  s += 1.5 * Math.max(0, band.avg - p.average) + 2 * Math.max(0, band.exp - p.expert);
+  if (p.average != null) s += 1.5 * Math.max(0, band.avg - p.average);
+  if (p.expert != null) s += 2 * Math.max(0, band.exp - p.expert);
   if ((spec.n === 3 || spec.n === 7) && p.near != null && timed) s += 40 * Math.max(0, 0.6 - p.near);
   return s;
 }
@@ -113,36 +116,78 @@ function tRange(spec) {
   for (let T = Math.ceil(g * 0.85); T <= Math.floor(g * 1.15); T++) out.push(T);
   return out;
 }
-/** Candidate knob sets: as-is, and the upper half of the margin range (more food, a faster greedy). */
+/** Candidate knob sets: as-is, the upper half of the margin range (more food, a faster greedy) and the lower half. */
+// DECISION (11-04): the lower half [lo, mid] joins the knobs: fixMargin lands near the top of a wide band, and a
+// leaner board costs a wandering casual bot more than greedy (casual ran 10–15 points over target on L5–L11).
 function knobs(spec) {
   const m = spec.margin, mid = Math.round(((m[0] + m[1]) / 2) * 100) / 100;
   const base = spec.marginBand || m;
+  const bm = Math.round(((base[0] + base[1]) / 2) * 100) / 100;
   const ks = [{ margin: base }];
-  const hi = [Math.round(((base[0] + base[1]) / 2) * 100) / 100, base[1]];
-  if (hi[0] !== base[0]) ks.push({ margin: hi });
+  if (bm !== base[0]) ks.push({ margin: [bm, base[1]] }, { margin: [base[0], bm] });
   return ks.map(k => ({ ...k, mid }));
 }
 /** Searches one spec. Returns { best, tried: [{ bump, knob, T, score, p }] }. */
-export function tuneSpec(spec, { seeds = 8, runs = 30, noise = 10, log = () => {} } = {}) {
+// DECISION (11-04): a staged search. The planner and expert bots cost ~2–2.5 s a run, so a candidate first runs
+// greedy alone (dropped when no T in goal.T ± 15 % puts it within 3 points of the greedy window), then one planner
+// run (dropped when planner/greedy is over the band's ratio + 0.02), then noise + casual (scored with the average /
+// expert terms left out); only the best `full` survivors get the average + expert sample. Up to `seeds` seed bumps
+// are screened; screening stops once 6 survivors have a partial score under 0.5. If nothing survives, the 3
+// candidates closest to the screens go on. Identical layouts (a margin knob that changes nothing) run once.
+export function tuneSpec(spec, { seeds = 24, runs = 20, noise = 10, xruns = 6, full = 3, log = () => {} } = {}) {
   const base = spec.seed0 != null ? spec.seed0 : spec.seed;
-  const tried = [];
-  let best = null;
-  for (let b = 0; b < Math.min(seeds, SEED_MAX + 1); b++) {
+  const band = bandOf(spec.n), gw = greedyWindow(spec), timed = spec.timed !== false, Ts = tRange(spec);
+  const goalT = (spec.goal && spec.goal.T) || spec.T, maxT = Math.max(90, goalT * 2.5);
+  const out = (v, lo, hi) => (v < lo ? lo - v : v > hi ? v - hi : 0);
+  const tried = [], pool = [], near = [], seen = new Set();
+  const bestT = (cand, S) => { let bt = null; for (const T of Ts) { const p = predict(cand, S, T); const sc = score(cand, p); if (!bt || sc < bt.score) bt = { T, score: sc, p }; } return bt; };
+  const stageC = c => {
+    for (let s = 1; s <= noise; s++) c.S.noise.push(run(c.lv, 'greedy', 100 + s, { noiseDeg: 3 }, maxT));
+    for (let s = 1; s <= runs; s++) c.S.casual.push(runTrace(c.lv, 'casual', s, maxT));
+    c.bt = bestT(c.cand, c.S);
+  };
+  const rowOf = c => ({ bump: c.b, seed: c.cand.seed, margin: c.cand.margin, ...c.bt, g: +c.S.greedy.t.toFixed(1), pl: +c.S.planner.t.toFixed(1) });
+  screen: for (let b = 0; b < Math.min(seeds, SEED_MAX + 1); b++) {
     for (const kn of knobs(spec)) {
       const cand = { ...spec, seed: (base + SEED_STEP * b) >>> 0, margin: kn.margin };
-      const lv = LV.genLevel({ ...cand, T: spec.timed === false ? cand.T : BIG }, cand.seed);
+      const lv = LV.genLevel({ ...cand, T: timed ? BIG : cand.T }, cand.seed);
+      const sig = lv.items.length + ':' + lv.items.reduce((q, o) => q + o.x * 3.1 + o.z * 1.7 + o.a, 0).toFixed(3);
+      if (seen.has(sig)) continue;
+      seen.add(sig);
       const sg = staticGates(lv, cand);
       if (sg.fails.length || !doomGate(lv)) { log(`  L${spec.n} bump ${b} margin ${kn.margin}: static FAIL ${sg.fails.join('; ')}`); continue; }
-      const S = sample(lv, (spec.goal && spec.goal.T) || spec.T, { runs, noise });
-      let bt = null;
-      for (const T of tRange(spec)) { const p = predict(cand, S, T); const sc = score(cand, p); if (!bt || sc < bt.score) bt = { T, score: sc, p }; }
-      const row = { bump: b, seed: cand.seed, margin: kn.margin, ...bt, g: +S.greedy.t.toFixed(1), pl: +S.planner.t.toFixed(1) };
-      tried.push(row);
-      log(`  L${spec.n} bump ${b} margin ${kn.margin} → T ${bt.T} score ${bt.score.toFixed(1)} greedy ${row.g}s (${bt.p.gPct == null ? '-' : bt.p.gPct.toFixed(0)}%) planner ${row.pl}s ratio ${bt.p.ratio == null ? '-' : bt.p.ratio.toFixed(2)} noise ${bt.p.noise.toFixed(0)} casual ${bt.p.casual.toFixed(0)} (3★ ${bt.p.casual3.toFixed(0)}, near ${bt.p.near == null ? '-' : bt.p.near.toFixed(2)}) average ${bt.p.average.toFixed(0)} (3★ ${bt.p.average3.toFixed(0)}) expert ${bt.p.expert.toFixed(0)}`);
-      if (!best || bt.score < best.score) best = row;
-      if (best.score === 0) break;
+      const S = { greedy: run(lv, 'greedy', 1, {}, maxT), planner: null, noise: [], casual: [], average: [], expert: [] };
+      if (!S.greedy.win) { log(`  L${spec.n} bump ${b} margin ${kn.margin}: greedy loses`); continue; }
+      const gMiss = timed && gw ? Math.min(...Ts.map(T => out((100 * S.greedy.t) / T, gw[0], gw[1]))) : 0;
+      const c = { b, cand, lv, S, pen: W.greedy * gMiss };
+      if (gMiss > 3) { near.push(c); log(`  L${spec.n} bump ${b} margin ${kn.margin}: screen greedy ${S.greedy.t.toFixed(1)}s`); continue; }
+      S.planner = run(lv, 'planner', 1, {}, maxT);
+      const ratio = S.planner.win ? S.planner.t / S.greedy.t : null;
+      if (band.plan && timed) c.pen += ratio == null ? 30 : 100 * Math.max(0, ratio - band.plan);
+      if (band.plan && timed && (ratio == null || ratio > band.plan + 0.02)) { near.push(c); log(`  L${spec.n} bump ${b} margin ${kn.margin}: screen planner ratio ${ratio == null ? '-' : ratio.toFixed(2)}`); continue; }
+      stageC(c);
+      pool.push(c);
+      log(`  L${spec.n} bump ${b} margin ${kn.margin}: survivor, partial score ${c.bt.score.toFixed(1)} (T ${c.bt.T}, greedy ${S.greedy.t.toFixed(1)}s, ratio ${ratio == null ? '-' : ratio.toFixed(2)}, casual ${c.bt.p.casual.toFixed(0)})`);
+      if (pool.filter(q => q.bt.score < 0.5).length >= 6) break screen;
     }
-    if (best && best.score === 0) break;
+  }
+  if (!pool.length) {
+    near.sort((x, y) => x.pen - y.pen);
+    for (const c of near.slice(0, 3)) { if (!c.S.planner) c.S.planner = run(c.lv, 'planner', 1, {}, maxT); stageC(c); pool.push(c); }
+    log(`  L${spec.n}: no candidate passed the screens; the ${pool.length} closest go on`);
+  }
+  pool.sort((x, y) => x.bt.score - y.bt.score);
+  let best = null;
+  for (let i = 0; i < pool.length; i++) {
+    const c = pool[i];
+    if (i >= full && (!best || best.score === 0 || c.bt.score >= best.score)) break;
+    for (let s = 1; s <= runs; s++) c.S.average.push(run(c.lv, 'average', s, {}, maxT));
+    for (let s = 1; s <= xruns; s++) c.S.expert.push(run(c.lv, 'expert', s, {}, maxT));
+    c.bt = bestT(c.cand, c.S);
+    const row = rowOf(c), p = c.bt.p;
+    tried.push(row);
+    log(`  L${spec.n} bump ${c.b} margin ${c.cand.margin} → T ${row.T} score ${row.score.toFixed(1)} greedy ${row.g}s (${p.gPct == null ? '-' : p.gPct.toFixed(0)}%) planner ${row.pl}s ratio ${p.ratio == null ? '-' : p.ratio.toFixed(2)} noise ${p.noise.toFixed(0)} casual ${p.casual.toFixed(0)} (3★ ${p.casual3.toFixed(0)}, near ${p.near == null ? '-' : p.near.toFixed(2)}) average ${p.average.toFixed(0)} (3★ ${p.average3.toFixed(0)}) expert ${p.expert.toFixed(0)}`);
+    if (!best || row.score < best.score) best = row;
   }
   return { best, tried };
 }
@@ -251,28 +296,65 @@ async function mainDaily(args, opt) {
 }
 
 // ------------------------------------------------------------------ CLI
+// DECISION (11-04, RAM/CPU etiquette): each child searches AND confirms its level, then the parent writes
+// levels-data.js at once, so a wall-clock-capped run keeps every finished level; a child exits when its parent goes.
 async function child(n, o) {
+  process.on('disconnect', () => process.exit(0));
   const spec = SPECS.find(s => s.n === n);
   const lines = [];
   const r = tuneSpec(spec, { ...o, log: t => lines.push(t) });
-  return { n, lines, best: r.best };
+  if (!r.best) return { n, lines, best: null };
+  const s = JSON.parse(JSON.stringify(spec));
+  const old = { seed: s.seed, T: s.T, margin: s.margin };
+  if (s.seed0 == null) s.seed0 = s.seed;
+  if (!s.marginBand) s.marginBand = s.margin.slice();
+  s.seed = r.best.seed; s.T = r.best.T; s.margin = r.best.margin;
+  const ch = ['seed', 'T', 'margin'].filter(k => JSON.stringify(old[k]) !== JSON.stringify(s[k])).map(k => `${k} ${JSON.stringify(old[k])} → ${JSON.stringify(s[k])}`);
+  lines.push(`L${n} CHANGE: ${ch.length ? ch.join(', ') : 'none'} (predicted score ${r.best.score.toFixed(1)})`);
+  let row = null, fails = null;
+  let out = s;
+  if (o.confirm) {
+    const v = verifySpec(s, { runs: o.confirm, xruns: o.xconfirm });
+    s.stats = statsFor(v);
+    row = rowText(s, v); fails = v.fails;
+    lines.push('  confirm: ' + row);
+    // DECISION (11-04): a search result that fails its confirm never replaces a spec whose last confirm passed
+    // unless the old spec fails too (re-verified now, since the generator or the bots may have moved under it).
+    if (fails.length && spec.stats && spec.stats.pass && ch.length) {
+      const o2 = JSON.parse(JSON.stringify(spec)), v2 = verifySpec(o2, { runs: o.confirm, xruns: o.xconfirm });
+      o2.stats = statsFor(v2);
+      lines.push('  old spec re-confirm: ' + rowText(o2, v2));
+      if (v2.fails.length <= fails.length) { out = o2; if (out.seed0 == null) out.seed0 = out.seed; if (!out.marginBand) out.marginBand = out.margin.slice(); row = rowText(o2, v2); fails = v2.fails; lines.push(`L${n}: kept the old spec`); }
+    }
+  }
+  return { n, lines, best: r.best, spec: { seed0: out.seed0, marginBand: out.marginBand, seed: out.seed, T: out.T, margin: out.margin, stats: out.stats }, row, fails };
 }
 async function main() {
   const args = process.argv.slice(2);
   const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; };
-  const o = { seeds: opt('--seeds', 8), runs: opt('--runs', 30), noise: opt('--noise', 10) };
+  const o = { seeds: opt('--seeds', 8), runs: opt('--runs', 30), noise: opt('--noise', 10), xruns: opt('--xruns', 8),
+    confirm: opt('--confirm', 100), xconfirm: opt('--xconfirm', 50) };
   W.greedy = opt('--wg', W.greedy); W.casual = opt('--wc', W.casual);
   const wArgs = ['--wg', String(W.greedy), '--wc', String(W.casual)];
-  if (args[0] === '--child') { process.send(await child(+args[1], o)); return; }
-  if (args[0] === '--dchild') { process.send(JSON.parse(args[1]).map(([k, v]) => tuneDaily(k, v, { runs: o.runs === 30 ? 20 : o.runs }))); return; }
+  // a 'disconnect' listener refs the IPC channel, so a child exits explicitly once its message is flushed
+  if (args[0] === '--child') { const m = await child(+args[1], o); process.send(m, () => process.exit(0)); return; }
+  if (args[0] === '--dchild') { process.on('disconnect', () => process.exit(0)); const m = JSON.parse(args[1]).map(([k, v]) => tuneDaily(k, v, { runs: o.runs === 30 ? 20 : o.runs })); process.send(m, () => process.exit(0)); return; }
   if (args.includes('--daily')) { await mainDaily(args, (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; }); return; }
   // levels: a range '1-10' or a list '3,4,7'
   const sel = args.find(x => /^\d+([-,]\d+)*$/.test(x)) || '1-10';
   const inSel = n => sel.split(',').some(p => { const [a, b] = p.split('-').map(Number); return n >= a && n <= (b || a); });
-  const jobs = opt('--jobs', 4), confirm = opt('--confirm', 100), write = args.includes('--write');
+  const jobs = opt('--jobs', 3), write = args.includes('--write');
   const list = SPECS.filter(s => inSel(s.n)).map(s => s.n);
-  const results = {};
-  const log = [`tune.mjs ${args.join(' ')} — search: seeds ${o.seeds} × margin knobs, ${o.runs} runs per human bot, ${o.noise} noise seeds (timer lifted)`];
+  const specs = SPECS.map(s => JSON.parse(JSON.stringify(s)));
+  report([`tune.mjs ${args.join(' ')} — search: seeds ${o.seeds} × margin knobs, ${o.runs} runs per casual/average bot, ${o.xruns} expert, ${o.noise} noise seeds (timer lifted); confirm ${o.confirm} (${o.xconfirm} expert)`], true);
+  // DECISION (11-04): kindMax is recomputed only at the end of a run (it needs every level and 400 dailies); the
+  // per-level writes keep the previous kindMax.
+  const save = async final => {
+    const km = final ? (await computeKindMax({ days: 400, specs })).kindMax : kindMax;
+    writeLevelsData(DATA_PATH, specs, REC, km);
+    return km;
+  };
+  const cliArgs = n => ['--child', String(n), ...['--seeds', '--runs', '--noise', '--xruns', '--confirm', '--xconfirm'].flatMap(k => [k, String(o[k.slice(2)])]), ...wArgs];
   let next = 0;
   await new Promise(done => {
     let live = 0;
@@ -280,39 +362,20 @@ async function main() {
       if (next >= list.length) { if (!live) done(); return; }
       const n = list[next++];
       live++;
-      const cp = fork(fileURLToPath(import.meta.url), ['--child', String(n), '--seeds', String(o.seeds), '--runs', String(o.runs), '--noise', String(o.noise), ...wArgs]);
-      cp.on('message', m => { results[m.n] = m; console.log(`L${m.n} searched: best bump ${m.best && m.best.bump} T ${m.best && m.best.T} score ${m.best && m.best.score.toFixed(1)}`); });
+      const cp = fork(fileURLToPath(import.meta.url), cliArgs(n));
+      cp.on('message', async m => {
+        const s = specs.find(q => q.n === m.n), log = m.lines.slice();
+        if (!m.best) log.push(`L${m.n}: no candidate passes the static gates; unchanged`);
+        else { Object.assign(s, m.spec); if (write) { await save(false); log.push(`  wrote ${DATA_PATH} (L${m.n})`); } }
+        report(log, true);
+        console.log(m.row || `L${m.n}: ${m.best ? 'searched, best score ' + m.best.score.toFixed(1) : 'no candidate'}`);
+      });
       cp.on('exit', () => { live--; launch(); });
     };
     for (let j = 0; j < jobs; j++) launch();
   });
-  const specs = SPECS.map(s => JSON.parse(JSON.stringify(s)));
-  for (const n of list) {
-    const r = results[n];
-    if (!r) { log.push(`L${n}: search crashed`); continue; }
-    log.push(...r.lines);
-    const s = specs.find(q => q.n === n);
-    if (!r.best) { log.push(`L${n}: no candidate passes the static gates; unchanged`); continue; }
-    const old = { seed: s.seed, T: s.T, margin: s.margin };
-    if (s.seed0 == null) s.seed0 = s.seed;
-    if (!s.marginBand) s.marginBand = s.margin.slice();
-    s.seed = r.best.seed; s.T = r.best.T; s.margin = r.best.margin;
-    const ch = ['seed', 'T', 'margin'].filter(k => JSON.stringify(old[k]) !== JSON.stringify(s[k])).map(k => `${k} ${JSON.stringify(old[k])} → ${JSON.stringify(s[k])}`);
-    log.push(`L${n} CHANGE: ${ch.length ? ch.join(', ') : 'none'} (predicted score ${r.best.score.toFixed(1)})`);
-    if (confirm) {
-      const v = verifySpec(s, { runs: confirm });
-      s.stats = statsFor(v);
-      log.push('  confirm: ' + rowText(s, v));
-      console.log(rowText(s, v));
-    }
-  }
-  if (write) {
-    const km = (await computeKindMax({ days: 400, specs })).kindMax;
-    writeLevelsData(DATA_PATH, specs, REC, km);
-    log.push(`wrote ${DATA_PATH} (seed, T, margin, stats; kindMax ${Object.keys(km).length} kinds)`);
-  }
-  report(log, true);
-  console.log('log appended to studio/2026-11-03/levels/levels-report.txt');
+  if (write) { const km = await save(true); report([`wrote ${DATA_PATH} (kindMax ${Object.keys(km).length} kinds)`], true); }
+  console.log('log appended to studio/2026-11-04/levels/levels-report.txt');
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) await main();

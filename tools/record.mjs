@@ -3,7 +3,7 @@
 // and muxes a 1080x1920 60fps MP4 ready for TikTok / Reels / Shorts.
 //
 // usage: node tools/record.mjs <game-slug> [--secs 30] [--out videos/x.mp4]
-//        [--query "seed=3&crash=22&hook=..."] [--snap 1,5,12]   (snap = save PNGs at those seconds, no video)
+//        [--query "seed=3&crash=22&hook=..."] [--snap 1,5,12] [--ready-timeout 60000]   (snap = save PNGs at those seconds, no video)
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -24,7 +24,9 @@ const snap = opt('snap');
 const tail = +(opt('tail') || 3.5); // seconds to keep after game over appears
 
 const root = resolve('games');
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.glb': 'model/gltf-binary', '.wasm': 'application/wasm', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.txt': 'text/plain' };
 const server = createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -44,7 +46,8 @@ const page = await browser.newPage({ viewport: { width: 1080, height: 1920 }, de
 page.on('console', m => m.type() === 'error' && console.error('[page]', m.text()));
 page.on('pageerror', e => console.error('[page]', e.message));
 await page.goto(`http://localhost:${port}/${slug}/?record=1&${query}`);
-await page.waitForFunction(() => window.__recReady === true, null, { timeout: 20000 });
+// 60 s: a three.js boot under heavy machine load took 8.7-20 s (2026-11-04), so 20 s flaked.
+await page.waitForFunction(() => window.__recReady === true, null, { timeout: +(opt('ready-timeout') || 60000) });
 
 if (snap) {
   await mkdir('videos/snaps', { recursive: true });

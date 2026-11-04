@@ -1,6 +1,7 @@
 // Slurp Pot constants: extracted verbatim from docs/gdd/2026-11-02-slurp-pot.md §13.2 (frozen Tue 12:00; changes go through Core).
 export const DT = 1 / 60, MAX_STEPS = 8, DTREAL_MAX = 0.134;   // fixed sim step; max catch-up steps per frame; real-dt clamp
 export const SLOWMO = 0.3, SLOWMO_REAL = 1.2;           // boss bite (slowT lives in game.js, never in w)
+export const CAKE_SLOWMO_REAL = 0.6;                    // non-final cake tier bite (Sim 12:32), same SLOWMO scale
 export const R0 = 0.30, R0_L1 = 0.25, R0_REC = 0.14, R_MAX = 4.2;   // R0 = default start radius (L2–L10, boss levels, twist intros, Daily, Feast)
 export const R0_VAR = [0.30, 0.45, 0.60];               // from L11, non-boss non-twist-intro levels: r0 = R0_VAR[n % 3]
 export const SIZEUP_MUL = 1.25;                         // w.pot.sizeUpR[k] = r0 × 1.25^k, built in createWorld by repeated multiplication (§3.3)
@@ -19,8 +20,8 @@ export const MAGNET = { t: 3, range: 2.5, v: 3 }, FREEZE_ADD = 10, MEGA = { t: 5
 export const PRICES = { magnet: 40, freeze: 60, mega: 80, lid: 120 }, LID_MAX = 2;   // lid = Streak Lid (shop shelf, not an in-level booster)
 export const BOOST_UNLOCK = { magnet: 6, freeze: 9, mega: 13 }, BOOST_GIFT = { magnet: 2, freeze: 2, mega: 1 };
 export const DAILY_UNLOCK = 6, FEAST_UNLOCK = 12, DAILY_START = '2026-11-08';
-export const FEAST = { start: 45, add0: 14, addMin: 6, tickets: 4, needMax: 6, sizzleCap: 3, coins: 2, pbCoins: 25 };
-                                                        // add(c) = c <= 4 ? 14 : max(6, 14 − (c − 4)); need from c5 [2+(c−4), 3+(c−4)] ≤ 6
+export const FEAST = { start: 45, add0: 12, addMin: 6, tickets: 4, needMax: 6, sizzleCap: 3, coins: 2, pbCoins: 25 };
+                                                        // add(c) = c <= 4 ? 12 : max(6, 12 − (c − 4)) (add0 14 → 12 on 11-04: runs were 1.5× the target); need from c5 [2+(c−4), 3+(c−4)] ≤ 6
 export const LADDER = [{coins:40},{chest:{coins:60, boost:'freeze'}},{lid:1},{coins:80},{boost:['magnet','mega']},{coins:120},{skin:'starladle', else:{coins:200, boost:'all'}}];
 export const SKINS = [['sunny',0],['cauldron',150],['wok',250],['teapot',350],['ricecooker',500],['dutch',650],['steamer',800],['royal',1200],['ufo',2000],['starladle',-1]];
 export const TOWNS = ['picnic', 'market', 'harbour'];
