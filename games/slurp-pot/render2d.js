@@ -99,7 +99,7 @@ const view = { x: 0, z: 0 };               // drawn camera centre (after shake /
 const mood = {};
 const lid = { on: false, pop: 0, jig: 0 };
 let punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0, reveal = null, glance = null, bossRing = null;
-let truckSq = 0, truckFlip = false, wipeT = -1, look = null, snapCam = false;
+let truckSq = 0, truckFlip = false, wipeT = -1, look = null, snapCam = false, freshW = false;
 const splats = [];
 const TOY = [];                            // flat sprite per kind index, built on first use
 const ART = new Map();                     // art name → { ok, img, sx, sy, sw, sh, p }
@@ -164,7 +164,7 @@ export function loadLevel(L, skinId) {
   const sp = L.spawn || { x: 0, z: 0 }, r0 = +L.r0 || 0.3;
   pot.x = +sp.x || 0; pot.z = +sp.z || 0; pot.r = pot.rVis = r0; cam.rCam = r0;
   cam.x = view.x = pot.x; cam.z = view.z = pot.z; cam.vx = cam.vz = 0; cam.ax = play.cx; cam.ay = play.cy;
-  W = null; look = null; splats.length = 0; snapCam = true;
+  W = null; look = null; splats.length = 0; snapCam = freshW = true;
   lid.on = false; lid.pop = lid.jig = 0;
   reveal = glance = bossRing = null; punchT = 0; bossCamT = -1; shakeX = shakeZ = 0; wipeT = -1; truckSq = 0;
   try { buildGround(L); } catch { ground = null; }   // a bad surface never takes the level down: the clear colour shows
@@ -926,6 +926,9 @@ export function update(w, dt, alpha = 1) {
   // DECISION (11-04): like render3d, a null world on the title builds an untouched backdrop world of the loaded
   // level once; any other null keeps the last world. Items that jump > 0.8 u in a step (belt wrap, Feast respawn)
   // snap instead of sliding.
+  // DECISION (Core 13:2x): after loadLevel the first world goes straight to the live camera on the pot (snapCam);
+  // a world already > 0.5 s old (a mid-run swap from 3D) never gets the levelStart reveal pan. Not w.tStart: the
+  // bot or a held finger can start the clock before the first paint of a real level start.
   if (!ctx) return;
   evSeen.clear();
   dt = clamp(+dt || 0, 0, 0.1);
@@ -940,6 +943,7 @@ export function update(w, dt, alpha = 1) {
     pot.r = r * (P.rEff > P.r ? P.rEff / P.r : 1);
   }
   if (snapCam && w) { cam.rCam = pot.rVis = pot.r; cam.x = pot.x; cam.z = pot.z; }   // first world after loadLevel
+  if (freshW && w) { freshW = false; if (+w.t > 0.5) reveal = null; }   // only that first world: a running one
   pot.rVis += ((titleOn ? Math.max(pot.r, 0.8) : pot.r) - pot.rVis) * ek(dt, 0.12);
   updateCamera(dt);
   updateFx(dt);

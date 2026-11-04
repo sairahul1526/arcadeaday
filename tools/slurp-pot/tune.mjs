@@ -1,6 +1,8 @@
 // Slurp Pot level tuner (GDD §5.3). Levels role.
 // Usage: node tools/slurp-pot/tune.mjs [1-10] [--seeds 8] [--runs 30] [--jobs 4] [--confirm 100] [--write]
 //        node tools/slurp-pot/tune.mjs --daily 400 [--jobs 6] [--runs 20] [--write]   (Daily T table + bumps)
+//        node tools/slurp-pot/tune.mjs --retime 400 [--jobs 3] [--fresh] [--out PATH] [--write]  (Daily T re-measure)
+//        --recheck: confirm the stored spec first and skip the search when it passes every gate
 // For each level it tries seed bumps (+7919, at most 40) and two margin targets, measures every bot once with the
 // timer lifted (T 999), then picks T inside goal.T ± 15 % and the candidate whose predicted §5.3 gates score best.
 // The pick is confirmed with verify.mjs (real T, --confirm runs per human bot). --write stores seed, T, margin and
@@ -14,8 +16,9 @@ import * as B from '../../games/slurp-pot/bots.js';
 import * as L from '../../games/slurp-pot/logic.js';
 import { SPECS, REC, kindMax } from '../../games/slurp-pot/levels-data.js';
 import { STAR3, STAR2, SIZZLE_CAP } from '../../games/slurp-pot/consts.js';
-import { writeFileSync } from 'node:fs';
-import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
+import { writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
+import { BUMPS as OLD_BUMPS, DAILY_T as OLD_T } from '../../games/slurp-pot/dailies-data.js';
+import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, casualWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
 
 const BIG = 999;
 // Score weights per point outside a gate: greedy % window and casual target (--wg / --wc).
@@ -101,8 +104,8 @@ export function score(spec, p) {
   if (band.plan && timed) s += p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);
   if (band.avg3 && timed && p.average3 != null) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
   if (band.cas3 && timed) s += 0.5 * Math.max(0, p.casual3 - band.cas3);
-  const ct = spec.goal && spec.goal.casual;
-  if (ct != null) { const d = Math.abs(p.casual - ct); s += W.casual * Math.max(0, d - 7) + 0.05 * d; }
+  const ct = spec.goal && spec.goal.casual, cw = casualWindow(spec);
+  if (cw) s += W.casual * out(p.casual, cw[0], cw[1]) + 0.05 * Math.abs(p.casual - ct);
   if (p.average != null) s += 1.5 * Math.max(0, band.avg - p.average);
   if (p.expert != null) s += 2 * Math.max(0, band.exp - p.expert);
   if ((spec.n === 3 || spec.n === 7) && p.near != null && timed) s += 40 * Math.max(0, 0.6 - p.near);
@@ -244,6 +247,114 @@ export function tuneDaily(key, variant, { runs = 20, maxBump = 8 } = {}) {
   if (best) { const r = confirm(best.b, best.T); if (r) return r; }
   return { key, variant, bump: 0, T: 65, ok: false, why };
 }
+// DECISION (11-04 Wed, daily retime): after a bot change only T should move, so --retime keeps a variant's stored
+// bump while its static gates pass and its new T is <= DAILY_SOFT (otherwise it searches bumps 0..8 as tuneDaily
+// does, lowest T wins). One lifted sample per (day, variant, town): greedy + 20 ±3° noise seeds + casual seeds
+// 1..20 (the seeds verify.mjs uses); T = the smallest whole second (40–120) at which all of them meet the daily
+// gates (greedy and every noise seed win, casual >= DAILY_TARGET %) in every town the variant shows, + 1. The
+// gate numbers at that T are kept in daily-retime.jsonl; a timed verify.mjs --daily spot check backs them up.
+// ~41 runs per town instead of tuneDaily's ~82 (search + timed confirm), so 400 days fit the RAM rule in ~1.5 h.
+let RETIME_PATH = fileURLToPath(new URL('../../studio/2026-11-04/levels/daily-retime.jsonl', import.meta.url));
+// Variants A/B/C of a day are the same layout unless the archetype uses rollers or belts (6 days in 10), so a
+// child measures each distinct layout once (826 layouts for 1466 day-variant-towns at bump 0; chunks are per day).
+const mCache = new Map();
+const dsig = lv => lv.town + ':' + lv.items.length + ':' + lv.items.reduce((q, o) => q + o.x * 3.1 + o.z * 1.7 + o.a, 0).toFixed(3);
+function measureDaily(key, variant, b) {
+  const towns = new Map();
+  for (const cur of VAR_CURS[variant]) {
+    const lv = LV.getDaily(key, cur, { bump: b, T: BIG });
+    if (towns.has(lv.town)) continue;
+    const ck = key + '|' + dsig(lv);
+    let S = mCache.get(ck);
+    if (!S) {
+      const v = verifyDaily(key, cur, { bots: false, bump: b, T: BIG });
+      if (v.fails.length) S = { why: `bump ${b}: ${v.fails.join('; ')}` };
+      else {
+        const maxT = 150;
+        S = { greedy: run(lv, 'greedy', 1, {}, maxT), noise: [], casual: [] };
+        if (!S.greedy.win) S.why = `bump ${b}: greedy loses`;
+        else {
+          for (let s = 1; s <= 20; s++) S.noise.push(run(lv, 'greedy', 100 + s, { noiseDeg: 3 }, maxT));
+          for (let s = 1; s <= 20; s++) S.casual.push(run(lv, 'casual', s, {}, maxT));
+        }
+      }
+      mCache.set(ck, S);
+    }
+    if (S.why) return { ok: false, why: S.why };
+    towns.set(lv.town, { cur, arch: lv.arch, S });
+  }
+  const okAt = t => [...towns.values()].every(({ S }) => winAt(S.greedy, t, true) && S.noise.every(r => winAt(r, t, true)) && pctOf(S.casual, r => winAt(r, t, true)) >= DAILY_TARGET);
+  let need = 0;
+  for (let t = DAILY_TMIN; t <= DAILY_TMAX; t++) if (okAt(t)) { need = t; break; }
+  if (!need) return { ok: false, why: `bump ${b}: no T <= ${DAILY_TMAX}` };
+  const T = need + 1;
+  const per = [...towns].map(([town, { cur, arch, S }]) => ({ town, cur, arch, g: +S.greedy.t.toFixed(1), gPct: +((100 * S.greedy.t) / T).toFixed(1),
+    noise: pctOf(S.noise, r => winAt(r, T, true)), casual: pctOf(S.casual, r => winAt(r, T, true)) }));
+  return { ok: true, T, per };
+}
+export function retimeDaily(key, variant) {
+  const old = (OLD_BUMPS[key] && OLD_BUMPS[key][variant]) | 0;
+  let best = null, why = '';
+  for (const b of [old, ...[0, 1, 2, 3, 4, 5, 6, 7, 8].filter(q => q !== old)]) {
+    const m = measureDaily(key, variant, b);
+    if (!m.ok) { why = m.why; continue; }
+    if (m.T <= DAILY_SOFT) return { key, variant, bump: b, T: m.T, ok: true, per: m.per, oldT: (OLD_T[key] || [])[variant] || 65, oldBump: old };
+    if (!best || m.T < best.T) best = { ...m, b };
+  }
+  if (best) return { key, variant, bump: best.b, T: best.T, ok: true, per: best.per, oldT: (OLD_T[key] || [])[variant] || 65, oldBump: old };
+  return { key, variant, bump: old, T: (OLD_T[key] || [])[variant] || 65, ok: false, why, oldBump: old };
+}
+/** Daily table rows from daily-retime.jsonl (later lines win), over the old table. */
+function retimeRows(keys) {
+  const got = new Map();
+  if (existsSync(RETIME_PATH)) for (const ln of readFileSync(RETIME_PATH, 'utf8').split('\n')) if (ln.trim()) { const r = JSON.parse(ln); got.set(r.key + '|' + r.variant, r); }
+  const rows = [];
+  for (const key of keys) for (let v = 0; v < 3; v++) {
+    const r = got.get(key + '|' + v);
+    rows.push(r || { key, variant: v, bump: (OLD_BUMPS[key] && OLD_BUMPS[key][v]) | 0, T: (OLD_T[key] || [])[v] || 65, ok: null });
+  }
+  return { rows, got };
+}
+// DECISION (11-04 Wed): --retime is resumable under a wall-clock cap: each child sends every day-variant as it
+// finishes, the parent appends it to daily-retime.jsonl at once, and a rerun skips what the file already holds
+// (--fresh starts over). --write rewrites dailies-data.js from the file merged over the old table at the end.
+async function mainRetime(args, opt) {
+  const days = opt('--retime', 400), jobs = opt('--jobs', 3);
+  { const i = args.indexOf('--out'); if (i >= 0) RETIME_PATH = args[i + 1]; }
+  const keys = dailyKeys(days);
+  if (args.includes('--fresh') && existsSync(RETIME_PATH)) writeFileSync(RETIME_PATH, '');
+  const { got } = retimeRows(keys);
+  const tasks = [];
+  for (const key of keys) for (let v = 0; v < 3; v++) if (!got.has(key + '|' + v)) tasks.push([key, v]);
+  console.log(`retime: ${tasks.length} day-variants to measure (${keys.length * 3 - tasks.length} already in ${RETIME_PATH})`);
+  const chunks = [];
+  for (const t of tasks) { const c = chunks[chunks.length - 1]; if (c && c[0][0] === t[0]) c.push(t); else chunks.push([t]); }
+  let done = 0, next = 0;
+  await new Promise(fin => {
+    let live = 0;
+    const launch = () => {
+      if (next >= chunks.length) { if (!live) fin(); return; }
+      const part = chunks[next++];
+      live++;
+      const cp = fork(fileURLToPath(import.meta.url), ['--rchild', JSON.stringify(part)]);
+      cp.on('message', r => { appendFileSync(RETIME_PATH, JSON.stringify(r) + '\n'); if (++done % 60 === 0) console.log(`retime: ${done}/${tasks.length}`); });
+      cp.on('exit', () => { live--; launch(); });
+    };
+    if (!chunks.length) { fin(); return; }
+    for (let j = 0; j < Math.min(jobs, chunks.length); j++) launch();
+  });
+  const { rows, got: g2 } = retimeRows(keys);
+  const meas = rows.filter(r => r.ok != null), bad = meas.filter(r => !r.ok);
+  const Ts = meas.filter(r => r.ok).map(r => r.T).sort((a, b) => a - b);
+  const moved = meas.filter(r => r.ok && r.T !== r.oldT).length, rebump = meas.filter(r => r.ok && r.bump !== r.oldBump).length;
+  const log = [`tune.mjs ${args.join(' ')} — daily retime: ${meas.length}/${rows.length} day-variants measured, ${bad.length} failing, ${moved} T changed, ${rebump} re-bumped`];
+  if (Ts.length) log.push(`  T range ${Ts[0]}–${Ts[Ts.length - 1]} s, median ${Ts[Ts.length >> 1]} s`);
+  for (const r of bad) log.push(`  daily ${r.key} variant ${'ABC'[r.variant]} FAIL: ${r.why}`);
+  if (args.includes('--write') && meas.length === rows.length) { writeDailies(rows); log.push(`wrote ${DAILIES_PATH}`); }
+  else if (args.includes('--write')) log.push(`not written: ${rows.length - meas.length} day-variants still to measure`);
+  report(log, true);
+  console.log(log.slice(0, 2).concat(bad.slice(0, 5).map(r => `  daily ${r.key} ${'ABC'[r.variant]} FAIL: ${r.why}`)).join('\n'));
+}
 function writeDailies(res) {
   const bumps = {}, ts = {};
   for (const r of res.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.variant - b.variant))) {
@@ -298,10 +409,26 @@ async function mainDaily(args, opt) {
 // ------------------------------------------------------------------ CLI
 // DECISION (11-04, RAM/CPU etiquette): each child searches AND confirms its level, then the parent writes
 // levels-data.js at once, so a wall-clock-capped run keeps every finished level; a child exits when its parent goes.
+// DECISION (11-04 Wed, --recheck): after a bot change the stored spec is confirmed first (same runs as the final
+// confirm); when it passes every gate it is kept with fresh stats and the search is skipped (about half the cost
+// of a level). When it fails, the search runs and this confirm stands in for the "old spec re-confirm" below.
 async function child(n, o) {
   process.on('disconnect', () => process.exit(0));
   const spec = SPECS.find(s => s.n === n);
   const lines = [];
+  let v0 = null;
+  if (o.recheck && o.confirm) {
+    const s0 = JSON.parse(JSON.stringify(spec));
+    v0 = verifySpec(s0, { runs: o.confirm, xruns: o.xconfirm });
+    s0.stats = statsFor(v0);
+    lines.push(`L${n} recheck: ` + rowText(s0, v0));
+    if (!v0.fails.length) {
+      if (s0.seed0 == null) s0.seed0 = s0.seed;
+      if (!s0.marginBand) s0.marginBand = s0.margin.slice();
+      lines.push(`L${n}: recheck passes every gate; kept (no search)`);
+      return { n, lines, best: { seed: s0.seed, T: s0.T, margin: s0.margin, score: 0 }, spec: { seed0: s0.seed0, marginBand: s0.marginBand, seed: s0.seed, T: s0.T, margin: s0.margin, stats: s0.stats }, row: rowText(s0, v0), fails: [] };
+    }
+  }
   const r = tuneSpec(spec, { ...o, log: t => lines.push(t) });
   if (!r.best) return { n, lines, best: null };
   const s = JSON.parse(JSON.stringify(spec));
@@ -320,8 +447,8 @@ async function child(n, o) {
     lines.push('  confirm: ' + row);
     // DECISION (11-04): a search result that fails its confirm never replaces a spec whose last confirm passed
     // unless the old spec fails too (re-verified now, since the generator or the bots may have moved under it).
-    if (fails.length && spec.stats && spec.stats.pass && ch.length) {
-      const o2 = JSON.parse(JSON.stringify(spec)), v2 = verifySpec(o2, { runs: o.confirm, xruns: o.xconfirm });
+    if (fails.length && ((spec.stats && spec.stats.pass) || v0) && ch.length) {
+      const o2 = JSON.parse(JSON.stringify(spec)), v2 = v0 || verifySpec(o2, { runs: o.confirm, xruns: o.xconfirm });
       o2.stats = statsFor(v2);
       lines.push('  old spec re-confirm: ' + rowText(o2, v2));
       if (v2.fails.length <= fails.length) { out = o2; if (out.seed0 == null) out.seed0 = out.seed; if (!out.marginBand) out.marginBand = out.margin.slice(); row = rowText(o2, v2); fails = v2.fails; lines.push(`L${n}: kept the old spec`); }
@@ -333,12 +460,14 @@ async function main() {
   const args = process.argv.slice(2);
   const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; };
   const o = { seeds: opt('--seeds', 8), runs: opt('--runs', 30), noise: opt('--noise', 10), xruns: opt('--xruns', 8),
-    confirm: opt('--confirm', 100), xconfirm: opt('--xconfirm', 50) };
+    confirm: opt('--confirm', 100), xconfirm: opt('--xconfirm', 50), recheck: args.includes('--recheck') };
   W.greedy = opt('--wg', W.greedy); W.casual = opt('--wc', W.casual);
   const wArgs = ['--wg', String(W.greedy), '--wc', String(W.casual)];
   // a 'disconnect' listener refs the IPC channel, so a child exits explicitly once its message is flushed
   if (args[0] === '--child') { const m = await child(+args[1], o); process.send(m, () => process.exit(0)); return; }
   if (args[0] === '--dchild') { process.on('disconnect', () => process.exit(0)); const m = JSON.parse(args[1]).map(([k, v]) => tuneDaily(k, v, { runs: o.runs === 30 ? 20 : o.runs })); process.send(m, () => process.exit(0)); return; }
+  if (args[0] === '--rchild') { process.on('disconnect', () => process.exit(0)); for (const [k, v] of JSON.parse(args[1])) { const r = retimeDaily(k, v); await new Promise(res => process.send(r, res)); } process.exit(0); }
+  if (args.includes('--retime')) { await mainRetime(args, (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; }); return; }
   if (args.includes('--daily')) { await mainDaily(args, (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; }); return; }
   // levels: a range '1-10' or a list '3,4,7'
   const sel = args.find(x => /^\d+([-,]\d+)*$/.test(x)) || '1-10';
@@ -354,7 +483,7 @@ async function main() {
     writeLevelsData(DATA_PATH, specs, REC, km);
     return km;
   };
-  const cliArgs = n => ['--child', String(n), ...['--seeds', '--runs', '--noise', '--xruns', '--confirm', '--xconfirm'].flatMap(k => [k, String(o[k.slice(2)])]), ...wArgs];
+  const cliArgs = n => ['--child', String(n), ...['--seeds', '--runs', '--noise', '--xruns', '--confirm', '--xconfirm'].flatMap(k => [k, String(o[k.slice(2)])]), ...wArgs, ...(o.recheck ? ['--recheck'] : [])];
   let next = 0;
   await new Promise(done => {
     let live = 0;

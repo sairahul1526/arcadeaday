@@ -205,8 +205,10 @@ export function getDaily(key, cur, o = {}) {
 // DECISION (11-04 Wed, Sim relay): market Feast pens are built of crates (FEAST_WALL), not cars. Car walls (a 1.3,
 // wall.a 1.3 vs 1.0 for picnic hedges / harbour posts) made each pen cost ~1.7x the supply of a picnic pen, so the
 // margin left too little food under the boss: from course 2 the expert stalled (one c2 map stopped at r 1.42 of 1.50)
-// and market served a median 9 tickets vs picnic 17 / harbour 18. Picnic and harbour are unchanged (same maps).
-const FEAST_WALL = { market: 'crate' };
+// and market served a median 9 tickets vs picnic 17 / harbour 18. With crates alone market went to 21 (24 seeds), so
+// its course margin is [1.8, 2.2] (others [1.9, 2.3]): market expert median 17 (24 seeds), casual 5 (16 seeds).
+// Picnic and harbour are unchanged (same maps).
+const FEAST_WALL = { market: 'crate' }, FEAST_MARGIN = { market: [1.8, 2.2] };
 const FEAST_BOSS = { picnic: ['boss-hamper', 'boss-table', 'boss-bigsandwich', 'boss-watermelon'], market: ['boss-pizza', 'boss-fruitstall', 'boss-bakerycart'],
   harbour: ['boss-popcorncart', 'boss-icecreamkiosk', 'boss-snackboat'] };
 /**
@@ -220,7 +222,8 @@ const FEAST_BOSS = { picnic: ['boss-hamper', 'boss-table', 'boss-bigsandwich', '
 // DECISION (11-04): ticket k takes 2 distinct ingredients from the k-th quarter of the town's ingredients sorted by
 // size (small first, so ticket 1 fits a fresh pot), the roller kind is swapped in for a rolling line; the course seed
 // is fnv1a('feast|town|seed|c'). The level carries lvl.feast = { course, need: [lo, hi], cur }.
-// DECISION (11-04 Wed): market courses carry spec.wallKind 'crate' (FEAST_WALL above; penAt reads spec.wallKind).
+// DECISION (11-04 Wed): market courses carry spec.wallKind 'crate' and margin [1.8, 2.2] (FEAST_WALL / FEAST_MARGIN
+// above; penAt reads spec.wallKind).
 export function feastCourse(c, town, seed, o = {}) {
   c = Math.max(1, c | 0);
   if (TOWNS.indexOf(town) < 0) town = 'picnic';
@@ -257,7 +260,7 @@ export function feastCourse(c, town, seed, o = {}) {
   const bl = FEAST_BOSS[town];
   tickets[3].boss = { kind: bl[(c - 1) % bl.length], a: r3(Math.min(2.0, 1.4 + 0.1 * (c - 1))) };
   const spec = {
-    n: 0, name: 'Feast', town, arch: 'FE', W: 24, D: 34, seed: cs, r0: R0, T: 45, items: 200, mix: [32, 30, 18, 15, 5], margin: [1.9, 2.3],
+    n: 0, name: 'Feast', town, arch: 'FE', W: 24, D: 34, seed: cs, r0: R0, T: 45, items: 200, mix: [32, 30, 18, 15, 5], margin: FEAST_MARGIN[town] || [1.9, 2.3],
     tickets, twist: {}, feast: true, wallKind: FEAST_WALL[town],
   };
   const lvl = genLevel(spec, cs);

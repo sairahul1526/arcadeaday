@@ -1,14 +1,20 @@
 // Slurp Pot level verifier (GDD §5.3, §4.2). Levels role.
-// Usage: node tools/slurp-pot/verify.mjs [1-10 | 2,5,7-9] [--runs 100] [--xruns N] [--write] [--daily 400] [--kindmax] [--quiet]
+// Usage: node tools/slurp-pot/verify.mjs [1-10 | 2,5,7-9] [--runs 100] [--xruns N] [--jobs N] [--write] [--daily 400 [--every K]]
+//        [--kindmax] [--quiet] [--report PATH] [--append] | --stats [range]
 //   range     levels to check (default 1-10); 'rec' checks the REC level only
 //   --runs    casual / average / expert runs per level (GDD: 100)
 //   --write   writes spec.stats for the checked levels and kindMax into games/slurp-pot/levels-data.js
-//   --daily N also checks N days × 3 variants of the Daily Order (static gates 5, 6, greedy gate 1, casual ≥ 80 %)
+//   --daily N also checks N days of the Daily Order, every variant in every town it shows (static gates 5, 6,
+//             greedy gate 1, casual ≥ 80 %)
+//   --every K with --daily: every K-th day only (spot check)
 //   --kindmax recomputes kindMax only (implied by --write)
+//   --jobs N  forks N worker processes (RAM rule: 3 at most)
+//   --stats   no bot runs: writes the §5.3 report from the stored stats (STALE when the layout or T moved since)
 // Exit code 1 when any checked level fails a gate. Report: studio/2026-11-04/levels/levels-report.txt.
 import { writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fork } from 'node:child_process';
 import * as LV from '../../games/slurp-pot/levels.js';
 import * as L from '../../games/slurp-pot/logic.js';
 import * as B from '../../games/slurp-pot/bots.js';
@@ -53,13 +59,27 @@ export function bandOf(n) {
   if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [15, 35], cas3: 15 };
   return { avg: 70, exp: 95, plan: 0.76, avg3: [15, 30], cas3: 15 };
 }
-/** Greedy share-of-T window (gate 2): table % ± 4; from L10 also inside 70–85 % (bakeoff call). */
+// DECISION (11-04 Wed, §4.4): breathers (6 12 15 25 30 35 45 50 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
+// each twist's first level (4 10 16 22 28 34 41 47 53) greedy ≤ 74 %, casual ≥ 80 %. Both clip the table windows
+// (goal.greedy ± 4, goal.casual ± 7); a casual goal under 80 (L55 78) keeps its own value as the floor.
+export const BREATHERS = [6, 12, 15, 25, 30, 35, 45, 50, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
+/** Greedy share-of-T window (gate 2): table % ± 4; from L10 also inside 70–85 % (bakeoff call); §4.4 caps. */
 export function greedyWindow(spec) {
   const g = spec.goal && spec.goal.greedy;
   if (!g) return null;
   let lo = g - 4, hi = g + 4;
   if (spec.n >= 10) { lo = Math.max(lo, 70); hi = Math.min(hi, 85); }
+  if (BREATHERS.includes(spec.n)) hi = Math.min(hi, 76);
+  if (TWIST_FIRST.includes(spec.n)) hi = Math.min(hi, 74);
   return [lo, hi];
+}
+/** Casual win window (gate 4): goal.casual ± 7; breathers and twist intros at least min(80, goal). */
+export function casualWindow(spec) {
+  const c = spec.goal && spec.goal.casual;
+  if (c == null) return null;
+  let lo = c - 7;
+  if (BREATHERS.includes(spec.n) || TWIST_FIRST.includes(spec.n)) lo = Math.max(lo, Math.min(80, c));
+  return [lo, c + 7];
 }
 
 // ------------------------------------------------------------------ static gates (§4.2) on an expanded level
@@ -306,8 +326,8 @@ export function botGates(spec, lv, st) {
     if (st.average && (st.average.s3 < band.avg3[0] || st.average.s3 > band.avg3[1])) fails.push(`3b average 3★ ${st.average.s3}% outside ${band.avg3[0]}–${band.avg3[1]}`);
     if (st.casual && st.casual.s3 > band.cas3) fails.push(`3b casual 3★ ${st.casual.s3}% > ${band.cas3}`);
   }
-  const ct = spec.goal && spec.goal.casual;
-  if (st.casual && ct != null && Math.abs(st.casual.win - ct) > 7 + 1e-9) fails.push(`4 casual ${st.casual.win}% vs target ${ct} ± 7`);
+  const ct = spec.goal && spec.goal.casual, cw = casualWindow(spec);
+  if (st.casual && cw && (st.casual.win < cw[0] - 1e-9 || st.casual.win > cw[1] + 1e-9)) fails.push(`4 casual ${st.casual.win}% vs target ${ct} (window ${cw[0]}–${cw[1]})`);
   if (st.average && st.average.win < band.avg) fails.push(`4 average ${st.average.win}% < ${band.avg}`);
   if (st.expert && st.expert.win < band.exp) fails.push(`4 expert ${st.expert.win}% < ${band.exp}`);
   if ((n === 3 || n === 7) && st.casual && st.casual.win < 100 && (st.casual.near == null || st.casual.near < 0.6)) fails.push(`D32 near-miss share ${st.casual.near} < 0.6`);
@@ -413,36 +433,128 @@ export function statsFor(r) {
     pass: !r.fails.length, fails: r.fails,
   };
 }
-export function report(lines, append = false) {
-  mkdirSync(dirname(REPORT_PATH), { recursive: true });
-  (append ? appendFileSync : writeFileSync)(REPORT_PATH, lines.join('\n') + '\n');
+export function report(lines, append = false, path = REPORT_PATH) {
+  mkdirSync(dirname(path), { recursive: true });
+  (append ? appendFileSync : writeFileSync)(path, lines.join('\n') + '\n');
+}
+
+/**
+ * Report row from a spec's stored stats (no bot runs). The static gates are re-run on the current generator: when
+ * margin / items / kinds differ from the stored ones, or the stored greedy % no longer matches spec.T, the row is
+ * marked STALE (the stats belong to an older layout or T) and counts as failing.
+ */
+// DECISION (11-04 Wed): --stats writes levels-report.txt from levels-data.js (the tune confirm runs, 100 casual /
+// average runs each) so the §5.3 table costs seconds; a STALE row means that level needs a fresh verify or tune.
+export function statsRow(spec) {
+  const lv = LV.genLevel(spec, spec.seed), sg = staticGates(lv, spec), m = sg.m, st = spec.stats;
+  if (!st) return { row: `L${String(spec.n).padStart(2)} ${spec.arch} T${spec.T} | no stats | FAIL: not verified`, pass: false };
+  const stale = [];
+  if (Math.abs(m.margin - st.margin) > 0.005 || m.items !== st.items || m.kinds !== st.kinds) stale.push(`layout (margin ${m.margin.toFixed(2)} items ${m.items} now)`);
+  if (st.greedy && st.greedy.win && st.greedy.pct != null && Math.abs(st.greedy.pct - (100 * st.greedy.t) / spec.T) > 0.15) stale.push(`T (greedy ${st.greedy.pct}% was at another T)`);
+  // bot gates are re-derived from the stored stats (so a gate change shows without a re-run); doom/determinism
+  // fails (6, 7) are kept from the stored run
+  const fails = (st.fails || []).filter(f => /^[67] /.test(f));
+  if (st.greedy && st.planner) for (const f of botGates(spec, lv, st)) if (!fails.includes(f)) fails.push(f);
+  for (const f of sg.fails) if (!fails.includes(f)) fails.push(f);
+  if (stale.length) fails.push('STALE ' + stale.join(', '));
+  const r = { st: { greedy: st.greedy, noise: st.noise, planner: st.planner, casual: st.casual, average: st.average, expert: st.expert }, static: m, fails };
+  return { row: rowText(spec, r), pass: !fails.length };
+}
+
+// DECISION (11-04 Wed, "no new cliffs"): a cliff is a casual-win drop from one level to the next that is more than
+// 10 points steeper than the drop in the §4.4 casual targets. Reported under the --stats table (not a gate: each
+// level already sits inside its own window).
+function cliffLines(list) {
+  const out = [], byN = new Map(list.map(s => [s.n, s]));
+  for (const s of list) {
+    const p = byN.get(s.n - 1);
+    if (!p || !s.stats || !p.stats || !s.stats.casual || !p.stats.casual || !s.goal || !p.goal || s.goal.casual == null || p.goal.casual == null) continue;
+    const drop = p.stats.casual.win - s.stats.casual.win, want = p.goal.casual - s.goal.casual;
+    if (drop - want > 10) out.push(`L${s.n}`.padEnd(4) + ` casual ${p.stats.casual.win} → ${s.stats.casual.win} (targets ${p.goal.casual} → ${s.goal.casual})`);
+  }
+  return ['cliffs (casual drop > target drop + 10): ' + (out.length ? out.length : 'none'), ...out.map(t => '  ' + t)];
 }
 
 // ------------------------------------------------------------------ CLI
+// DECISION (11-04 Wed): --jobs N forks N children (one level, or 12 day-variants, per child) so the full L1–L60 +
+// 400-daily check fits the RAM rule (--jobs 3) in wall-clock-capped runs; --write saves each finished level's stats
+// to levels-data.js at once (a capped run keeps what it finished) and recomputes kindMax at the end.
+const SELF = fileURLToPath(import.meta.url);
+function pool(tasks, jobs, argsOf, onMsg) {
+  return new Promise(done => {
+    let live = 0, next = 0;
+    const launch = () => {
+      if (next >= tasks.length) { if (!live) done(); return; }
+      const t = tasks[next++];
+      live++;
+      const cp = fork(SELF, argsOf(t));
+      cp.on('message', onMsg);
+      cp.on('exit', () => { live--; launch(); });
+    };
+    if (!tasks.length) { done(); return; }
+    for (let j = 0; j < Math.min(jobs, tasks.length); j++) launch();
+  });
+}
+function levelRow(s, runs, xruns) {
+  const t0 = performance.now();
+  const r = verifySpec(s, { runs, xruns });
+  return { n: s.n, line: rowText(s, r) + ` (${((performance.now() - t0) / 1000).toFixed(1)}s)`, fails: r.fails, stats: statsFor(r) };
+}
+const dailyLine = r => `daily ${r.key} cur ${r.cur} ${r.town} ${r.arch} T${r.T} ${JSON.stringify(r.st)} FAIL: ${r.fails.join('; ')}`;
 async function main() {
   const args = process.argv.slice(2);
   const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
-  const runs = +(opt('--runs') || 100), xruns = +(opt('--xruns') || runs);
+  const runs = +(opt('--runs') || 100), xruns = +(opt('--xruns') || runs), jobs = Math.max(1, +(opt('--jobs') || 1));
+  if (args[0] === '--vchild') {
+    process.on('disconnect', () => process.exit(0));
+    const s = SPECS.find(q => q.n === +args[1]);
+    const m = levelRow(JSON.parse(JSON.stringify(s)), runs, xruns);
+    process.send(m, () => process.exit(0));
+    return;
+  }
+  if (args[0] === '--dvchild') {
+    process.on('disconnect', () => process.exit(0));
+    const m = JSON.parse(args[1]).map(([key, cur]) => { const r = verifyDaily(key, cur, { runs: Math.min(runs, 20) }); return { key, cur, town: r.town, arch: r.arch, T: r.T, st: r.st, fails: r.fails }; });
+    process.send(m, () => process.exit(0));
+    return;
+  }
   const write = args.includes('--write');
   const quiet = args.includes('--quiet');
   const days = opt('--daily') != null ? +opt('--daily') : 0;
+  const rpath = opt('--report') || REPORT_PATH;
   const rangeArg = args.find(a => /^(\d+([-,]\d+)*|rec|none)$/.test(a)) || '1-10';
+  const specs = SPECS.map(s => JSON.parse(JSON.stringify(s)));
+  const inRange = s => rangeArg.split(',').some(p => { const [a, b] = p.split('-').map(Number); return s.n >= a && s.n <= (b || a); });
+  if (args.includes('--stats')) {
+    const list = args.some(x => /^\d+([-,]\d+)*$/.test(x)) ? specs.filter(inRange) : specs;
+    const rows = list.map(statsRow), np = rows.filter(r => r.pass).length;
+    const out = [`verify.mjs ${args.join(' ')} — §5.3 table from the stored stats in levels-data.js (tune confirm / verify runs:`,
+      `100 casual + 100 average runs, expert 34 in a tune confirm, greedy + 20 ±3° noise seeds, planner deterministic); static gates re-run now.`,
+      `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 20–45 | L8–20 75/97/.80/15–40 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
+      `casual 3★ ≤15 from L4; casual win within goal.casual ± 7; greedy % of T within goal.greedy ± 4 (70–85 from L10); D32 near ≥.6 on L3/L7;`,
+      `§4.4: breathers ${BREATHERS.join(' ')} greedy ≤76 casual ≥80; twist intros ${TWIST_FIRST.join(' ')} greedy ≤74 casual ≥80.`,
+      `${np}/${list.length} levels pass every gate`, ...rows.map(r => r.row), ...cliffLines(list)];
+    report(out, args.includes('--append'), rpath);
+    if (!quiet) console.log(out.join('\n'));
+    process.exitCode = np === list.length ? 0 : 1;
+    return;
+  }
   const out = [`verify.mjs ${args.join(' ')} — runs ${runs} (casual/average), expert ${xruns}, greedy + 20 noise seeds, planner deterministic`];
   let bad = 0;
-  const specs = SPECS.map(s => JSON.parse(JSON.stringify(s)));
   if (rangeArg !== 'none') {
-    let list;
-    if (rangeArg === 'rec') list = [];
-    else list = specs.filter(s => rangeArg.split(',').some(p => { const [a, b] = p.split('-').map(Number); return s.n >= a && s.n <= (b || a); }));
-    for (const s of list) {
-      const t0 = performance.now();
-      const r = verifySpec(s, { runs, xruns });
-      const line = rowText(s, r) + ` (${((performance.now() - t0) / 1000).toFixed(1)}s)`;
-      out.push(line);
-      if (!quiet) console.log(line);
-      if (r.fails.length) bad++;
-      if (write) s.stats = statsFor(r);
-    }
+    const list = rangeArg === 'rec' ? [] : specs.filter(inRange);
+    const res = new Map();
+    const got = m => {
+      res.set(m.n, m);
+      if (!quiet) console.log(m.line);
+      if (write) { specs.find(q => q.n === m.n).stats = m.stats; writeLevelsData(DATA_PATH, specs, REC, KM_OLD); }
+    };
+    if (jobs > 1) await pool(list, jobs, s => ['--vchild', String(s.n), '--runs', String(runs), '--xruns', String(xruns)], got);
+    else for (const s of list) got(levelRow(s, runs, xruns));
+    let np = 0;
+    for (const s of list) { const m = res.get(s.n); if (!m) { out.push(`L${String(s.n).padStart(2)} not finished`); bad++; continue; } out.push(m.line); if (m.fails.length) bad++; else np++; }
+    out.push(`levels: ${np}/${list.length} pass every gate`);
+    if (list.length) console.log(`levels: ${np}/${list.length} pass every gate`);
     if (rangeArg === 'rec' || rangeArg === '1-60') {
       const lv = LV.genLevel(REC, REC.seed);
       const sg = staticGates(lv, REC);
@@ -452,15 +564,38 @@ async function main() {
     }
   }
   if (days) {
-    let dbad = 0, n = 0;
-    for (const key of dailyKeys(days)) for (const cur of [7, 15, 30]) {
-      const r = verifyDaily(key, cur, { runs: Math.min(runs, 20) });
-      n++;
-      if (r.fails.length) { dbad++; const line = `daily ${key} cur ${cur} ${r.town} ${r.arch} T${r.T} ${JSON.stringify(r.st)} FAIL: ${r.fails.join('; ')}`; out.push(line); if (!quiet) console.log(line); }
-    }
-    const line = `daily: ${n - dbad}/${n} pass (${days} days × 3 variants)`;
+    // DECISION (11-04 Wed): one check per distinct (day, variant, town) level over DAILY_CURS (B shows Market from
+    // cur 21, C shows Harbour from cur 45): 400 days give ~1466 levels, where cur 7 / 15 / 30 never showed Harbour.
+    // --every K checks every K-th day only (a spot check).
+    const tasks = [], every = Math.max(1, +(opt('--every') || 1));
+    dailyKeys(days).forEach((key, d) => {
+      if (d % every) return;
+      const seen = new Set();
+      for (const cur of DAILY_CURS) {
+        const v = cur > 22 ? 2 : cur > 10 ? 1 : 0, town = LV.getDaily(key, cur).town;
+        if (seen.has(v + town)) continue;
+        seen.add(v + town);
+        tasks.push([key, cur]);
+      }
+    });
+    // the same layout at the same T (variants A/B/C share it on 6 days in 10) runs once; its copies reuse the result
+    const sigOf = (key, cur) => { const lv = LV.getDaily(key, cur); return key + '|' + lv.town + '|' + lv.T + '|' + lv.items.length + ':' + lv.items.reduce((q, o) => q + o.x * 3.1 + o.z * 1.7 + o.a, 0).toFixed(3); };
+    const first = new Map(), copies = [], uniq = [];
+    for (const t of tasks) { const g = sigOf(t[0], t[1]); if (first.has(g)) copies.push([t, first.get(g)]); else { first.set(g, t); uniq.push(t); } }
+    const res = [], byT = new Map();
+    const got = r => { res.push(r); byT.set(r.key + '|' + r.cur, r); if (r.fails.length && !quiet) console.log(dailyLine(r)); };
+    if (jobs > 1) {
+      const chunks = [];
+      for (let i = 0; i < uniq.length; i += 8) chunks.push(uniq.slice(i, i + 8));
+      await pool(chunks, jobs, c => ['--dvchild', JSON.stringify(c), '--runs', String(runs)], m => { for (const r of m) got(r); });
+    } else for (const [key, cur] of uniq) { const r = verifyDaily(key, cur, { runs: Math.min(runs, 20) }); got({ key, cur, town: r.town, arch: r.arch, T: r.T, st: r.st, fails: r.fails }); }
+    for (const [[key, cur], src] of copies) { const r = byT.get(src[0] + '|' + src[1]); if (r) res.push({ ...r, key, cur }); }
+    res.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.cur - b.cur));
+    const dbad = res.filter(r => r.fails.length);
+    for (const r of dbad) out.push(dailyLine(r));
+    const line = `daily: ${res.length - dbad.length}/${tasks.length} pass (${days} days${every > 1 ? `, every ${every}th day` : ''}: each day × variant × town level, ${uniq.length} distinct layouts run${res.length < tasks.length ? `; ${tasks.length - res.length} not finished` : ''})`;
     out.push(line); console.log(line);
-    if (dbad) bad++;
+    if (dbad.length || res.length < tasks.length) bad++;
   }
   let km = null;
   if (write || args.includes('--kindmax')) {
@@ -470,7 +605,7 @@ async function main() {
     out.push(line); console.log(line);
   }
   if (write) writeLevelsData(DATA_PATH, specs, REC, km || KM_OLD);
-  report(out, args.includes('--append'));
+  report(out, args.includes('--append'), rpath);
   console.log(bad ? `${bad} failing` : 'all checked levels pass');
   process.exitCode = bad ? 1 : 0;
 }

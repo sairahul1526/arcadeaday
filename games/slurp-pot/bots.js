@@ -14,12 +14,19 @@ const DEG = Math.PI / 180;
 // focus (ticket focus once the boss fits, see focusOf), turn (max heading rate rad/s, 0 = none)
 const KINDS = {
   greedy:  { precise: false, every: 0.1,  second: 0,    lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: false, look: false, focus: false, turn: 0 },
-  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.30, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 0.5, plan: false, look: false, focus: true,  turn: 0 },
+  // DECISION (Wed pm, casual pacing): casual lag 0.40 s (GDD §5.2: 0.30) and side 1 (GDD: 0.5), with target memory
+  // (memo, see pickTarget) and the edge-arrow fix (candidates). side 0.5 skipped the router on half the decisions and
+  // the arrow bug flip-flopped it at gates, so casual stalled behind fences (L4/L18/L23 under goal.casual) while it
+  // ran 10-25 points over goal on open levels; the extra lag slows it evenly instead. L4-L23 at today's T, seeds
+  // 101-120: within goal.casual +-7 on 4 -> 12 levels, mean delta +9.1 -> +2.8; seeds 1-40 (verify's): 7 -> 7, +6.4 ->
+  // +2.2, and levels where some T in the greedy window meets goal.casual 8 -> 14 of 20. Tried and dropped: sigma as the
+  // stationary error (25 deg: L4 42 %, L23 17 %), a 0.25 s hesitation per new target (L4 8 %), a ticket-focus delay.
+  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.40, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 1,   plan: false, look: false, focus: true,  turn: 0, memo: true },
   average: { precise: true, every: 0.2,  second: 0.1,  lag: 0.20, sigma: 15 * DEG, theta: 3, m: 0.92, idle: 0.6, sight: false, side: 1,   plan: false, look: true,  focus: true,  turn: 0 },
   // DECISION (Wed): the planner gets ticket focus too (it is verify's "best route" reference for gate 3a). On the
   // frozen L4–L9 its time / greedy drops to 0.59–0.86 (from 0.80–0.97); L8 0.96 and L10 0.85 are unchanged (layout).
   planner: { precise: false, every: 15 * DT, second: 0, lag: 0,    sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 0 },
-  expert:  { precise: true, every: 15 * DT, second: 0, lag: 0.12, sigma: 6 * DEG,  theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 0 },
+  expert:  { precise: true, every: 15 * DT, second: 0, lag: 0.12, sigma: 6 * DEG,  theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 0, hold: 3 },
   // DECISION (Wed): director = the record/showcase bot: expert's planner and ticket focus, no lag or noise, and
   // a turn-rate limit (7 rad/s) so the camera path reads smooth on video; follows level.recordPath when present.
   director: { precise: true, every: 15 * DT, second: 0, lag: 0,   sigma: 0,       theta: 3, m: 1,    idle: 0,   sight: false, side: 1,   plan: true,  look: false, focus: true,  turn: 7 },
@@ -42,7 +49,7 @@ export function createBot(kind = 'greedy', seed = 1, opts = {}) {
     t: 0, nextDecide: 0, target: -1, targetT: -9, ban: new Float32Array(256), sideOn: true,
     stuckX: 0, stuckZ: 0, stuckT: 0, escapeT: 0, escapeSign: 1, skip: -1, skipT: 0, ox: 0, oz: 0, rTgt: -1, rT: -1, rWp: null,
     noise: 0, queue: [], out: { x: 0, z: 0, m: 0 }, dir: { x: 0, z: -1 }, plan: [], planT: -9, w: null,
-    lv: null, zNeed: null, foc: false, gullT: null, wp: 0,
+    lv: null, zNeed: null, foc: false, prevTgt: -1, gullT: null, wp: 0,
   };
 }
 
@@ -189,7 +196,10 @@ function candidates(bot, w) {
     const b = L.curBoss(w);
     if (b >= 0 && L.edible(w, b) && !out.includes(b)) out.push(b);
     let has = false;
-    for (let k = 0; k < out.length && !has; k++) if (ingHits(w, out[k]) > 0) has = true;
+    // DECISION (Wed pm): only a REACHABLE ingredient in sight (zone open, fits) cancels the arrow. An unreachable one
+    // (L4: a zone-1 cheese behind the pen) used to cancel it, so the arrow target came and went with the view and
+    // casual flip-flopped for up to 18 s (L4 casual tail 1.4-1.5 T -> 1.2 T).
+    for (let k = 0; k < out.length && !has; k++) { const i = out[k]; if (ingHits(w, i) > 0 && zoneOK(bot, w, i, P.rEff) && L.canFit(P.rEff, w._.a[i])) has = true; }
     if (!has) {
       let bi = -1, bd = 1e18;
       for (let i = 0; i < w.n; i++) {
@@ -607,6 +617,15 @@ function planBeam(bot, w) {
   if (best && bot.target >= 0 && best.eaten[0] !== bot.target && L.edible(w, bot.target)) {
     const keep = beam.find(nd => nd.eaten[0] === bot.target);
     if (keep && keep.score * BH >= best.score) return keep.eaten;
+    // DECISION (Wed pm, L4 flip-flop): P.hold (expert, s) = no switching BACK to the previous target for hold s after
+    // a switch. Twin targets (the two coolers behind the L4 pen) pushed each other out of the beam's top 6 in turn,
+    // so the keep test above never saw the current one and the expert switched every 0.25-0.5 s for 3 s, then gave
+    // both up. (Re-planning with the current target forced first fixed L4 but lost 4 s on L8: the forced beam's
+    // score is not comparable with the pruned one.) Expert median, 10 seeds: L4 41.9 -> 40.8 s (max 44.8 -> 41.4),
+    // L8 45.1 -> 42.2, L10 36.9 -> 35.8, L34 66.9 -> 57.7. The planner (gate 3a reference) and the director are unchanged.
+    if (bot.P.hold > 0 && best.eaten[0] === bot.prevTgt && bot.t - bot.targetT < bot.P.hold) {
+      return [bot.target].concat(best.eaten.filter(i => i !== bot.target));
+    }
   }
   return best ? best.eaten : [];
 }
@@ -619,9 +638,12 @@ function pickTarget(bot, w) {
     bot.plan = seq;
     return seq.length ? seq[0] : -1;
   }
-  const sc = scoreList(bot, w, candidates(bot, w));
+  // DECISION (Wed pm): memo (casual) = target memory: a still-edible, unbanned current target stays in the scored list
+  // when it drops out of sight (a player remembers what they were going for), so sight changes alone never flip it.
+  const cur = bot.target, cl = candidates(bot, w);
+  if (P.memo && P.precise && cur >= 0 && cur !== bot.skip && L.edible(w, cur) && !(bot.ban[cur] > bot.t) && !cl.includes(cur)) cl.push(cur);
+  const sc = scoreList(bot, w, cl);
   if (!sc.length) return -1;
-  const cur = bot.target;
   // DECISION: human-like bots (casual/average/expert) commit: on a re-decide they keep a still-edible target unless
   // the best one scores 1.3× more; the 2nd-best roll (P.second) only applies when they pick a new target.
   // greedy keeps the proto rule (hysteresis only within KEEP_T).
@@ -802,7 +824,7 @@ export function decide(bot, w, dt = DT) {
   if (t >= bot.nextDecide - 1e-9 || (bot.target >= 0 && !L.edible(w, bot.target))) {
     bot.nextDecide = t + P.every;
     const nt = pickTarget(bot, w);
-    if (nt !== bot.target) { bot.target = nt; bot.targetT = t; }
+    if (nt !== bot.target) { bot.prevTgt = bot.target; bot.target = nt; bot.targetT = t; }
     bot.sideOn = P.side >= 1 || R() < P.side;
   }
   let want, aim = bot.target;
