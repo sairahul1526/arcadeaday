@@ -1430,11 +1430,22 @@ B.kernel = () => {
     HL(0.012, [-0.012, 0.078, 0.012]),
   ];
 };
-B.gummy = () => [
-  P(lathe([[0, 0], [0.075, 0], [0.082, 0.02], [0.072, 0.062], [0.042, 0.092], [0, 0.1]], 10), grad('#D93A50', '#FF8A98', 0, 0.1)),
-  ...[[0.03, 0.088, 0.01], [-0.04, 0.078, 0.03], [0.01, 0.075, -0.055], [0.055, 0.06, 0.035]].map((p) => H_oct(0.009, '#FFFFFF', p)),
-  HL(0.013, [-0.02, 0.09, 0.02]),
-];
+// (11-04, orchestrator) was a plain pink drop: now a gummy bear lying on its back, so the top-down camera sees the
+// bear silhouette (head + ears, paws, feet); same footprint radius as the drop.
+B.gummy = () => {
+  const c = grad('#D93A50', '#FF8A98', 0, 0.06);
+  return [
+    P(sph(0.042, 6, 4), c, [0, 0.03, 0.012], null, [1, 0.7, 1.25]),
+    P(sph(0.031, 6, 4), c, [0, 0.032, -0.044], null, [1, 0.8, 1]),
+    ...[-1, 1].flatMap((s) => [
+      P(sph(0.013, 4, 3), c, [s * 0.025, 0.04, -0.066]),
+      P(sph(0.016, 4, 3), c, [s * 0.043, 0.024, -0.006], null, [1.3, 0.8, 1]),
+      P(sph(0.019, 4, 3), c, [s * 0.03, 0.02, 0.056], null, [1, 0.8, 1.1]),
+    ]),
+    H_oct(0.007, '#FFFFFF', [0.016, 0.052, 0.02]),
+    HL(0.012, [-0.012, 0.055, 0.0]),
+  ];
+};
 B.mint = () => {
   const sw = (x, y, z) => ((Math.floor((az(x, z) + Math.hypot(x, z) * 38) / (TAU / 12)) % 2) ? '#FFFFFF' : '#3FC496');
   return [
@@ -1817,6 +1828,14 @@ B['boss-popcorncart'] = () => {
     for (let k = 0; k < 3; k++) parts.push(P(box(0.03, 0.72, 0.02), H_RED, [0.7, 0.4, z], [0, 0, k * PI / 3]));
   });
   [[-0.95, -0.4], [0.95, -0.4], [-0.95, 0.4], [0.95, 0.4]].forEach(([x, z]) => parts.push(P(box(0.05, 0.36, 0.05), '#FFCF3D', [x, 1.07, z])));
+  // (11-04, orchestrator) the case read as an open gold frame: pale glass panels on the back and both ends, with
+  // white glare streaks; the front stays open so the top-down camera still sees the popcorn.
+  const glass = grad('#A9DCEF', '#E8F8FF', 0.89, 1.25);
+  parts.push(P(box(1.86, 0.34, 0.02), glass, [0, 1.06, -0.4]));
+  [-0.95, 0.95].forEach((x) => parts.push(P(box(0.02, 0.34, 0.76), glass, [x, 1.06, 0])));
+  [[-0.55, -0.385], [0.45, -0.385]].forEach(([x, z]) => parts.push(P(box(0.05, 0.28, 0.008), '#FFFFFF', [x, 1.06, z], [0, 0, 0.5])));
+  parts.push(P(box(0.008, 0.26, 0.05), '#FFFFFF', [-0.935, 1.06, 0.15], [0.5, 0, 0]), P(box(0.008, 0.26, 0.05), '#FFFFFF', [0.935, 1.06, -0.15], [0.5, 0, 0]));
+  parts.push(P(box(1.9, 0.03, 0.03), '#FFCF3D', [0, 0.89, 0.4]));
   const C = ['#FFF4C2', '#FFFFFF', '#FFE08A', '#FFF8DC'];
   for (let i = 0; i < 22; i++) {
     const x = -0.8 + 1.6 * hsh(i + 1), z = -0.3 + 0.6 * hsh(i + 31), d = Math.hypot(x / 0.9, z / 0.36);
