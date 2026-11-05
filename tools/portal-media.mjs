@@ -2,7 +2,8 @@
 // Portal store media from the kie.ai covers (tools/<slug>/art-media.json): exact sizes, clean and with the title.
 //   node tools/portal-media.mjs <slug> "<Game Title>"
 // Reads studio/art-raw/<slug>/media/{cover-wide,cover-tall,cover-square,icon}.png and writes dist/portals/<slug>/media/.
-// Sizes: CrazyGames 1920x1080 / 800x1200 / 800x800, GameDistribution 512x512 / 512x384 / 200x120, icon 512/256.
+// Sizes: CrazyGames 1920x1080 / 800x1200 / 800x800, GameDistribution 512x512 / 512x384 / 200x120, icon 512/256,
+// Facebook 1200x630 / 1080x1080 / 1200x400 and a square-cornered icon 1024/800.
 // The title is drawn in Lilita One (games/shared/fonts) with a plum outline, in Chromium via Playwright.
 import { chromium } from 'playwright';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -24,6 +25,9 @@ const JOBS = [
   ['thumb-512x512', 'cover-square', 512, 512, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['thumb-512x384', 'cover-wide', 512, 384, 0.42, { ...L, s: 0.16 }],
   ['thumb-200x120', 'cover-wide', 200, 120, 0.45, { ...L, s: 0.17 }],
+  ['fb-cover-1200x630', 'cover-wide', 1200, 630, 0.5, L],
+  ['fb-cover-1080x1080', 'cover-square', 1080, 1080, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
+  ['fb-banner-1200x400', 'cover-wide', 1200, 400, 0.5, { ...L, s: 0.2 }],
 ];
 
 const data = async f => `data:image/png;base64,${(await readFile(join(RAW, f + '.png'))).toString('base64')}`;
@@ -64,5 +68,5 @@ for (const [name, src, w, h, fx, t] of JOBS) {
   if (w >= 800) await save(`${name}.jpg`, await render(s, w, h, fx, null, 'image/jpeg'));
 }
 const icon = await data('icon');
-for (const n of [512, 256]) await save(`icon-${n}.png`, await render(icon, n, n, 0.5, null, 'image/png'));
+for (const n of [1024, 800, 512, 256]) await save(`icon-${n}.png`, await render(icon, n, n, 0.5, null, 'image/png'));
 await browser.close();

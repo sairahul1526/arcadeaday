@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Portal packages from the clean Playables build (run `node tools/build-playables.mjs <slug>` first).
-//   node tools/build-portal.mjs <slug> [crazygames,gamedistribution,gamepix,coolmath,playgama]
+//   node tools/build-portal.mjs <slug> [crazygames,gamedistribution,gamepix,coolmath,playgama,facebook]
 // Writes dist/portals/<portal>/<slug>/ and dist/portals/<portal>/<slug>.zip. The YouTube SDK tag is replaced by
 // `window.__PORTAL = '<portal>'` (platform.js turns off share/links and drives the portal adapter) plus the
 // portal's own SDK script where the portal requires one. The game itself makes no ad calls.
@@ -24,6 +24,7 @@ const PORTALS = {
     `<script src="https://html5.api.gamedistribution.com/main.min.js"></script>`,
   gamepix: `<script src="https://integration.gamepix.com/sdk/v3/gamepix.sdk.js"></script>`,
   playgama: `<script src="https://bridge.playgama.com/v2/stable/playgama-bridge.js"></script>`,
+  facebook: `<script src="https://connect.facebook.net/en_US/fbinstant.8.0.js"></script>`,
   coolmath: '', // Coolmath adds its own wrapper on licence; the build only strips links and share
 };
 
@@ -41,6 +42,9 @@ for (const p of want) {
   await writeFile(join(dir, 'index.html'), html0.replace(YT, tag));
   // Bridge loads ./playgama-bridge-config.json next to index.html; the Playgama console refuses a build without it.
   if (p === 'playgama') await writeFile(join(dir, 'playgama-bridge-config.json'), JSON.stringify({ platforms: {} }, null, 2) + '\n');
+  // Instant Games needs this at the zip root. NAV_BAR is the only menu version Facebook still supports; the bundle's
+  // values override the App Dashboard. Portrait is our default (the games resize to anything on the web version).
+  if (p === 'facebook') await writeFile(join(dir, 'fbapp-config.json'), JSON.stringify({ instant_games: { navigation_menu_version: 'NAV_BAR', orientation: 'PORTRAIT' } }, null, 2) + '\n');
   execFileSync('zip', ['-qr', '-X', zip, '.', '-x', '.DS_Store'], { cwd: dir });
   console.log(`✓ ${p}: ${zip} (${((await stat(zip)).size / 1024).toFixed(0)} KB)`);
 }

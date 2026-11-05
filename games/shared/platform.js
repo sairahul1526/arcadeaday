@@ -19,8 +19,8 @@ const MAX_SAVE = 500 * 1024; // Playables limit on saveData size (bytes, roughly
 // Analytics endpoint (functions/api/ev.js -> D1, read with tools/analytics/report.mjs). Empty = P.event is a no-op.
 const ANALYTICS_URL = '/api/ev';
 const IST = 5.5 * 3600e3;
-// Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|playgama|poki or window.__PORTAL set by the portal build.
-const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'playgama', 'poki'];
+// Portal (web builds only): ?portal=crazygames|gamedistribution|gamepix|coolmath|playgama|facebook|poki or window.__PORTAL set by the portal build.
+const PORTALS = ['crazygames', 'gamedistribution', 'gamepix', 'coolmath', 'playgama', 'facebook', 'poki'];
 const portalName = (() => {
   if (Y) return '';
   let n = '';
@@ -71,7 +71,7 @@ const call = (list, ...a) => list.slice().forEach(cb => { try { cb(...a); } catc
 const P = {
   /** 'yt' inside YouTube Playables, otherwise 'web'. */
   env: Y ? 'yt' : 'web',
-  /** '' on the web and YouTube; 'crazygames' | 'gamedistribution' | 'gamepix' | 'coolmath' | 'playgama' | 'poki' when running inside a portal build. */
+  /** '' on the web and YouTube; 'crazygames' | 'gamedistribution' | 'gamepix' | 'coolmath' | 'playgama' | 'facebook' | 'poki' when running inside a portal build. */
   portal: portalName,
   /** true when the page was opened with ?qa=1 (QA hooks may be exposed). */
   qa: QA,
@@ -100,6 +100,9 @@ const P = {
       try { P.lang = (await Y.system.getLanguage()) || P.lang; } catch {}
     } else {
       raw = ls.get(opts.store + 'save') || '';
+      // Facebook keeps the save on its servers (follows the player across devices); the webview's localStorage is
+      // only the offline fallback. initializeAsync() must be the first SDK call, so it is awaited here.
+      if (portalName === 'facebook') raw = (await fbLoad()) || raw;
     }
     let d = null, migrated = false;
     if (typeof raw === 'string' && raw !== '') {
@@ -166,6 +169,7 @@ const P = {
     } else {
       ls.set(opts.store + 'save', json);
       ls.set(opts.store + 'best', String(P.data.best | 0));
+      if (portalName === 'facebook') fb(f => f.player.setDataAsync({ save: json }).catch(e => P.error(e)));
     }
   },
 
@@ -284,6 +288,32 @@ const pg = fn => {
   const b = window.bridge;
   if (b) pgReady.then(() => sdkCall(() => fn(b)));
 };
+// Facebook Instant Games (SDK 8.0): initializeAsync() must come before any other FBInstant call, so every call waits
+// on it. startGameAsync() takes the host's loading screen down; the game shows nothing until it resolves.
+let fbReady = null;
+const fbInit = () => {
+  if (fbReady) return fbReady;
+  const f = window.FBInstant;
+  fbReady = Promise.resolve();
+  if (f && f.initializeAsync) try {
+    fbReady = Promise.resolve(f.initializeAsync()).then(() => {
+      // There is no onResume: a hidden page comes back through visibilitychange, anything else on the next touch.
+      sdkCall(() => f.onPause(() => {
+        setPaused(true);
+        addEventListener('pointerdown', () => { if (!document.hidden) setPaused(false); }, { once: true, capture: true });
+      }));
+    }).catch(e => P.error(e));
+  } catch (e) { P.error(e); }
+  return fbReady;
+};
+const fb = fn => { const f = window.FBInstant; if (f) fbInit().then(() => sdkCall(() => fn(f))); };
+/** The server copy of the save, or '' (no SDK, first play, or the call failed: the local copy is used). */
+async function fbLoad() {
+  const f = window.FBInstant;
+  if (!f) return '';
+  await fbInit();
+  try { const o = await f.player.getDataAsync(['save']); return (o && o.save) || ''; } catch (e) { P.error(e); return ''; }
+}
 function initPortal() {
   if (!portalName || portalInited) return;
   portalInited = true;
@@ -312,10 +342,12 @@ function initPortal() {
 function portalLoading() {
   if (portalName === 'crazygames') cg(g => g.loadingStart());
   else if (portalName === 'gamepix') sdkCall(() => window.GamePix.loading(0));
+  else if (portalName === 'facebook') fb(f => f.setLoadingProgress(50));
 }
 function portalLoaded() {
   if (portalName === 'crazygames') cg(g => g.loadingStop());
   else if (portalName === 'gamepix') sdkCall(() => window.GamePix.loaded());
+  else if (portalName === 'facebook') fb(f => { f.setLoadingProgress(100); return f.startGameAsync().catch(e => P.error(e)); });
 }
 
 function setPaused(p) {
