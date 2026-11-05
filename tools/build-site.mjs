@@ -92,7 +92,7 @@ const clientJs = `<script>
 </script>`;
 
 const header = `<header class="top"><div class="wrap">${LOGO}<a class="drop" href="/#next"><span class="dot"></span><span>Day ${latest.day + 1} <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>`;
-const footer = `<footer class="foot wrap">© ${new Date().getFullYear()} ${NAME} · a new free game every day · <a href="/">all games</a></footer>`;
+const footer = `<footer class="foot wrap">© ${new Date().getFullYear()} ${NAME}, made by Xautomate · a new free game every day · <a href="/">all games</a></footer>`;
 
 // ------------------------------------------------------------ hub
 const hubTitle = 'Arcade a Day: Free Browser Games, a New One Every Day';
