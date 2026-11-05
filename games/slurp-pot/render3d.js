@@ -99,8 +99,8 @@ const evSeen = new Set();
 // pot + camera state
 const pot = { x: 0, z: 0, r: 0.3, rVis: 0.3 };
 const cam = { x: 0, z: 0, vx: 0, vz: 0, rCam: 0.3, yaw: 0, pitch: 55 * D2R, wv: 6, ax: 0, ay: 0 };
-let titleOn = false, titleT = 0, reveal = null, punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0, recWinT = -1;
-const mood = { biteT: 0, biteDx: 0, biteDz: 1, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, bumpDx: 0, bumpDz: 0,
+let titleOn = false, titleT = 0, reveal = null, punchT = 0, punchA = 0.08, bossCamT = -1, shakeX = 0, shakeZ = 0, recWinT = -1;
+const mood = { biteT: 0, biteK: 1, flash: 0, biteDx: 0, biteDz: 1, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, bumpDx: 0, bumpDz: 0,
   celebrateT: -1, sad: false, worried: false, blinkIn: 3, blinkT: -1, sqzT: 0, lookX: 0, lookY: -0.08,
   lid: 0, happy: 0, wide: 0, worry: 0, droop: 0, squeeze: 0, dim: 1, sink: 0, tilt: 0, tiltDx: 0, tiltDz: 1, shockT: -1 };
 const _m = new Matrix4(), _q = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _p = new Vector3(), _s = new Vector3();
@@ -1353,7 +1353,7 @@ function updateCamera(dt) {
   cam.ax += (ax - cam.ax) * ek(dt, 0.25); cam.ay += (ay - cam.ay) * ek(dt, 0.25);
   if (Math.abs(cam.ax - ax) > cssW || !(cam.ax > -1e8) || REC) { cam.ax = ax; cam.ay = ay; }
   if (STILL) cam.pitch = pitchT;
-  if (punchT > 0) { punchT = Math.max(0, punchT - dt); wv *= 1 + 0.08 * (1 - (1 - punchT / 0.5) ** 2) * (punchT > 0 ? 1 : 0); }
+  if (punchT > 0) { punchT = Math.max(0, punchT - dt); wv *= 1 + punchA * (1 - (1 - punchT / 0.5) ** 2) * (punchT > 0 ? 1 : 0); }
   if (bossCamT >= 0) {
     bossCamT += dt;
     const t = bossCamT;
@@ -1442,7 +1442,7 @@ function updateFx(dt) {
 
 // ------------------------------------------------------------------ fx events (bus → onFx)
 function resetMood() {
-  Object.assign(mood, { biteT: 0, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, celebrateT: -1, sad: false, worried: false,
+  Object.assign(mood, { biteT: 0, biteK: 1, flash: 0, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, celebrateT: -1, sad: false, worried: false,
     blinkIn: 2 + rnd() * 2, blinkT: -1, sqzT: 0, lid: 0, happy: 0, wide: 0, worry: 0, droop: 0, squeeze: 0, dim: 1, sink: 0, tilt: 0, shockT: -1 });
   rattleT.fill(0); wobT.fill(0); popT.fill(0);
 }
@@ -1473,16 +1473,21 @@ export function onFx(ev, data) {
   if (cn) { const key = cn + ':' + (d.i ?? ''); if (evSeen.has(key)) return; evSeen.add(key); ev = cn; }
   switch (ev) {
     case 'bite': {
-      mood.biteT = 0.18; mood.sqzT = 0.1;
+      // DECISION (11-05, art lane): the bite has to read at phone size. The squash deepens with the chain and the food's
+      //   size, and the stew flashes, so a run of bites looks like a run instead of the same small nod.
+      const cn = d.n | 0;
+      mood.biteT = 0.18; mood.sqzT = 0.1; mood.biteK = 1 + 0.5 * Math.min(1, cn / 8) + 0.1 * Math.min(4, d.tier | 0);
+      mood.flash = Math.min(1, 0.6 + 0.08 * cn);
       const [x, z] = itemXZ(d.i); const dx = x - pot.x, dz = z - pot.z, L = Math.hypot(dx, dz) || 1;
       mood.biteDx = dx / L; mood.biteDz = dz / L;
       if (d.ing) sparkleRing(5, '#FFF3C4', 1.1);
+      else if (cn >= 3) sparkleRing(Math.min(6, cn - 1), '#FFE27A', 1.1);
       break;
     }
     case 'sizeUp': {
       mood.sizeT = 0.2; mood.happyT = Math.max(mood.happyT, 0.4);
       sparkleRing(BIG_STEPS.has(d.step | 0) ? 14 : 7, '#FFE27A', 1.8);
-      if (BIG_STEPS.has(d.step | 0)) { punchT = 0.5; mood.shockT = 0; }
+      if (BIG_STEPS.has(d.step | 0)) { punchT = 0.5; punchA = 0.08; mood.shockT = 0; }
       break;
     }
     case 'padlock': {
@@ -1536,7 +1541,11 @@ export function onFx(ev, data) {
     }
     case 'wobble': if (d.i >= 0 && d.i < ITEM_MAX) wobT[d.i] = 0.4; break;
     case 'sizzle': sparkleRing(8, '#FFB347', 1.6); burst(pot.x, 0.1, pot.z, 4, '#FFFFFF', { speed: 0.2, up: 1.0, size: 0.1 * Math.max(0.6, pot.rVis), shape: 4, grav: -0.5, grow: 1.6, life: 1.0, a: 0.55 }); break;
-    case 'chain': if ((d.n | 0) >= 3) sparkleRing(3, '#FFF3C4', 1.0); break;
+    case 'chain': {   // every fifth bite in a chain: a full ring and a small camera nudge (a big size up punches 0.08)
+      sparkleRing(12, (d.n | 0) >= 10 ? '#FFB347' : '#FFE27A', 1.5);
+      if (punchT <= 0) { punchT = 0.5; punchA = 0.03; }
+      break;
+    }
     case 'start': reveal = null; break;
     case 'levelStart': {
       resetMood();
@@ -1778,7 +1787,9 @@ export function update(w, dt, alpha = 1) {
       if (s === 2) {
         if (prevSt[i] === 1) {   // swallowed: crumbs fly out of the stew in the kind colour
           const K = KINDS[itemCat[i]] || null, tierN = K ? K.tier | 0 : 0;
-          burst(pot.x, 0.05 + potLift, pot.z, Math.min(12, 3 + 2 * tierN), [K ? K.color : '#FFD36E', '#FFD36E', '#FF8A2A'], { speed: 0.6 + 0.4 * rv, up: 1.4 + rv, size: Math.max(0.03, 0.045 * Math.sqrt(rv) + 0.015 * tierN), life: 0.5 });
+          // DECISION (11-05, art lane): sized by the view, not the pot, so a crumb is ~6 px on a phone at L1 and at L60.
+          const vu = 3.6 + 7.2 * rv;
+          burst(pot.x, 0.05 + potLift, pot.z, Math.min(16, 6 + 2 * tierN), [K ? K.color : '#FFD36E', '#FFD36E', '#FF8A2A'], { speed: 0.13 * vu, up: 0.42 * vu, size: 0.017 * vu * (1 + 0.15 * tierN), grav: vu, life: 0.6 });
         }
         prevSt[i] = 2; continue;
       }
@@ -1841,6 +1852,11 @@ export function update(w, dt, alpha = 1) {
         const p = clamp(tp[i], 0, 1), L = dist || 1;
         _ax.set(dz / L, 0, -dx / L);
         _q2.setFromAxisAngle(_ax, 70 * D2R * sstep(0, 0.6, p)); _q.premultiply(_q2);
+        // DECISION (11-05, art lane): a slurp, not a sink. The food is dragged to the middle of the pot and stretches along
+        //   the pull (the tip above points its local y at the pot). Render only: the sim's tip time and position don't change.
+        const pull = 0.85 * sstep(0, 0.75, p);
+        x += dx * pull; z += dz * pull;
+        sy *= 1 + 0.55 * Math.sin(PI * sstep(0.05, 0.8, p));
         y -= (h * 1.2 + 0.55 * rv) * sstep(0.3, 1, p);
         sc *= 1 - 0.45 * sstep(0.6, 1, p);
         shAlpha = 1 - sstep(0.1, 0.6, p);
@@ -2025,7 +2041,7 @@ function updatePot(dt, look) {
   M.wideT = Math.max(0, M.wideT - dt); M.squintT = Math.max(0, M.squintT - dt); M.sqzT = Math.max(0, M.sqzT - dt);
   // squash/tilt/overshoot/bob
   let sy = 1;
-  if (M.biteT > 0) { const t = 0.18 - M.biteT; sy = t < 0.06 ? lerp(1, 0.92, t / 0.06) : t < 0.12 ? lerp(0.92, 1.04, (t - 0.06) / 0.06) : lerp(1.04, 1, (t - 0.12) / 0.06); }
+  if (M.biteT > 0) { const t = 0.18 - M.biteT; const lo = 1 - 0.12 * M.biteK, hi = 1 + 0.07 * M.biteK; sy = t < 0.06 ? lerp(1, lo, t / 0.06) : t < 0.12 ? lerp(lo, hi, (t - 0.06) / 0.06) : lerp(hi, 1, (t - 0.12) / 0.06); }
   const over = M.sizeT > 0 ? 1 + 0.12 * Math.sin(PI * (1 - M.sizeT / 0.2)) : 1;
   let yOff = 0.015 * pot.r * Math.sin(TAU * 0.9 * time);
   if (M.celebrateT >= 0) { M.celebrateT += dt; const t = M.celebrateT; if (t < 0.36) yOff += 0.22 * rv * Math.abs(Math.sin(PI * t / 0.12)) * (1 - t / 0.45); else M.celebrateT = -1; }
@@ -2047,7 +2063,8 @@ function updatePot(dt, look) {
   if (potExtras.sparkle) potExtras.sparkle.scale.setScalar(0.8 + 0.25 * Math.abs(Math.sin(time * 3.1)));
   // stew dim
   M.dim += ((M.sad ? 0.6 : 1) - M.dim) * ek(dt, 0.3);
-  stewMat.uniforms.uDim.value = M.dim;
+  M.flash = Math.max(0, M.flash - dt * 5);
+  stewMat.uniforms.uDim.value = M.dim + 0.6 * M.flash;
   // Simmer lid hat (§4.5): perched on the back rim, tipped back like a hat, pops on, jiggles on refusals; while the
   // pot boils over, steam puffs out from under it every 0.12 s.
   // DECISION (11-04): the lid lives in pot-local units (child of potRoot), so it scales with the pot for free.

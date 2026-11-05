@@ -404,7 +404,10 @@ function bindBus(bus) {
   on('start', () => { hud.started = T; hud.lastBite = T; if (hud.n === 1 || hud.n === 2) tutSet('drag'); });
   on('bite', d => {
     hud.lastBite = T;
-    if (d.ing) { const li = typeof d.ing === 'number' ? d.ing : lineIndexOf(d.kind); if (li >= 0) hud.chipPop[li] = T; }
+    if (d.ing) {
+      const li = typeof d.ing === 'number' ? d.ing : lineIndexOf(d.kind);
+      if (li >= 0) { if (hud.chipXY[li] && hud.ups.length < 8) hud.ups.push({ t0: T, li }); else hud.chipPop[li] = T; }
+    }
   });
   on('sizeUp', d => {
     hud.sizeUps++;
@@ -443,7 +446,7 @@ function lineIndexOf(kind) {
 function newHud(w) {
   const n = (w.level && w.level.n) || 0;
   return {
-    n, ti: w.ti || 0, t0: T, started: null, lastBite: T, sizeUps: 0, chipPop: [], lineDone: [], flip: -9, bossPulse: -9,
+    n, ti: w.ti || 0, t0: T, started: null, lastBite: T, sizeUps: 0, chipPop: [], chipXY: [], ups: [], lineDone: [], flip: -9, bossPulse: -9,
     padPop: -9, padIdx: -1, padRattle: -9, chipNudge: -9, orderUp: -9, course: -9, chainPop: -9, chainDrop: -9, chainLast: 0,
     chainShown: 0, sizzle: -9, low: -9, tick: -9, boostFx: {}, frost: -9, result: null, bossPoint: -9,
     reveal: skipReveal ? -9 : T, rDisp: w.pot ? w.pot.r : 0.3, fly: null, flown: false, hintItem: -1, idleCall: false,
@@ -790,7 +793,7 @@ export function draw(state, w, dt) {
   } else if (w && w.tickets) {
     const t = w.tickets[w.ti || 0], n = t ? t.lines.length : 3;
     if (n !== curLines) { curLines = n; setTicketLines(n); }
-    if (hud && (w.ti || 0) !== hud.ti) { hud.ti = w.ti || 0; hud.chipPop = []; hud.lineDone = []; hud.flip = -9; }
+    if (hud && (w.ti || 0) !== hud.ti) { hud.ti = w.ti || 0; hud.chipPop = []; hud.chipXY = []; hud.ups = []; hud.lineDone = []; hud.flip = -9; }
   }
   ensureSize(st);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -850,6 +853,7 @@ function drawHud(st, w, dt) {
   if (playing || rec) {
     if (!rec) drawArrows(w);
     drawChain(w);
+    drawUps(w);
     if (!rec) { drawStick(st); drawGhost(w); drawFly(w); }
     drawOrderUp(w);
   }
@@ -1000,6 +1004,7 @@ function drawChips(w, t, r, y) {
       const x0 = sx - cm.w / 2, rx = x0 + cm.ring / 2;
       const done = l.got >= l.need, frac = l.need ? l.got / l.need : 0;
       chipRing(rx, cy, cm.ring, frac, done, 0, !done ? nud : 0);
+      hud.chipXY[i] = { x: rx, y: cy, s: cm.ring };
       const pk = popK(hud.chipPop[i] ?? -9);
       g.save(); g.translate(rx, cy); g.scale(pk, pk); ingIcon(l.kind, 0, 0, cm.ring * 0.82); g.restore();
       if (done) tick(rx + cm.ring * 0.36, cy + cm.ring * 0.3, Math.max(14, cm.ring * 0.5));
@@ -1023,6 +1028,7 @@ function drawLinesList(w, t, r, y) {
     const cy = y + i * lh + lh / 2, rx = r.x + r.pad + cm.ring / 2;
     const done = l.got >= l.need;
     chipRing(rx, cy, Math.min(cm.ring, lh - 2), l.need ? l.got / l.need : 0, done, 0, !done ? nud : 0);
+    hud.chipXY[i] = { x: rx, y: cy, s: Math.min(cm.ring, lh - 2) };
     const pk = popK(hud.chipPop[i] ?? -9);
     g.save(); g.translate(rx, cy); g.scale(pk, pk); ingIcon(l.kind, 0, 0, Math.min(cm.ring, lh - 2) * 0.82); g.restore();
     if (done) tick(rx + cm.ring * 0.36, cy + cm.ring * 0.3, Math.max(14, cm.ring * 0.5));
@@ -1460,6 +1466,21 @@ function drawFly(w) {
   const x = (1 - e) * (1 - e) * sx + 2 * (1 - e) * e * mx + e * e * p.x, y = (1 - e) * (1 - e) * sy + 2 * (1 - e) * e * my + e * e * p.y;
   g.save(); g.translate(x, y); const s = 1 + 0.6 * Math.sin(k * Math.PI); g.scale(s, s);
   ingIcon(f.kind, 0, 0, cm.ring); g.restore();
+}
+// A goal food flies from the pot to its chip and the chip pops as it lands, so the eye goes from the bite to the count.
+function drawUps(w) {
+  if (!hud.ups.length) return;
+  const t = w.tickets && w.tickets[w.ti || 0], dur = 0.36;
+  const p = worldToScreen(w.pot.x, w.pot.z) || { x: L.play.cx, y: L.play.cy };
+  hud.ups = hud.ups.filter(f => {
+    const k = (T - f.t0) / dur, c = hud.chipXY[f.li], l = t && t.lines[f.li];
+    if (k >= 1 || !c || !l) { hud.chipPop[f.li] = T; return false; }
+    const e = k * k * (3 - 2 * k), mx = (p.x + c.x) / 2 + 40 * L.u, my = Math.min(p.y, c.y) + 30 * L.u;
+    const x = (1 - e) * (1 - e) * p.x + 2 * (1 - e) * e * mx + e * e * c.x, y = (1 - e) * (1 - e) * p.y + 2 * (1 - e) * e * my + e * e * c.y;
+    g.save(); g.translate(x, y); const s = 1.5 - 0.6 * e + 0.25 * Math.sin(k * Math.PI); g.scale(s, s);
+    ingIcon(l.kind, 0, 0, c.s * 0.82); g.restore();
+    return true;
+  });
 }
 function drawGhost(w) {
   if (!hud.ghost) return;
