@@ -631,14 +631,15 @@ B.swingset = () => {
   const parts = [], red = '#E8574A', L = 1.1;
   [-L, L].forEach((x) => {
     [-1, 1].forEach((s) => {
-      parts.push(P(cyl(0.04, 0.04, 1.7, 6), red, [x, 0.8, s * 0.24], [s * 0.3, 0, 0]));
-      parts.push(P(ico(0.06), '#FFC93C', [x, 0.03, s * 0.48]));
+      parts.push(P(cyl(0.085, 0.085, 1.7, 6), red, [x, 0.8, s * 0.24], [s * 0.3, 0, 0]));
+      parts.push(P(ico(0.11), '#FFC93C', [x, 0.05, s * 0.48]));
     });
   });
-  parts.push(P(cyl(0.045, 0.045, 2.3, 8), red, [0, 1.62, 0], [0, 0, PI / 2]));
+  // DECISION (11-05): chunky toy tubes. Real swing-set proportions read as a red wire scribble from the game camera.
+  parts.push(P(cyl(0.095, 0.095, 2.42, 8), red, [0, 1.62, 0], [0, 0, PI / 2]));
   [-0.48, 0.48].forEach((x) => {
-    parts.push(P(rbox(0.32, 0.045, 0.16, 0.018, 1), '#FFC93C', [x, 0.42, 0]));
-    [-0.13, 0.13].forEach((dx) => parts.push(P(cyl(0.009, 0.009, 1.18, 4), '#9AA3B5', [x + dx, 1.02, 0])));
+    parts.push(P(rbox(0.4, 0.08, 0.22, 0.03, 1), '#FFC93C', [x, 0.42, 0]));
+    [-0.16, 0.16].forEach((dx) => parts.push(P(cyl(0.022, 0.022, 1.18, 4), '#9AA3B5', [x + dx, 1.02, 0])));
   });
   return parts;
 };
