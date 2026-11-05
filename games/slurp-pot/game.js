@@ -997,9 +997,9 @@ function uiPos(e) { const r = $ui.getBoundingClientRect(); return [e.clientX - r
 for (const [type, name] of [['pointerdown', 'down'], ['pointermove', 'move'], ['pointerup', 'up'], ['pointercancel', 'cancel']]) {
   $ui.addEventListener(type, e => {
     if (name === 'down') gesture();
-    if (!S.ready || S.fatal || !ui || !e.isPrimary || hostPaused()) return;
+    if (!S.ready || S.fatal || !ui || hostPaused()) return;
     const [x, y] = uiPos(e);
-    try { ui.pointer(name, x, y, e); } catch (err) { report(err); }
+    try { if (e.isPrimary) ui.pointer(name, x, y, e); else ui.pointer2(name, x, y, e.pointerId); } catch (err) { report(err); }
   });
 }
 // Map wheel (UI relay 12:2x): ui.wheel(dy in CSS px) scrolls the town map; true = consumed, so the page stays put.

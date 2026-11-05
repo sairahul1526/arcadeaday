@@ -213,7 +213,7 @@ let cv = null, g = null, dpr = 1, M = null, AU = null, RD = null, BUS = null, IN
 let L = null, Lkey = '', cssW = 0, cssH = 0;
 let T = 0;                                  // ui clock (real s)
 let screen = 'title', prevScreen = '', cardT = 0, cardData = {}, cardStack = [];
-let btns = [], lastBtns = [], press = null, primary = null, kbHi = false;
+let btns = [], lastBtns = [], press = null, press2 = null, primary = null, kbHi = false;
 const DBG = { on: false, texts: [], over: [] };
 let hud = null;                             // per-world HUD animation state
 let lastW = null, skipReveal = false;
@@ -352,6 +352,29 @@ function pointerBtn(type, x, y) {
   }
   press = null;
   return false;
+}
+// DECISION (chaos lane 11-05): while one thumb steers, the other thumb can tap Pause or a booster. A second finger
+//   only ever taps (no stick, no map drag) and only on play and pause; other cards stay one-pointer so two fingers
+//   can't fire a card button twice. Pause counts because the steering thumb may still be down when Resume is tapped.
+export function pointer2(type, x, y, id) {
+  if (type === 'down') {
+    press2 = null;
+    if (screen !== 'play' && screen !== 'pause') return false;
+    const b = hit(x, y);
+    if (!b) return false;
+    press2 = { id: b.id, pid: id, scr: screen };
+    if (AU && AU.unlock) { try { AU.unlock(); } catch {} }
+    return true;
+  }
+  if (!press2 || press2.pid !== id) return false;
+  if (type === 'move') return true;
+  const p = press2; press2 = null;
+  if (type !== 'up' || p.scr !== screen) return false;
+  const b = lastBtns.find(q => q.id === p.id);
+  if (!b || b.disabled || !inR(hitR(b), x, y)) return false;
+  sfx('ui');
+  b.act && b.act();
+  return true;
 }
 export function key(e) {
   const k = e.key;
@@ -625,7 +648,7 @@ function paperBtn(b, label, o = {}) {
     txtMin([label, ...(o.alts || [])], x + w / 2, cy + fs * 0.04, fs, { col: C.ink, f: o.f, maxW: w - Math.max(12, 18 * u) });
   }
 }
-function isDown(id) { return press && press.id === id && press.inside; }
+function isDown(id) { return (press && press.id === id && press.inside) || (press2 && press2.id === id); }
 function reg(id, r, fn, o = {}) {
   const b = { id, x: r.x, y: r.y, w: r.w, h: r.h, act: fn, primary: !!o.primary, soft: !!o.soft, disabled: !!o.disabled };
   btns.push(b); return b;
