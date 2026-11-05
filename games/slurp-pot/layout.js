@@ -428,6 +428,8 @@ export function cardLayout(L, name, opts = {}) {
     const s = stack(ix, inner.y, iw, inner.h, rows);
     const used = s._end - inner.y, d = Math.max(0, (inner.h - used) / 2);
     for (const k in s) if (k !== '_end') { s[k].y += d; B[k] = s[k]; }
+    // DECISION (11-05, art lane): the panel hugs its rows, as the pause card does; at 390 it stood half empty.
+    if (d > 0) out.panel = R(c.x, inner.y + d - pad, c.w, used + 2 * pad);
     const tw = Math.max(64, U(76)), th = 44;
     for (const id of ['music', 'sfx', 'stick']) {
       const r = B[id];

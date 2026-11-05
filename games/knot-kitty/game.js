@@ -296,6 +296,7 @@ function retry() {
 
 function next() {
   const s = S.sess;
+  safe(P.breakpoint); // Playgama's level-end ad slot; does nothing on every other build
   if (!s) return go('map');
   if (s.kind === 'daily') return go('daily');
   if (s.kind === 'bonus') return meta.bonusState().open ? startLevel('bonus', meta.bonusNext()) : go('map');

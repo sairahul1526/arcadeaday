@@ -71,7 +71,7 @@ export const STR = {
   music: 'Music', sound: 'Sound', showStick: 'Show stick', reset: 'Reset progress', resetSure: 'Tap again to reset',
   credits: 'Slurp Pot · Arcade a Day', on: 'On', off: 'Off', unlocksAt: 'Unlocks at Level {n}',
   cookToday: "Cook today's order", startFeast: 'Start Feast', allDone: 'All 60 orders served!',
-  dailyBody: 'A fresh order every day. Keep your streak!', dailyBodyShort: 'A fresh order every day!', dailyDone: 'Order served! Come back tomorrow.',
+  dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', dailyDone: 'Order served! Come back tomorrow.',
   feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
   cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Head chef! Try the Daily Order and the Feast.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
@@ -1195,7 +1195,7 @@ function drawMeter(w, dt) {
     if (k < (w.ti || 0)) tick(s * 0.32, -s * 0.28, Math.max(12, s * 0.42), C.stamp);
     // padlock: rattles on bossNudge, pops on 'padlock'
     const pp = T - hud.padPop, rat = T - hud.padRattle;
-    const ps = Math.max(14, 16 * u);
+    const ps = Math.max(18, 21 * u);
     if (!open) {
       g.save(); g.translate(s * 0.3, s * 0.22);
       if (rat >= 0 && rat < 0.4) g.rotate(Math.sin(rat * 45) * 0.35 * (1 - rat / 0.4));
