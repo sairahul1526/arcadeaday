@@ -401,7 +401,12 @@ async function contactSheet(browser, tag, names) {
     const p = await ctx.newPage();
     await p.goto(pathToFileURL(f).href);
     await p.waitForLoadState('load');
-    await p.screenshot({ path: join(OUT, `contact-${tag}.png`), fullPage: true });
+    // DECISION (11-05): the big sheets sometimes fail with "Unable to capture screenshot" on a loaded machine; the
+    // game shots are already on disk, so a short retry is enough.
+    for (let i = 0; ; i++) {
+      try { await p.screenshot({ path: join(OUT, `contact-${tag}.png`), fullPage: true }); break; }
+      catch (e) { if (i >= 2) throw e; await p.waitForTimeout(1500); }
+    }
   } finally { await ctx.close().catch(() => {}); }
 }
 async function secShots(browser, bname) {

@@ -474,13 +474,17 @@ function prep(g) {
   g.morphAttributes = {};
   return g;
 }
-function tableGeo(cx, cz) {   // #7A5236 table with a soft radial vignette (vertex colours, white ground uv)
-  const g = new PlaneGeometry(200, 200, 40, 40).rotateX(-PI / 2).toNonIndexed();
+/** Picnic: a mown park lawn at street level. Stripes run toward the horizon (one colour per cell keeps them crisp). */
+function lawnGeo(cx, cz) {
+  const NX = 56, g = new PlaneGeometry(200, 200, NX, 28).rotateX(-PI / 2).toNonIndexed();
   const p = g.attributes.position, n = p.count, col = new Float32Array(n * 3);
-  const A = new Color('#7A5236'), B = new Color('#6A452C');
-  for (let i = 0; i < n; i++) {
-    const t = sstep(9, 46, Math.hypot(p.getX(i), p.getZ(i)));
-    col[i * 3] = lerp(A.r, B.r, t); col[i * 3 + 1] = lerp(A.g, B.g, t); col[i * 3 + 2] = lerp(A.b, B.b, t);
+  const A = new Color('#93D66A'), A2 = new Color('#83CA5C'), B = new Color('#6CB24E');
+  for (let t = 0; t < n; t += 3) {
+    const mx = (p.getX(t) + p.getX(t + 1) + p.getX(t + 2)) / 3, c = Math.floor((mx + 100) / (200 / NX)) & 1 ? A : A2;
+    for (let i = t; i < t + 3; i++) {
+      const v = sstep(9, 46, Math.hypot(p.getX(i), p.getZ(i)));
+      col[i * 3] = lerp(c.r, B.r, v); col[i * 3 + 1] = lerp(c.g, B.g, v); col[i * 3 + 2] = lerp(c.b, B.b, v);
+    }
   }
   g.setAttribute('color', new BufferAttribute(col, 3));
   g.deleteAttribute('uv');
@@ -572,6 +576,90 @@ function marketBackdrop(parts, x0, x1, z0, z1, rng) {
   const fl = (z1 - 1) - (z0 - 2.5);
   row(fl, (g, u) => g.rotateY(PI / 2).translate(x0 - 2.5, 0, far + u));
   row(fl, (g, u) => g.rotateY(-PI / 2).translate(x1 + 2.5, 0, far + u));
+}
+/** Triangle soup (flat position list, one colour per vertex list) as a static part: facets stay low-poly. */
+function soup(pos, cols) {
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('color', new BufferAttribute(new Float32Array(cols), 3));
+  g.computeVertexNormals();
+  return prep(g);
+}
+/** A clipped hedge along +x from 0 to len, front face on z = 0 facing +z, base at street level. ~6 tris per 0.55 u. */
+function hedgeWall(len, H, rng) {
+  const y0 = -0.5, n = Math.max(2, Math.round(len / 0.55)), pos = [], cols = [];
+  const lo = new Color('#2F7F3A'), mid = new Color('#46A24E'), hi = new Color('#6CC66F');
+  const tops = Array.from({ length: n + 1 }, (_, i) => y0 + H + 0.14 * Math.sin(i * 1.7 + rng() * 2) + rng() * 0.16);
+  const quad = (a, b, c, d, ca, cb) => {   // a, b on the lower edge; c, d on the upper edge
+    pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+    for (const k of [ca, ca, cb, ca, cb, cb]) cols.push(k.r, k.g, k.b);
+  };
+  for (let i = 0; i < n; i++) {
+    const xa = (i / n) * len, xb = ((i + 1) / n) * len, ta = tops[i], tb = tops[i + 1];
+    const ma = y0 + (ta - y0) * 0.55, mb = y0 + (tb - y0) * 0.55;
+    quad([xa, y0, 0.05], [xb, y0, 0.05], [xb, mb, 0.2], [xa, ma, 0.2], lo, mid);
+    quad([xa, ma, 0.2], [xb, mb, 0.2], [xb, tb, 0], [xa, ta, 0], mid, hi);
+    quad([xa, ta, 0], [xb, tb, 0], [xb, tb - 0.1, -1.1], [xa, ta - 0.1, -1.1], hi, mid);
+  }
+  return soup(pos, cols);
+}
+/** White picket fence along +x from 0 to len, front face toward +z, base at street level. 3 tris a picket + 2 rails. */
+function picketFence(len) {
+  const y0 = -0.5, pos = [], cols = [], w = 0.075, h = 0.62, tip = 0.1, step = 0.3;
+  const cream = new Color('#FFF6E6'), shade = new Color('#D9CDBB');
+  const tri = (a, b, c, ca, cb, cc) => { pos.push(...a, ...b, ...c); for (const k of [ca, cb, cc]) cols.push(k.r, k.g, k.b); };
+  for (let x = step / 2; x < len; x += step) {
+    const l = [x - w, y0, 0], r = [x + w, y0, 0], tl = [x - w, y0 + h, 0], tr = [x + w, y0 + h, 0], t = [x, y0 + h + tip, 0];
+    tri(l, r, tr, shade, shade, cream); tri(l, tr, tl, shade, cream, cream); tri(tl, tr, t, cream, cream, cream);
+  }
+  for (const y of [0.2, 0.46]) {
+    const a = [0, y0 + y, -0.03], b = [len, y0 + y, -0.03], c = [len, y0 + y + 0.07, -0.03], d = [0, y0 + y + 0.07, -0.03];
+    tri(a, b, c, shade, shade, shade); tri(a, c, d, shade, shade, shade);
+  }
+  return soup(pos, cols);
+}
+/** Picnic Park backdrop: a picket fence and a clipped hedge past the far edge and both flanks, sunflowers, then trees
+ *  melting into the fog. The near side only gets flat things (tufts, daisies, flowerbeds): tall decor there blurs over the HUD. */
+function picnicBackdrop(parts, x0, x1, z0, z1, rng) {
+  const off = 3.7, far = z0 - off, xl = x0 - off, xr = x1 + off, flank = z1 + 2.5 - far;
+  const place = (kind, x, z, s, ry) => {
+    try { parts.push(prep(props.geometryFor(kind).clone()).scale(s, s, s).rotateY(ry).translate(x, -0.5, z)); } catch (e) { /* skip */ }
+  };
+  const patch = (x, z, r) => parts.push(tint(new CircleGeometry(r, 9).rotateX(-PI / 2), '#6FB552').scale(1, 1, 0.8).translate(x, -0.494, z));
+  const run = (geo, side) => parts.push(
+    side === 0 ? geo.translate(xl - 8, 0, far)
+      : side < 0 ? geo.rotateY(PI / 2).translate(xl, 0, far + flank) : geo.rotateY(-PI / 2).translate(xr, 0, far));
+  run(picketFence(xr - xl + 16), 0); run(picketFence(flank), -1); run(picketFence(flank), 1);
+  const hed = 0.95, back = 0.5;
+  parts.push(hedgeWall(xr - xl + 22, hed, rng).translate(xl - 11, 0, far - back));
+  parts.push(hedgeWall(flank, hed, rng).rotateY(PI / 2).translate(xl - back, 0, far + flank));
+  parts.push(hedgeWall(flank, hed, rng).rotateY(-PI / 2).translate(xr + back, 0, far));
+  // sunflowers lean over the fence on the far side, trees rise behind the hedge
+  for (let x = xl + 0.8 + rng() * 2; x < xr - 0.5; x += 2.3 + rng() * 2.6) place('sunflower', x, far - 0.2 + rng() * 0.3, 0.85 + rng() * 0.3, (rng() - 0.5) * 0.7);
+  for (let x = xl - 6 + rng() * 2; x < xr + 6; x += 3.4 + rng() * 2.6) {
+    place('tree', x, far - 2.6 - rng() * 4.5, 1.25 + rng() * 0.7, rng() * TAU);
+    if (rng() < 0.5) place('bush', x + 1.5, far - 1.9 - rng(), 1.3 + rng() * 0.5, rng() * TAU);
+  }
+  for (const [s, ex] of [[-1, xl], [1, xr]]) {
+    for (let z = far + 2; z < z1 + 2; z += 4 + rng() * 3) place('tree', ex + s * (2.4 + rng() * 3.5), z, 1.2 + rng() * 0.6, rng() * TAU);
+  }
+  // the lawn inside the fence: tufts, daisies and mown patches, all low enough to pass under the HUD
+  const scatter = i => {
+    const k = i % 5;
+    return k === 0 ? [lerp(x0 - 3.2, x1 + 3.2, rng()), z0 - 0.7 - rng() * 2.6]
+      : k === 1 ? [x0 - 0.7 - rng() * 2.6, lerp(z0, z1, rng())]
+        : k === 2 ? [x1 + 0.7 + rng() * 2.6, lerp(z0, z1, rng())]
+          : [lerp(x0 - 3, x1 + 3, rng()), z1 + 0.7 + rng() * 3.6];
+  };
+  for (let i = 0; i < 18; i++) { const [x, z] = scatter(i); place('grasstuft', x, z, 1 + rng() * 0.5, rng() * TAU); }
+  for (let i = 0; i < 10; i++) { const [x, z] = scatter(i); patch(x, z, 0.5 + rng() * 0.8); }
+  const petals = ['#FFFFFF', '#FFFFFF', '#FFC93C', '#FF9EC4'];
+  for (let i = 0; i < 40; i++) {
+    const [x, z] = scatter(i), c = petals[(rng() * 4) | 0];
+    parts.push(tint(new CircleGeometry(0.075, 5).rotateX(-PI / 2), c).translate(x, -0.488, z));
+    parts.push(tint(new CircleGeometry(0.03, 4).rotateX(-PI / 2), c === '#FFC93C' ? '#FF7A59' : '#FFC93C').translate(x, -0.484, z));
+  }
+  place('flowerbed', x0 - 1.1, z1 + 1.2, 1.4, 0.3); place('flowerbed', x1 + 1.1, z1 + 1.5, 1.2, -0.4);
 }
 /** Harbour Pier: pilings just outside the deck edge and a few toy sailboats out at sea. */
 function harbourBackdrop(parts, x0, x1, z0, z1, rng) {
@@ -801,7 +889,7 @@ export async function initRender(cv, opts = {}) {
   { const c = blankTex.image.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, 4, 4); }
   blankTex.colorSpace = SRGBColorSpace; blankTex.wrapS = blankTex.wrapT = RepeatWrapping;
   staticMat = patchStatic(stencilSkip(new MeshLambertMaterial({ vertexColors: true, map: blankTex })));
-  staticMesh = new Mesh(tableGeo(0, 0), staticMat);
+  staticMesh = new Mesh(lawnGeo(0, 0), staticMat);
   staticMesh.frustumCulled = false; scene.add(staticMesh);
 
   // the hole (D25): rim disc writes stencil 1; pit and stew draw only where stencil == 1
@@ -839,6 +927,10 @@ export async function initRender(cv, opts = {}) {
     const g = new BufferGeometry();
     for (const n of ['position', 'normal', 'color']) if (base.attributes[n]) g.setAttribute(n, base.attributes[n]);
     if (base.index) g.setIndex(base.index);
+    // DECISION (11-05, art lane): the smallest foods were a few pixels at 390 wide, so tier 0 draws 30 % larger and tier 1
+    // 12 %. Render only: sim sizes, what fits the pot and the "too big" cue are unchanged (these are always edible).
+    const vis = K.food ? (K.tier === 0 ? 1.3 : K.tier === 1 ? 1.12 : 1) : 1;
+    if (vis !== 1) { const q = base.attributes.position.clone(); for (let i = 0; i < q.array.length; i++) q.array[i] *= vis; g.setAttribute('position', q); }
     const cap = capFor(K);
     const fx = instAttr(g, 'aFx', cap, 4);
     const m = new InstancedMesh(g, propMat, cap);
@@ -975,7 +1067,9 @@ export function loadLevel(L, skinId) {
 function buildStatic(L, town) {
   // DECISION: off-board decor on the near side (z > z1, toward the camera) is skipped: at 55° pitch it sits between
   // the camera and the play area and reads as a big blurry blob over the bottom HUD (seen at 390×844).
-  // DECISION (11-04, §7.2–§7.3): the ground is per town: Picnic the wooden table, Market a cobbled street with toy
+  // DECISION (11-05, art lane): Picnic's bare brown table read as a void around the board on phones, so the ground is now
+  // a mown lawn with a picket fence, hedge, sunflowers and trees past the far edge and flanks (flat things only on the near side).
+  // DECISION (11-04, §7.2–§7.3): the ground is per town: Picnic the lawn, Market a cobbled street with toy
   // shopfront rows ~2.5 u past the far edge and both flanks (never the near side), Harbour the sea (water beyond every
   // board edge, swell + edge foam in patchStatic) with pilings and a few sailboats. Off-board decor sits at street
   // level (−0.5) or at the waterline in Harbour. Everything static merges into the one mesh (D25: one draw).
@@ -987,10 +1081,11 @@ function buildStatic(L, town) {
   const x0 = num(L.x0, -(L.W || 10) / 2), x1 = num(L.x1, (L.W || 10) / 2), z0 = num(L.z0, -(L.D || 10) / 2), z1 = num(L.z1, (L.D || 10) / 2);
   const Wd = num(L.W, x1 - x0), Dd = num(L.D, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const rng = mulberry32(hs32('sp' + (L.n ?? L.id ?? '') + town));
-  const parts = [town === 'market' ? streetGeo(cx, cz, town) : town === 'harbour' ? seaGeo(cx, cz) : tableGeo(cx, cz)], fresh = [];
+  const parts = [town === 'market' ? streetGeo(cx, cz, town) : town === 'harbour' ? seaGeo(cx, cz) : lawnGeo(cx, cz)], fresh = [];
   try { const b = props.boardGeometry(Wd, Dd, town); fresh.push(b); parts.push(prep(b.clone()).translate(cx, 0, cz)); } catch (e) { /* board missing: ground only */ }
   if (town === 'market') marketBackdrop(parts, x0, x1, z0, z1, rng);
   else if (town === 'harbour') harbourBackdrop(parts, x0, x1, z0, z1, rng);
+  else picnicBackdrop(parts, x0, x1, z0, z1, rng);
   const surf = L.surfaces || [], sb = [], lvl = [];
   for (let k = 0; k < surf.length; k++) {
     const s = surf[k], cr = Math.abs(Math.cos(s.rot || 0)), sr = Math.abs(Math.sin(s.rot || 0));
@@ -1155,7 +1250,7 @@ export function title(on) { const v = !!on; if (v !== titleOn) titleT = 0; title
 // ------------------------------------------------------------------ camera
 function placeCamera(tx, tz, wv, yaw, pitch, ax, ay) {
   // DECISION: fog starts just past the board's farthest corner (view depth) and is opaque 16 u later, so the
-  // board is never hazed and the table beyond it melts into the town's fog colour instead of a muddy brown band
+  // board is never hazed and the ground beyond it melts into the town's fog colour instead of a muddy band
   // (portrait at a big radius sees ~2.8 × Wv deep). Without a board: d + 4 … d + 38 (GDD).
   const aspect = cssW / cssH;
   const d = wv / (2 * Math.tan(20 * D2R) * aspect);

@@ -2148,17 +2148,25 @@ function drawMap(st, dt) {
     const im = img('map-' + TOWNS[tw.i]);
     const vy0 = Math.max(V.y, y0), vy1 = Math.min(V.y + V.h, y1);
     if (im) {
+      // DECISION (11-05, art lane): on wide screens the town art carries on past the column (mirrored at each seam, dimmed
+      // so the trail stays the subject) instead of flat brown bands; locked towns wash the full width below.
       const th = col.w * (im.naturalHeight || im.height) / (im.naturalWidth || im.width);
-      g.save(); g.beginPath(); g.rect(col.x, vy0, col.w, vy1 - vy0); g.clip();
-      for (let k = 0, ty = y1 - th; ty + th > y0; k++, ty -= th) {
-        if (ty > vy1 || ty + th < vy0) continue;
-        if (k % 2) { g.save(); g.translate(0, ty * 2 + th); g.scale(1, -1); g.drawImage(im, col.x, ty, col.w, th); g.restore(); }
-        else g.drawImage(im, col.x, ty, col.w, th);
+      const wings = col.w < V.w - 2 ? Math.ceil((col.x - V.x) / col.w) : 0;
+      for (let c = -wings; c <= wings; c++) {
+        const px = col.x + c * col.w;
+        g.save(); g.beginPath(); g.rect(px, vy0, col.w, vy1 - vy0); g.clip();
+        if (c % 2) { g.translate(px * 2 + col.w, 0); g.scale(-1, 1); }
+        for (let k = 0, ty = y1 - th; ty + th > y0; k++, ty -= th) {
+          if (ty > vy1 || ty + th < vy0) continue;
+          if (k % 2) { g.save(); g.translate(0, ty * 2 + th); g.scale(1, -1); g.drawImage(im, px, ty, col.w, th); g.restore(); }
+          else g.drawImage(im, px, ty, col.w, th);
+        }
+        g.restore();
       }
-      g.restore();
-    } else { g.fillStyle = ['#8CCB72', '#EDBB86', '#8FCADB'][tw.i]; g.fillRect(col.x, vy0, col.w, vy1 - vy0); }
+    } else { g.fillStyle = ['#8CCB72', '#EDBB86', '#8FCADB'][tw.i]; g.fillRect(V.x, vy0, V.w, vy1 - vy0); }
   }
-  if (col.w < V.w - 2) {   // column edges (landscape / desktop)
+  if (col.w < V.w - 2) {   // wings dim + column edges (landscape / desktop)
+    g.fillStyle = 'rgba(58,36,24,0.3)'; g.fillRect(V.x, V.y, col.x - V.x, V.h); g.fillRect(col.x + col.w, V.y, V.x + V.w - col.x - col.w, V.h);
     g.fillStyle = 'rgba(58,36,24,0.35)'; g.fillRect(col.x - 6, V.y, 6, V.h); g.fillRect(col.x + col.w, V.y, 6, V.h);
   }
   // path
@@ -2227,7 +2235,7 @@ function drawMap(st, dt) {
     if (cur > tw.i * 20) continue;
     const y0 = sy(tw.y), y1 = y0 + tw.h;
     if (y1 < V.y || y0 > V.y + V.h) continue;
-    g.fillStyle = 'rgba(38,24,16,0.62)'; g.fillRect(col.x, y0, col.w, tw.h);
+    g.fillStyle = 'rgba(38,24,16,0.62)'; g.fillRect(V.x, y0, V.w, tw.h);
     const vy0 = Math.max(y0, V.y), vy1 = Math.min(y1, V.y + V.h);
     if (vy1 - vy0 < 120) continue;
     const ms = Math.min(col.w * 0.5, (vy1 - vy0) * 0.42, 200 * u);
