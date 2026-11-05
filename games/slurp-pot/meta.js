@@ -329,6 +329,9 @@ export async function initMeta(Pin) {
   replaceIn(d, clean);
   syncOn = P.env === 'web' && !qOn('record') && !qOn('og');
   wireSync();
+  // DECISION (chaos lane 11-05): fold the local copy in at boot too. Facebook loads its server save first, and after a
+  //   failed setDataAsync that copy is behind this device; no-op on the web, where the two copies are the same save.
+  mergeStored();
   if (JSON.stringify(d) !== before) P.save();
   reportScore();
   return d;
