@@ -1,7 +1,7 @@
 // Slurp Pot level tuner (GDD §5.3). Levels role.
 // Usage: node tools/slurp-pot/tune.mjs [1-10] [--seeds 8] [--runs 30] [--jobs 4] [--confirm 100] [--write]
 //        node tools/slurp-pot/tune.mjs --daily 400 [--jobs 6] [--runs 20] [--write]   (Daily T table + bumps)
-//        node tools/slurp-pot/tune.mjs --retime 400 [--jobs 3] [--fresh] [--out PATH] [--write]  (Daily T re-measure)
+//        node tools/slurp-pot/tune.mjs --retime 400 [--jobs 3] [--fresh] [--out PATH] [--write] [--partial]  (Daily T re-measure)
 //        --recheck: confirm the stored spec first and skip the search when it passes every gate
 //        --from B: start the seed bumps at B, for a level whose first bumps an earlier run already screened
 // For each level it tries seed bumps (+7919, at most 40) and two margin targets, measures every bot once with the
@@ -351,7 +351,8 @@ async function mainRetime(args, opt) {
   const log = [`tune.mjs ${args.join(' ')} — daily retime: ${meas.length}/${rows.length} day-variants measured, ${bad.length} failing, ${moved} T changed, ${rebump} re-bumped`];
   if (Ts.length) log.push(`  T range ${Ts[0]}–${Ts[Ts.length - 1]} s, median ${Ts[Ts.length >> 1]} s`);
   for (const r of bad) log.push(`  daily ${r.key} variant ${'ABC'[r.variant]} FAIL: ${r.why}`);
-  if (args.includes('--write') && meas.length === rows.length) { writeDailies(rows); log.push(`wrote ${DAILIES_PATH}`); }
+  // --partial writes whatever is measured over the old table. Days run in date order, so a capped retime still fixes the nearest days.
+  if (args.includes('--write') && (meas.length === rows.length || args.includes('--partial'))) { writeDailies(rows); log.push(`wrote ${DAILIES_PATH} (${meas.length}/${rows.length} measured)`); }
   else if (args.includes('--write')) log.push(`not written: ${rows.length - meas.length} day-variants still to measure`);
   report(log, true);
   console.log(log.slice(0, 2).concat(bad.slice(0, 5).map(r => `  daily ${r.key} ${'ABC'[r.variant]} FAIL: ${r.why}`)).join('\n'));

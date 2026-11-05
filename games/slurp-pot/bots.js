@@ -265,11 +265,11 @@ function segBlocked(w, x0, z0, x1, z1, skip) {
 const RC = 0.5;
 let rBlk = new Uint8Array(0), rPar = new Int32Array(0), rQ = new Int32Array(0);
 /** Fills blk (closed cells of the router grid for the pot's current size, item skip left open); returns nx. */
-function blockGrid(w, blk, skip) {
+function blockGrid(w, blk, skip, slack = 0) {
   const _ = w._, x0 = _.x0, z0 = _.z0;
   const nx = Math.max(1, Math.ceil((_.x1 - x0) / RC)), nz = Math.max(1, Math.ceil((_.z1 - z0) / RC));
   blk.fill(0, 0, nx * nz);
-  const half = 0.5 * w.pot.r + 0.05;
+  const half = 0.5 * w.pot.r + 0.05 - slack;
   for (let j = 0; j < w.n; j++) {
     if (j === skip || w.st[j] !== 0 || w.hid[j] || !(w.flags[j] & L.F.SOLID)) continue;
     const rr = _.a[j] + half, cx = w.ix[j], cz = w.iz[j];
@@ -353,11 +353,11 @@ function pathLen(w, i) {
   return best;
 }
 
-function route(w, tgt, tx, tz) {
+function route(w, tgt, tx, tz, tight = false) {
   const _ = w._, x0 = _.x0, z0 = _.z0;
   const N = gridN(w);
   if (rBlk.length < N) { rBlk = new Uint8Array(N); rPar = new Int32Array(N); rQ = new Int32Array(N); }
-  const nx = blockGrid(w, rBlk, tgt), nz = N / nx;
+  const nx = Math.max(1, Math.ceil((_.x1 - x0) / RC)), nz = N / nx;
   const P = w.pot;
   const cell = (x, z) => {
     let i = Math.floor((x - x0) / RC), k = Math.floor((z - z0) / RC);
@@ -366,24 +366,34 @@ function route(w, tgt, tx, tz) {
     return k * nx + i;
   };
   const s0 = cell(P.x, P.z), g = cell(tx, tz);
-  rBlk[s0] = 0; rBlk[g] = 0;
-  rPar.fill(-1, 0, N);
-  let qh = 0, qt = 0;
-  rQ[qt++] = s0; rPar[s0] = s0;
+  // DECISION (Thu, gate stall): a closed grid is not always a closed gap. The pot collides at a + 0.5·r, but cells are
+  // 0.5 u and sampled at their centres, so a grown pot's corridor back through an eaten gate can miss every cell centre.
+  // L25 expert 1005 (r 1.39) got no path to the pineapples, banned them, and wandered until time out, while a
+  // force-steered pot took them in 8 s. No path at full clearance now retries with 0.35 u less (0.7 of a cell), but only
+  // when the pot is big enough for the target's zone (tight, see routeTo), so a closed pen still reads as closed.
+  // L25 at T 82: expert 70.6 -> 100 %, average 85 -> 99 %. L4: average 3-star 27 -> 54 % (no more stall), casual unchanged.
   let found = false;
-  while (qh < qt) {
-    const c = rQ[qh++];
-    if (c === g) { found = true; break; }
-    const ci = c % nx, ck = (c - ci) / nx;
-    for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++) {
-      if (!di && !dk) continue;
-      const i = ci + di, k = ck + dk;
-      if (i < 0 || k < 0 || i >= nx || k >= nz) continue;
-      const q = k * nx + i;
-      if (rPar[q] >= 0 || rBlk[q]) continue;
-      if (di && dk && (rBlk[ck * nx + i] || rBlk[k * nx + ci])) continue;   // no corner cutting
-      rPar[q] = c; rQ[qt++] = q;
+  for (const slack of tight ? [0, 0.7 * RC] : [0]) {
+    blockGrid(w, rBlk, tgt, slack);
+    rBlk[s0] = 0; rBlk[g] = 0;
+    rPar.fill(-1, 0, N);
+    let qh = 0, qt = 0;
+    rQ[qt++] = s0; rPar[s0] = s0;
+    while (qh < qt) {
+      const c = rQ[qh++];
+      if (c === g) { found = true; break; }
+      const ci = c % nx, ck = (c - ci) / nx;
+      for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dk) continue;
+        const i = ci + di, k = ck + dk;
+        if (i < 0 || k < 0 || i >= nx || k >= nz) continue;
+        const q = k * nx + i;
+        if (rPar[q] >= 0 || rBlk[q]) continue;
+        if (di && dk && (rBlk[ck * nx + i] || rBlk[k * nx + ci])) continue;   // no corner cutting
+        rPar[q] = c; rQ[qt++] = q;
+      }
     }
+    if (found) break;
   }
   if (!found) return null;
   const path = [];
@@ -402,7 +412,7 @@ function routeTo(bot, w, tgt, tx, tz) {
     // reuse while the cached waypoint is still ahead and visible
     if (!segBlocked(w, w.pot.x, w.pot.z, bot.rWp.x, bot.rWp.z, tgt)) return bot.rWp;
   }
-  const wp = route(w, tgt, tx, tz);
+  const wp = route(w, tgt, tx, tz, tgt >= 0 && zoneOK(bot, w, tgt, w.pot.r));
   bot.rTgt = tgt; bot.rT = bot.t + 0.3; bot.rWp = wp;
   return wp;
 }
