@@ -3,6 +3,7 @@
 //        node tools/slurp-pot/tune.mjs --daily 400 [--jobs 6] [--runs 20] [--write]   (Daily T table + bumps)
 //        node tools/slurp-pot/tune.mjs --retime 400 [--jobs 3] [--fresh] [--out PATH] [--write]  (Daily T re-measure)
 //        --recheck: confirm the stored spec first and skip the search when it passes every gate
+//        --from B: start the seed bumps at B, for a level whose first bumps an earlier run already screened
 // For each level it tries seed bumps (+7919, at most 40) and two margin targets, measures every bot once with the
 // timer lifted (T 999), then picks T inside goal.T ± 15 % and the candidate whose predicted §5.3 gates score best.
 // The pick is confirmed with verify.mjs (real T, --confirm runs per human bot). --write stores seed, T, margin and
@@ -137,7 +138,7 @@ function knobs(spec) {
 // expert terms left out); only the best `full` survivors get the average + expert sample. Up to `seeds` seed bumps
 // are screened; screening stops once 6 survivors have a partial score under 0.5. If nothing survives, the 3
 // candidates closest to the screens go on. Identical layouts (a margin knob that changes nothing) run once.
-export function tuneSpec(spec, { seeds = 24, runs = 20, noise = 10, xruns = 6, full = 3, log = () => {} } = {}) {
+export function tuneSpec(spec, { seeds = 24, from = 0, runs = 20, noise = 10, xruns = 6, full = 3, log = () => {} } = {}) {
   const base = spec.seed0 != null ? spec.seed0 : spec.seed;
   const band = bandOf(spec.n), gw = greedyWindow(spec), timed = spec.timed !== false, Ts = tRange(spec);
   const goalT = (spec.goal && spec.goal.T) || spec.T, maxT = Math.max(90, goalT * 2.5);
@@ -150,7 +151,7 @@ export function tuneSpec(spec, { seeds = 24, runs = 20, noise = 10, xruns = 6, f
     c.bt = bestT(c.cand, c.S);
   };
   const rowOf = c => ({ bump: c.b, seed: c.cand.seed, margin: c.cand.margin, ...c.bt, g: +c.S.greedy.t.toFixed(1), pl: +c.S.planner.t.toFixed(1) });
-  screen: for (let b = 0; b < Math.min(seeds, SEED_MAX + 1); b++) {
+  screen: for (let b = from; b < Math.min(seeds, SEED_MAX + 1); b++) {
     for (const kn of knobs(spec)) {
       const cand = { ...spec, seed: (base + SEED_STEP * b) >>> 0, margin: kn.margin };
       const lv = LV.genLevel({ ...cand, T: timed ? BIG : cand.T }, cand.seed);
@@ -459,7 +460,7 @@ async function child(n, o) {
 async function main() {
   const args = process.argv.slice(2);
   const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? +args[i + 1] : d; };
-  const o = { seeds: opt('--seeds', 8), runs: opt('--runs', 30), noise: opt('--noise', 10), xruns: opt('--xruns', 8),
+  const o = { seeds: opt('--seeds', 8), from: opt('--from', 0), runs: opt('--runs', 30), noise: opt('--noise', 10), xruns: opt('--xruns', 8),
     confirm: opt('--confirm', 100), xconfirm: opt('--xconfirm', 50), recheck: args.includes('--recheck') };
   W.greedy = opt('--wg', W.greedy); W.casual = opt('--wc', W.casual);
   const wArgs = ['--wg', String(W.greedy), '--wc', String(W.casual)];
@@ -483,7 +484,7 @@ async function main() {
     writeLevelsData(DATA_PATH, specs, REC, km);
     return km;
   };
-  const cliArgs = n => ['--child', String(n), ...['--seeds', '--runs', '--noise', '--xruns', '--confirm', '--xconfirm'].flatMap(k => [k, String(o[k.slice(2)])]), ...wArgs, ...(o.recheck ? ['--recheck'] : [])];
+  const cliArgs = n => ['--child', String(n), ...['--seeds', '--from', '--runs', '--noise', '--xruns', '--confirm', '--xconfirm'].flatMap(k => [k, String(o[k.slice(2)])]), ...wArgs, ...(o.recheck ? ['--recheck'] : [])];
   let next = 0;
   await new Promise(done => {
     let live = 0;
