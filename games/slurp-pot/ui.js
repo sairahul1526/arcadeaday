@@ -7,7 +7,7 @@
 //   pointer(type, x, y) -> bool   type 'down'|'move'|'up'|'cancel', CSS px relative to the canvas
 //   key(e) -> bool                Enter/Space = primary button, Esc = back/close/pause, P = pause, 1/2/3 = boosters
 //   show(screen, data)            'win' {n, kind, stars, tLeft, chainBest, coins, newStars, gifts, chest, milestone, nextSkin}
-//                                 'fail' {n, kind, why, progress, missing:[{kind,need,got}], canFreeze, freezeCost}
+//                                 'fail' {n, kind, why, progress, missing:[{kind,n}], canFreeze, freezeCost}
 //                                 any other screen name: data optional
 //   callout(id, icon, text, ms)   one at a time, queued by priority (id prefix tut > twist > gift > other)
 //   rects() -> [{id, x, y, w, h, soft}]   live button rects (input.setBlockRects; soft = booster: a drag >= 8 px steers)
@@ -75,7 +75,8 @@ export const STR = {
   feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
   cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Head chef! Try the Daily Order and the Feast.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
-  giftBody: 'Find it in the spice tins on the side.', chestT: 'Town chest!', starBonus: 'Star bonus!',
+  giftBody: 'Tap them during a level.', giftMagnet: 'Tap it during a level to pull food in.', giftFreeze: 'Tap it during a level for more time.',
+  giftMega: 'Tap it during a level to eat bigger food.', tooBig: 'Too big! Eat smaller food', chestT: 'Town chest!', starBonus: 'Star bonus!',
   giftCoins: '+{n} coins', eachBooster: '{n} of each booster', levelLabel: 'L{n} · {name}', levelShort: 'L{n}', dailyLabel: 'Daily',
   feastLabel: 'Feast', mute: 'Sound', newBest: 'NEW BEST!', stars: '{n}', loading: 'Cooking…',
   magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
@@ -1373,9 +1374,25 @@ function tutorialTick(st, w) {
   // L1–L2: ghost hand after 1.2 s of no input; "Drag to move" only after 4 s (tut bit 1)
   hud.ghost = !moved && n <= 2 && !tutHas('drag') && since > 1.2;
   if (!moved && n <= 2 && !tutHas('drag') && since > 4 && !hud.idleCall) { hud.idleCall = true; callout('tut-drag', 'hand', STR.dragToMove, 2500); }
+  tooBigTick(w, n, moved);
   // twist intros: stuckTick (below) owns the ≤ 4-word "stuck 4 s" callouts for every twist
   // L1: the bouncing gold pointer stays on the flown-to sandwich until it is eaten
   if (hud.hintItem >= 0 && w.st && w.st[hud.hintItem] !== 0) hud.hintItem = -1;
+}
+// DECISION (11-05, first-time lane): pressing against something too big said nothing, and a slow push never reaches the
+//   bump speed, so L1-L3 test contact here: the first touch of an item that doesn't fit names the rule, once per save.
+function tooBigTick(w, n, moved) {
+  if (n > 3 || !moved || hud.bigTip || w.mode !== 'level' || !w.fits || !w.pot || !w.ia) return;
+  if (seenFlag('tip:toobig')) { hud.bigTip = true; return; }
+  const r = w.pot.r;
+  for (let i = 0; i < (w.n || 0); i++) {
+    if (w.fits[i] || (w.st && w.st[i] !== 0) || isHid(w, i)) continue;
+    const reach = (r + w.ia[i]) * 1.08, dx = w.ix[i] - w.pot.x, dz = w.iz[i] - w.pot.z;
+    if (dx * dx + dz * dz > reach * reach) continue;
+    hud.bigTip = true; seenFlag('tip:toobig', true);
+    callout('tut-toobig', iconFor(itemKind(w, i)), STR.tooBig, 3000);
+    return;
+  }
 }
 // DECISION (stuck callouts): a twist level gets ONE ≤ 4-word callout once the player has moved and then 4 s pass
 //   without a bite: once per world and once per save per twist (meta.seen('stuck:<id>'); pens/simmer also keep
@@ -1427,7 +1444,9 @@ function startFly() {
   hud.hintItem = best;
 }
 function drawFly(w) {
-  if (hud.hintItem >= 0 && (!hud.fly || T - hud.fly.t0 > 0.6)) {
+  // DECISION (11-05, first-time lane): the pointer waits until the pot can eat the item. Bouncing on a sandwich the pot
+  //   can't swallow sent new players into it for a minute; it now pops in as the reward for growing.
+  if (hud.hintItem >= 0 && (!hud.fly || T - hud.fly.t0 > 0.6) && (!w.fits || w.fits[hud.hintItem])) {
     const p = worldToScreen(w.ix[hud.hintItem], w.iz[hud.hintItem]);
     if (p && onPlay(p)) bouncePointer(p.x, p.y - L.hud.arrow);
   }
@@ -1869,7 +1888,8 @@ function drawWin(st, w) {
 function failHeading(d) {
   if (d.why === 'spoiled') return STR.spoiled;
   const size = +d.progress || 0;
-  const miss = (d.missing || []).reduce((s, l) => s + Math.max(0, (l.need | 0) - (l.got | 0)), 0);
+  // logic.missing() lines are {kind, n}; forced qa fails pass {kind, need, got}
+  const miss = (d.missing || []).reduce((s, l) => s + (l.n != null ? l.n | 0 : Math.max(0, (l.need | 0) - (l.got | 0))), 0);
   if (size >= 0.9 && miss <= 1) return STR.soClose;
   if (size >= 0.7 || miss <= 2) return STR.almost;
   return STR.outOfTime;
@@ -2116,6 +2136,20 @@ function mapPhysics(dt) {
   if (MAP.s < 0) { MAP.s *= Math.exp(-12 * dt); if (MAP.s > -0.5) MAP.s = 0; }
   else if (MAP.s > MAP.max) { MAP.s = MAP.max + (MAP.s - MAP.max) * Math.exp(-12 * dt); if (MAP.s - MAP.max < 0.5) MAP.s = MAP.max; }
 }
+// DECISION (11-05, first-time lane): the art past the column is a soft blurred copy. Sharp mirrored art read as a second
+//   fountain and a seam; blurred it reads as background. Downscale then upscale in steps (ctx.filter is missing on Safari);
+//   built once per town.
+const wingCache = {};
+function wingArt(name, im) {
+  if (wingCache[name]) return wingCache[name];
+  const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const step = (src, k) => {
+    const c = document.createElement('canvas'); c.width = Math.max(2, Math.round(iw / k)); c.height = Math.max(2, Math.round(ih / k));
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  };
+  return (wingCache[name] = step(step(step(step(im, 8), 32), 16), 6));
+}
 function drawMap(st, dt) {
   // DECISION: the town map is a full-screen scroller, not a card. Each town is one band of the content (ribbon at
   //   the bottom where you enter, 20 nodes, the town chest at the top); its kie map art is tiled down the band at
@@ -2153,13 +2187,13 @@ function drawMap(st, dt) {
       const th = col.w * (im.naturalHeight || im.height) / (im.naturalWidth || im.width);
       const wings = col.w < V.w - 2 ? Math.ceil((col.x - V.x) / col.w) : 0;
       for (let c = -wings; c <= wings; c++) {
-        const px = col.x + c * col.w;
+        const px = col.x + c * col.w, art = c ? wingArt(TOWNS[tw.i], im) : im;
         g.save(); g.beginPath(); g.rect(px, vy0, col.w, vy1 - vy0); g.clip();
         if (c % 2) { g.translate(px * 2 + col.w, 0); g.scale(-1, 1); }
         for (let k = 0, ty = y1 - th; ty + th > y0; k++, ty -= th) {
           if (ty > vy1 || ty + th < vy0) continue;
-          if (k % 2) { g.save(); g.translate(0, ty * 2 + th); g.scale(1, -1); g.drawImage(im, px, ty, col.w, th); g.restore(); }
-          else g.drawImage(im, px, ty, col.w, th);
+          if (k % 2) { g.save(); g.translate(0, ty * 2 + th); g.scale(1, -1); g.drawImage(art, px, ty, col.w, th); g.restore(); }
+          else g.drawImage(art, px, ty, col.w, th);
         }
         g.restore();
       }
@@ -2167,7 +2201,12 @@ function drawMap(st, dt) {
   }
   if (col.w < V.w - 2) {   // wings dim + column edges (landscape / desktop)
     g.fillStyle = 'rgba(58,36,24,0.3)'; g.fillRect(V.x, V.y, col.x - V.x, V.h); g.fillRect(col.x + col.w, V.y, V.x + V.w - col.x - col.w, V.h);
-    g.fillStyle = 'rgba(58,36,24,0.35)'; g.fillRect(col.x - 6, V.y, 6, V.h); g.fillRect(col.x + col.w, V.y, 6, V.h);
+    const sw = Math.min(70, col.x - V.x);   // the column lies on the blurred art: a soft shadow, no hard line
+    for (const [x0, x1] of [[col.x, col.x - sw], [col.x + col.w, col.x + col.w + sw]]) {
+      const sh = g.createLinearGradient(x0, 0, x1, 0);
+      sh.addColorStop(0, 'rgba(58,36,24,0.5)'); sh.addColorStop(1, 'rgba(58,36,24,0)');
+      g.fillStyle = sh; g.fillRect(Math.min(x0, x1), V.y, sw, V.h);
+    }
   }
   // path
   const vis = mp.nodes.filter(nd => { const y = sy(nd.y); return y > V.y - mp.step * 2 && y < V.y + V.h + mp.step * 2; });
@@ -2790,13 +2829,15 @@ function resetScreenState() { shopSel = bookTab = feastSel = null; dsCache.t = -
 const BOOST_NAME = { magnet: 'magnet', freeze: 'freezeB', mega: 'mega' };
 function giftBody(d) {
   // DECISION: Core's gift data is { kind, count } (unlock gift), { kind, count, coins, milestone } or { chest, coins };
-  //   the card names the booster and coins, and points at the spice tins (D33), never a jar.
+  //   the card names the booster and coins, then says what to do with it (first-time lane, 11-05: "spice tins" meant
+  //   nothing on a round button).
   const parts = [];
   if (BOOST_NAME[d.kind]) parts.push(STR[BOOST_NAME[d.kind]] + ' ×' + (d.count || 1));
   if (d.coins) parts.push(fmt(STR.giftCoins, { n: d.coins }));
   if (d.chest && d.chest.boost) parts.push(fmt(STR.eachBooster, { n: 2 }));
   const boosts = BOOST_NAME[d.kind] || (d.chest && d.chest.boost);
-  return parts.join(' · ') + (parts.length ? '. ' : '') + (boosts ? STR.giftBody : '');
+  const use = { magnet: STR.giftMagnet, freeze: STR.giftFreeze, mega: STR.giftMega }[d.kind] || STR.giftBody;
+  return parts.join(' · ') + (parts.length ? '. ' : '') + (boosts ? use : '');
 }
 const INFO = {
   shop: { icon: 'shop', title: () => STR.shop, body: () => STR.shopBody },

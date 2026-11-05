@@ -634,3 +634,8 @@ These still apply in v2. Give the relevant ones to every QA, bot and video agent
 - **On wide screens, carry the art past the column.** The map's flat side bands became the same town art, mirrored at each seam and dimmed, so the trail stays the subject. Wash locked towns across the full width too, or the wings look unlocked.
 - **`tune.mjs --write` holds a snapshot of the specs.** Applying timers or specs while it runs gets overwritten. Finish every hand edit first, then start the search.
 - **Big screenshots can fail on a loaded machine.** `Page.captureScreenshot` gave "Unable to capture screenshot" on the largest contact sheets with the tuners running. It's a tool hiccup, not a game bug, and a short retry fixes it.
+- A forced QA path can't catch a data-shape bug. `__qaFail` passed `{need, got}` while the real fail passed `{kind, n}`, so a real fail could never say "Out of time!" and the shots all looked right. End one level the real way before trusting a card.
+- Reproduce a lane's stall before you believe or dismiss it. The first-time lane's bot "stalled" on desktop in 3 of 3 levels; a clean loop at the same size won L1 to L3 with no stall, so the fault was the lane's harness.
+- Never point at something the player can't do yet. A bouncing pointer on a sandwich the pot can't swallow cost a new player a minute. Show the pointer when the item fits, and name the rule on first contact, since a slow push never reaches bump speed.
+- Art past a portrait column: blur it (downscale, upscale in steps, no `ctx.filter` on Safari) and give the column a soft shadow. Sharp mirrored art reads as a duplicate and a seam.
+
