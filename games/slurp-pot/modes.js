@@ -283,7 +283,7 @@ function makeQaInput(api) {
       }
       const c = playCentre(api);
       if (!down) { down = true; return [at('down', c.cx, c.cy)]; }
-      // DECISION: if the game dropped the pointer (pause/resume, level reset, the 2 s lost-pointerup guard), press again.
+      // DECISION: if the game dropped the pointer (pause/resume, level reset, a lost touch), press again.
       if (api.input && api.input.held === false) return [up(), at('down', c.cx, c.cy)];
       const d = botDirection(api, w), rad = stickRad(api);
       if (d) return [at('move', c.cx + d.dx * 0.8 * rad, c.cy + d.dy * 0.8 * rad)];

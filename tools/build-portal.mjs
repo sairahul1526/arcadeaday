@@ -3,7 +3,7 @@
 //   node tools/build-portal.mjs <slug> [crazygames,gamedistribution,gamepix,coolmath,playgama,facebook]
 // Writes dist/portals/<portal>/<slug>/ and dist/portals/<portal>/<slug>.zip. The YouTube SDK tag is replaced by
 // `window.__PORTAL = '<portal>'` (platform.js turns off share/links and drives the portal adapter) plus the
-// portal's own SDK script where the portal requires one. The game itself makes no ad calls.
+// portal's own SDK script where the portal requires one. Only Playgama shows ads, through P.breakpoint().
 // DECISION: GameDistribution needs a gameId that only exists after the user creates the game on their
 //   dashboard, so GD_OPTIONS.gameId is a placeholder unless GD_GAME_ID is set:
 //   GD_GAME_ID=<id> node tools/build-portal.mjs <slug> gamedistribution

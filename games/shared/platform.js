@@ -103,6 +103,9 @@ const P = {
       // Facebook keeps the save on its servers (follows the player across devices); the webview's localStorage is
       // only the offline fallback. initializeAsync() must be the first SDK call, so it is awaited here.
       if (portalName === 'facebook') raw = (await fbLoad()) || raw;
+      // Playgama wants saves in Bridge storage (cloud saves; moderation checks it). The localStorage copy is read only
+      // for a save made before this build, and is not written again (see flush).
+      if (portalName === 'playgama') raw = (await pgLoad()) || raw;
     }
     let d = null, migrated = false;
     if (typeof raw === 'string' && raw !== '') {
@@ -139,7 +142,7 @@ const P = {
         if (!document.hidden) evShow();
       }
       // Keep the hub's "your best" readable even for saves made before best() existed.
-      if (d.best > 0 && !ls.get(opts.store + 'best')) ls.set(opts.store + 'best', String(d.best));
+      if (d.best > 0 && !pgStore() && !ls.get(opts.store + 'best')) ls.set(opts.store + 'best', String(d.best));
     }
     initPortal();
     if (QA) window.__P = P;
@@ -166,6 +169,9 @@ const P = {
     if (json.length > MAX_SAVE) console.warn('[P] save is ' + json.length + ' chars, over the 500 KiB limit');
     if (Y) {
       try { Promise.resolve(Y.game.saveData(json)).catch(e => P.error(e)); } catch (e) { P.error(e); }
+    } else if (pgStore()) {
+      // DECISION: localStorage stays the fallback only when Bridge refuses the write, so a save is never lost.
+      pg(b => Promise.resolve(b.storage.set([PG_KEY], [json])).catch(e => { P.error(e); ls.set(opts.store + 'save', json); }));
     } else {
       ls.set(opts.store + 'save', json);
       ls.set(opts.store + 'best', String(P.data.best | 0));
@@ -174,7 +180,7 @@ const P = {
   },
 
   /** Web only: the raw stored save string (null on yt or when storage is blocked), for multi-tab merges. */
-  readStored() { return Y ? null : ls.get(opts.store + 'save'); },
+  readStored() { return Y || pgStore() ? null : ls.get(opts.store + 'save'); },
 
   /** Web only: cb(raw) whenever another tab writes this game's save (raw is null when it was removed). */
   onStoredChange(cb) {
@@ -246,9 +252,13 @@ const P = {
   happyTime() {
     if (portalName === 'crazygames') cg(g => g.happytime());
     else if (portalName === 'gamepix') sdkCall(() => window.GamePix.happyMoment());
+    else if (portalName === 'playgama') pg(b => b.platform.sendMessage('player_got_achievement'));
   },
-  /** A natural break between levels. Does nothing: the game makes no ad calls. Reserved for a portal that requires it. */
-  breakpoint() {},
+  /**
+   * A natural break between levels. Only Playgama shows an ad here, because its moderation requires interstitials at
+   * natural pauses; every other host gets nothing. Bridge keeps the minimum gap, and its pause and audio events stop the game.
+   */
+  breakpoint() { if (portalName === 'playgama') pg(b => { if (b.advertisement.isInterstitialSupported !== false) b.advertisement.showInterstitial(); }); },
 
   /** Report an error without throwing. Uses console.warn so it never counts as a console error. */
   error(e) {
@@ -288,6 +298,21 @@ const pg = fn => {
   const b = window.bridge;
   if (b) pgReady.then(() => sdkCall(() => fn(b)));
 };
+const PG_KEY = 'save', PG_WAIT = 4000;
+/** true when Bridge holds the save (Playgama build with the SDK present). */
+const pgStore = () => portalName === 'playgama' && !!window.bridge;
+/** The Bridge copy of the save, or '' (no SDK, first play, the call failed or Bridge hung: the game still boots). */
+async function pgLoad() {
+  if (!pgStore()) return '';
+  initPortal();
+  const read = pgReady.then(() => window.bridge.storage.get([PG_KEY])).then(d => {
+    const v = d && d[0]; // Bridge may hand back parsed JSON
+    return typeof v === 'string' ? v : v ? JSON.stringify(v) : '';
+  });
+  let timer = 0;
+  const late = new Promise(r => { timer = setTimeout(() => r(''), PG_WAIT); });
+  try { return await Promise.race([read, late]); } catch (e) { P.error(e); return ''; } finally { clearTimeout(timer); }
+}
 // Facebook Instant Games (SDK 8.0): initializeAsync() must come before any other FBInstant call, so every call waits
 // on it. startGameAsync() takes the host's loading screen down; the game shows nothing until it resolves.
 let fbReady = null;
@@ -332,9 +357,17 @@ function initPortal() {
     if (b && b.initialize) try {
       pgReady = Promise.resolve(b.initialize()).then(() => {
         const audio = on => { P.audioOn = !!on; call(audioCbs, P.audioOn); };
+        sdkCall(() => { if (b.platform.language) P.lang = b.platform.language; });
         sdkCall(() => { if (b.platform.isAudioEnabled === false) audio(false); });
         sdkCall(() => b.platform.on(b.EVENT_NAME.AUDIO_STATE_CHANGED, audio));
         sdkCall(() => b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, p => setPaused(!!p)));
+        // An ad already open at load (Bridge can show one before the game starts): stay paused until it ends.
+        sdkCall(() => {
+          const ad = b.advertisement;
+          if (ad.interstitialState !== 'opened') return;
+          setPaused(true);
+          ad.on(b.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, st => { if (st === 'closed' || st === 'failed') setPaused(false); });
+        });
       }).catch(() => {});
     } catch {}
   }

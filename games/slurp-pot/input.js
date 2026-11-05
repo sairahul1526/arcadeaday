@@ -13,7 +13,7 @@
 const DZ = 4;            // dead-zone, CSS px
 const PREC = 0.55;       // inner precision zone, fraction of RAD
 const SLOP = 8;          // a press on a UI button that travels this far becomes the stick
-const GUARD_MS = 2000;   // lost-pointerup guard (touch only)
+const GUARD_MS = 2000;   // lost-pointerup guard (touch only): a press after this long of silence takes the stick over
 const KEYS = {
   KeyW: 'u', ArrowUp: 'u', KeyS: 'd', ArrowDown: 'd',
   KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r',
@@ -87,12 +87,13 @@ export function createInput(uiCanvas, getLayout) {
     pid = null; steering = false; pend = null; m = 0; moved = false;
   }
 
-  function guard() {
-    if (pid !== null && ptype === 'touch' && now() - lastEvt > GUARD_MS) release();
-  }
+  // DECISION (11-05): a finger held dead still sends no events, so silence alone can't mean the pointerup was lost: the
+  // stick stays live through it. Only a new press ends a silent touch, which is the one case a lost pointerup needs.
+  const lostTouch = () => pid !== null && ptype === 'touch' && now() - lastEvt > GUARD_MS;
 
   function onDown(e) {
     lastType = e.pointerType || 'mouse';
+    if (lostTouch()) release();
     if (!enabled || pid !== null) return;          // only the first pointer steers
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const r = uiCanvas.getBoundingClientRect();
@@ -147,7 +148,6 @@ export function createInput(uiCanvas, getLayout) {
   const api = {
     /** One input for this fixed step: { x, z, m }. Keys win over the stick. */
     sample() {
-      guard();
       if (!enabled) return { x: 0, z: 0, m: 0 };
       const kx = (keys.has('r') ? 1 : 0) - (keys.has('l') ? 1 : 0);
       const kz = (keys.has('d') ? 1 : 0) - (keys.has('u') ? 1 : 0);
@@ -156,12 +156,11 @@ export function createInput(uiCanvas, getLayout) {
       return { x: 0, z: 0, m: 0 };
     },
     /** true while a steering pointer is down or a direction key is held. */
-    get held() { guard(); return (pid !== null && steering) || keys.size > 0; },
+    get held() { return (pid !== null && steering) || keys.size > 0; },
     /** Last pointerType seen ('touch' | 'mouse' | 'pen' | ''), for the "Show stick" default. */
     get type() { return lastType; },
     /** Stick visual for ui.js: anchor (ax, ay), knob (kx, ky) in CSS px, show once moved >= the dead-zone. */
     stick() {
-      guard();
       if (pid === null || !steering) return null;
       return { ax, ay, kx: px, ky: py, show: moved, rad, kr: 0.32 * rad, m, touch: ptype === 'touch' };
     },

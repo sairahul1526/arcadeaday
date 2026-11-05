@@ -235,7 +235,7 @@ async function act(s, a) {
   }
   if (a.type === 'tap') return page.mouse.click(x, y);
   if (a.type === 'up') return page.mouse.up();
-  await page.mouse.move(x, y, a.type === 'move' ? { steps: 3 } : undefined);
+  await page.mouse.move(x, y); // one event: steps cost a renderer round trip each, and late commands leave the bot circling (PLAYBOOK 11-05)
   if (a.type === 'down') return page.mouse.down();
 }
 

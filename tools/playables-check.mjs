@@ -202,17 +202,25 @@ async function act(s, a) {
     }, [a.type, x, y]);
   }
   if (a.type === 'tap') return page.mouse.click(x, y);
-  await page.mouse.move(x, y, a.type === 'move' ? { steps: 4 } : undefined);
+  // DECISION (11-05): one mouse event per move. Each step is a round trip that waits on the renderer, so steps: 4 made the
+  // loop ~570 ms under software WebGL. Commands that late left the bot circling its target and level 1 timed out.
+  await page.mouse.move(x, y);
   if (a.type === 'down') return page.mouse.down();
   if (a.type === 'up') return page.mouse.up();
 }
 
 // Performs the game's __qaInput() actions until until(state) holds or the time runs out.
 async function drive(s, until, ms) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms, t0 = Date.now();
+  let lastTrace = 0;
   while (Date.now() < end) {
     const st = await qa(s.page);
     if (until(st)) return st;
+    // PC_TRACE=1: wall clock against game clock, so a slow run shows whether the game or the frame rate fell behind.
+    if (process.env.PC_TRACE && Date.now() - lastTrace > 5000) {
+      lastTrace = Date.now();
+      console.log(`  trace ${s.bname} ${s.vp.name} wall ${((Date.now() - t0) / 1000).toFixed(0)}s game ${(+st?.t || 0).toFixed(1)}s bar ${(+st?.bar || 0).toFixed(2)} r ${(+st?.r || 0).toFixed(2)} fps ${(+st?.fps || 0).toFixed(0)} tier ${st?.tier} dpr ${st?.dpr} screen ${st?.screen} items ${st?.items}`);
+    }
     const acts = (await s.page.evaluate(() => (window.__qaInput ? window.__qaInput() : []))) || [];
     for (const a of acts) await act(s, a);
     await sleep(acts.length ? 50 : 100);
