@@ -13,12 +13,16 @@
 <link rel="stylesheet" href="/site.css">
 </head>
 <body class="site">
-<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 11 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
+<header class="top"><div class="wrap"><a class="logo" href="/"><i aria-hidden="true">🕹️</i><span>ARCADE <b>A DAY</b></span></a><a class="drop" href="/#next"><span class="dot"></span><span>Day 12 <span class="lbl">drops </span>in <time data-next>soon</time></span></a></div></header>
 <main class="wrap">
-  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/knot-kitty/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY KNOT KITTY</a></div>
+  <div class="lost"><b>404</b><h1>This level doesn't exist</h1><p>But today's game does, and it's free.</p><a class="btn" href="/slurp-pot/"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg> PLAY SLURP POT</a></div>
   <section class="shelf"><div class="shelf-h"><h2>All games</h2></div><ul class="tiles">
+<li><a class="tile" href="/slurp-pot/" style="--accent:#F5B323">
+  <img src="/slurp-pot/og.jpg" alt="Slurp Pot: a huge golden cooking pot with big round eyes on a teal cobbled street, swallowing a market stall and a delivery van" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <div class="tb"><div><h3>Slurp Pot</h3><small data-best="sp_">Day 11 · Nov 8</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
+</a></li>
 <li><a class="tile" href="/knot-kitty/" style="--accent:#E8463A">
-  <img src="/knot-kitty/og.jpg" alt="Knot Kitty: a dense, tilted pegboard of colourful yarn strands with a tangled calico kitten below it calling out &quot;Help!&quot;" width="1200" height="630" loading="lazy" decoding="async"><span class="pill new">NEW</span>
+  <img src="/knot-kitty/og.jpg" alt="Knot Kitty: a dense, tilted pegboard of colourful yarn strands with a tangled calico kitten below it calling out &quot;Help!&quot;" width="1200" height="630" loading="lazy" decoding="async">
   <div class="tb"><div><h3>Knot Kitty</h3><small data-best="kk_">Day 10 · Oct 30</small></div><span class="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span></div>
 </a></li>
 <li><a class="tile" href="/reel-greedy/" style="--accent:#ffc83d">
@@ -66,7 +70,7 @@
   addEventListener('keydown', e => {
     if (e.code === 'Space' && !e.target.closest?.('input, textarea, select, button, [contenteditable]')) e.preventDefault();
   });
-  const LATEST = "2026-10-30", H = 9;
+  const LATEST = "2026-11-08", H = 9;
   const istDay = t => new Date(t + 330 * 60e3).toISOString().slice(0, 10);
   const today = istDay(Date.now());
   document.querySelectorAll('[data-today]').forEach(el => { if (el.dataset.today === today) el.textContent = 'NEW TODAY'; });

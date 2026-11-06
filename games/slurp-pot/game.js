@@ -1068,16 +1068,21 @@ const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown
   'Space', 'Enter', 'NumpadEnter', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3', 'KeyM']);
 const MAP_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']); // game keys only while the map is open
 const MAP_REPEAT = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown']);
+// DECISION (UI relay 12:2x): PageUp/PageDown/Home/End are game keys only on the map (elsewhere the page keeps
+//   them); on the map a held arrow or page key repeats (it scrolls), every other key still ignores repeats.
+function keyIsOurs(e, onMap) {
+  return (GAME_KEYS.has(e.code) || (onMap && MAP_KEYS.has(e.code))) && !e.ctrlKey && !e.metaKey && !e.altKey;
+}
+// DECISION (11-07 Sat, U7): Enter was never broken. A press inside the boot warm-up was dropped here, so a first key at 2.5 s did
+//   nothing and the second one looked like the only key that worked. A start key during boot now waits for the title.
+function keyBeforeReady(e) {
+  if (S.fatal) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); location.reload(); } return true; }
+  if (S.ready !== true) { if (START_KEYS.has(e.code)) S.startKey = true; return true; }
+  return false;
+}
 addEventListener('keydown', e => {
-  // DECISION (UI relay 12:2x): PageUp/PageDown/Home/End are game keys only on the map (elsewhere the page keeps
-  //   them); on the map a held arrow or page key repeats (it scrolls), every other key still ignores repeats.
   const onMap = S.screen === 'map';
-  if (!(GAME_KEYS.has(e.code) || (onMap && MAP_KEYS.has(e.code))) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (S.fatal) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); location.reload(); } return; }
-  // DECISION (11-07 Sat, U7): Enter was never broken. A press inside the boot warm-up was dropped here, so a first key at 2.5 s did
-  //   nothing and the second one looked like the only key that worked. A start key during boot now waits for the title.
-  if (S.ready !== true) { if (START_KEYS.has(e.code)) S.startKey = true; return; }
-  if (hostPaused()) return;
+  if (!keyIsOurs(e, onMap) || keyBeforeReady(e) || hostPaused()) return;
   if (S.screen !== 'play' && scrollY > 40) return;
   if (e.code !== 'Escape') e.preventDefault();
   if (e.repeat && !(onMap && MAP_REPEAT.has(e.code))) return;

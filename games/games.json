@@ -1212,5 +1212,145 @@
         ]
       ]
     }
+  },
+  {
+    "slug": "slurp-pot",
+    "title": "Slurp Pot",
+    "tagline": "Steer a hungry pot, eat everything smaller than your rim and grow until you can bite the boss. Start the size of a pea, end up eating the lighthouse.",
+    "date": "2026-11-08",
+    "accent": "#F5B323",
+    "icon": "🍲",
+    "store": "sp_",
+    "shop": {
+      "name": "Shop",
+      "item": "Pot",
+      "items": [
+        [
+          "Sunny Pot",
+          0
+        ],
+        [
+          "Cauldron",
+          150
+        ],
+        [
+          "Wok",
+          250
+        ],
+        [
+          "Teapot",
+          350
+        ],
+        [
+          "Rice Cooker",
+          500
+        ],
+        [
+          "Dutch Oven",
+          650
+        ],
+        [
+          "Steamer",
+          800
+        ],
+        [
+          "Royal Pot",
+          1000
+        ],
+        [
+          "UFO Pot",
+          1300
+        ]
+      ],
+      "currency": [
+        "coins",
+        "🪙"
+      ]
+    },
+    "share": {
+      "title": "Slurp Pot: start tiny, eat the whole town",
+      "description": "Steer a hungry pot, eat everything smaller than your rim, fill the recipe and bite the boss. 60 levels, free in your browser."
+    },
+    "seo": {
+      "keyword": "hole game",
+      "title": "Slurp Pot: Free 3D Hole Game · Play Online",
+      "description": "Play Slurp Pot, a free 3D hole game. Steer a hungry pot, eat everything smaller than its rim and finish the recipe in 60 levels. No download.",
+      "h1": "Slurp Pot: the 3D hole game where a tiny pot eats the whole town",
+      "imageAlt": "Slurp Pot: a huge golden cooking pot with big round eyes on a teal cobbled street, swallowing a market stall and a delivery van",
+      "genre": [
+        "Arcade",
+        "Casual",
+        "Hole Game",
+        "Action"
+      ],
+      "intro": [
+        "Slurp Pot is a free 3D hole game you play with one finger. You steer a hungry golden cooking pot around a toy town, and it swallows anything smaller than its rim. Berries go first, then sandwiches, then picnic tables and market stalls, and every bite makes the pot bigger. It runs right here in your browser on a phone or a computer.",
+        "Each level is a recipe. Eat what the ticket asks for, grow big enough for the boss and take the final bite before the clock runs out. There are 60 levels across three towns (Picnic Park, Market Street and Harbour Pier), and new twists keep arriving: hedges and size gates, rolling food, conveyor belts, swooping gulls and hot chilis. After the campaign there's a Daily Order with a 7-day streak ladder, an endless Feast mode, new pots to collect and a cookbook to fill."
+      ],
+      "howTo": [
+        "Drag anywhere on the screen to steer the pot. Push further to go faster. On a computer, drag with the mouse or use WASD or the arrow keys.",
+        "Swallow anything that fits inside the rim. If something is too big, the pot bumps into it. Eat smaller food first and come back when you've grown.",
+        "Follow the recipe ticket at the top of the screen. It shows what the level needs and how many are left.",
+        "Eat quickly to build a chain. Long chains add seconds to the clock.",
+        "When the recipe is done, go for the boss and take the final bite. A bigger boss needs a bigger pot, so eat the food around you if it won't fit yet.",
+        "Stars come from the time you have left at the final bite. The chip under the clock shows the time you need for 3 stars. A win pays coins for new pots and boosters."
+      ],
+      "controls": [
+        [
+          "Phone or tablet",
+          "Drag anywhere to steer. You can lift your finger and start again from any spot."
+        ],
+        [
+          "Computer",
+          "Drag with the mouse, or use WASD or the arrow keys. 1, 2 and 3 use a booster, P or Esc pauses, M mutes, Enter or Space presses the main button on each screen."
+        ],
+        [
+          "Boosters",
+          "Tap a booster during a level. Magnet pulls food in, Freeze adds time and Mega Rim makes the pot bigger for a moment."
+        ]
+      ],
+      "tips": [
+        "Eat the small food around you first. Each bite makes the next size easier to reach, and it builds your chain.",
+        "Stuck behind a hedge or a fence? Go around it, or grow until you can swallow the gate. On the first 20 levels a gold dotted trail shows the way if you stop making progress.",
+        "Boosters cost coins: Magnet 40, Freeze 60 and Mega Rim 80. They unlock at levels 6, 9 and 13, each with free ones as a gift.",
+        "Run out of time and your next retry gets extra seconds. After a few tries the pot starts bigger too, and part of that help carries into the next level.",
+        "Don't eat hot chilis. From Market Street on, a chili burns 3 seconds off the clock and ends your chain.",
+        "Watch for the warning mark on Harbour Pier. It shows where a gull is about to swoop."
+      ],
+      "faq": [
+        [
+          "Is Slurp Pot free?",
+          "Yes. It is free to play in your browser with no download, no install and no account."
+        ],
+        [
+          "Can I play this hole game on my phone?",
+          "Yes. It was made for phones and one finger, and it works on a computer with a mouse or the keyboard too."
+        ],
+        [
+          "Why won't the pot eat something?",
+          "It only swallows what fits inside its rim. Eat smaller food to grow, then come back. The boss opens once the recipe is done."
+        ],
+        [
+          "How do I get 3 stars?",
+          "Finish with plenty of time left. The chip under the clock shows the time to beat. Long chains add seconds, and a planned route helps on later levels."
+        ],
+        [
+          "What happens if I run out of time?",
+          "You can retry straight away with extra seconds on the clock. If you keep running out, the pot starts a little bigger as well."
+        ],
+        [
+          "What is the Daily Order?",
+          "A new recipe every day, open from level 6. Play on following days to climb a 7-day streak ladder. A Streak Lid saves your streak if you miss a day."
+        ],
+        [
+          "What is Feast mode?",
+          "An endless mode that opens at level 12. Serve as many orders as you can and beat your best."
+        ],
+        [
+          "Does my progress save?",
+          "Yes. Your levels, stars, coins and pots are saved in your browser on this device."
+        ]
+      ]
+    }
   }
 ]
