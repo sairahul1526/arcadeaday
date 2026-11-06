@@ -21,18 +21,17 @@
 import P from '../shared/platform.js';
 import * as C from './consts.js';
 import * as bus from './bus.js';
+import { withMercy, mercySecs, mercyGrow, carryAfterWin } from './mercy.js';
 import { createInput } from './input.js';
 
 const PAPER = '#FFF6E3', PAPER_SHADE = '#EBD9B8', INK = '#3A2418', GOLD = '#F5B323', GOLD_SHADE = '#B9770E', STAMP = '#E5483B';
 const WIN_CARD_S = 1.2 + 1.6;   // slow-mo (real s) + the ORDER UP stamp hold
 const FIN_CARD_S = 0.8;          // after a final boss bite: `win` lands ~1.3 s in, the finisher ends at 1.9, so the card comes at ~2.1 s
-// DECISION (11-06 Fri, mercy clock): a level gives no fixed long clock past the first session, because that took the sweat away from
-//   everyone (casual 100 % on L4 to L15). Each straight time-out on a campaign level adds MERCY_STEP of the pace to the next try
-//   as extra grace, up to MERCY_MAX steps: a fast hand still feels the first clock, a slow hand always gets through, and the stars
-//   keep the old pace. Spoiled orders get none because more time cannot help. A win or another level resets it. Daily and Feast
-//   never get it. Tuning and verify read the base level, so no stored stat moves.
-const MERCY_STEP = 0.4, MERCY_MAX = 3;
-const mercySecs = (lvl, fails) => Math.min(fails, MERCY_MAX) * Math.round(MERCY_STEP * (lvl.T - (lvl.grace > 0 ? +lvl.grace : 0)));
+const FIN_BIG_CARD_S = 1.5;      // milestones (L10 ... L60): the finisher ends at 2.6 s and booms at 1.9, so the card comes at ~2.8 s
+// DECISION (11-06 Fri, mercy, see mercy.js): a fixed long clock took the sweat away from everyone (casual 100 % on L4 to L15), so the
+//   help follows the player instead. Each time-out on a level or Daily makes the next try easier, a win carries one step less to the
+//   next one (save.help), and the seconds are grace, so stars keep the old pace. Spoiled orders get none because time cannot help.
+//   Feast never gets it. Tuning and verify read the base level, so no stored stat moves.
 const FAIL_CARD_S = 0.8;
 const PERF_AFTER_S = 20;
 const SCREENS = ['title', 'map', 'play', 'win', 'fail', 'pause', 'daily', 'feast', 'shop', 'cookbook', 'settings', 'alldone', 'gift',
@@ -375,7 +374,7 @@ const V = {};
 function view() {
   V.screen = S.screen; V.mode = S.kind; V.kind = S.kind; V.paused = S.paused; V.level = S.n; V.n = S.n;
   V.data = S.data; V.L = S.L; V.W = S.W; V.H = S.H; V.dpr = S.dpr; V.t = realT;
-  V.started = S.started; V.pending = S.pend ? S.pend.screen : '';
+  V.started = S.started; V.pending = S.pend ? S.pend.screen : ''; V.refused = S.refused || '';
   V.stick = input ? input.stick() : null; V.held = input ? input.held : false; V.pointer = input ? input.type : '';
   V.muted = isMuted(); V.userMuted = S.userMuted; V.env = P.env; V.showMute = P.showMute; V.portal = P.portal;
   V.tutStep = S.tutStep; V.slow = slowT > 0; V.lvl = S.lvl; V.bot = !!S.bot;
@@ -470,7 +469,7 @@ function boostersFor(n, kind = 'level') {
 
 /** Builds and enters a level. kind = 'level' | 'daily' | 'feast' | 'record'. retry skips the goal reveal. */
 function startLevel(n, opt = {}) {
-  if (!S.ready || S.fatal) return false;
+  if (!S.ready || S.fatal) { S.refused = S.fatal ? 'fatal' : 'not ready'; return false; }
   const kind = opt.kind || 'level';
   if (kind === 'level') {
     n = Math.max(1, Math.min(C.LEVELS, n | 0 || 1));
@@ -490,18 +489,19 @@ function startLevel(n, opt = {}) {
       if (has(meta, 'feastTown')) safe(meta.feastTown, town);
       lvl = feast.feastLevel(fs);
     } else lvl = levels.getLevel(n);
-  } catch (e) { report(e); return false; }
-  if (!lvl) return false;
-  if (kind === 'level') {
-    if (S.mercyN !== n) { S.mercyN = n; S.mercy = 0; }
+  } catch (e) { report(e); S.refused = 'build: ' + (e && e.message); return false; }
+  if (!lvl) { S.refused = 'no level'; return false; }
+  if (kind === 'level' || kind === 'daily') {
+    // The step follows the player: fails on this level or Daily raise it, and a new one starts from the carried step.
+    const key = kind === 'daily' ? 'daily' : n;
+    if (S.mercyN !== key) { S.mercyN = key; S.mercy = save().help | 0; }
     S.mercyBase = lvl;
-    const m = mercySecs(lvl, S.mercy | 0);
-    if (m > 0) lvl = { ...lvl, T: lvl.T + m, grace: (lvl.grace > 0 ? +lvl.grace : 0) + m, mercy: m };
+    lvl = withMercy(lvl, S.mercy | 0);
   }
   const town = lvl.town;
   let w = null;
   const wopt = kind === 'record' ? { mode: 'record', boosters: {}, recordPath: lvl.path || null } : { mode: kind, boosters: boostersFor(n, kind) };
-  try { w = logic.createWorld(lvl, wopt); } catch (e) { report(e); return false; }
+  try { w = logic.createWorld(lvl, wopt); } catch (e) { report(e); S.refused = 'world: ' + (e && e.message); return false; }
   const sameLevel = S.lvl === lvl || (S.lvl && S.lvl.n === lvl.n && S.kind === kind && kind === 'level');
   S.kind = kind; S.n = kind === 'level' ? n : 0; S.lvl = lvl; S.w = w; S.fs = fs;
   if (kind !== 'record') { S.driver = null; S.recLevel = null; }
@@ -598,7 +598,9 @@ function onWin(ev, now) {
   //   event carries 3 stars (drain sets them) for the ORDER UP stamp beat (§12.2 19.5-21.5).
   if (S.resultDone) return;
   if (S.kind === 'feast') return; // Sim 12:32: the Feast never wins; feastStep rolls courses and the clock ends it
-  S.resultDone = true; S.live = false; S.mercy = 0;
+  S.resultDone = true; S.live = false;
+  if (!quietResult(ev) && (S.kind === 'level' || S.kind === 'daily')) { save().help = carryAfterWin(S.mercy | 0); safe(meta.save); }
+  S.mercy = 0; S.mercyN = null;
   const w = S.w;
   if (input) input.enable(false);
   safe(P.gameplayStop);
@@ -620,10 +622,13 @@ function onWin(ev, now) {
     P.event('level_complete', { id: levelId(), stars, tLeft: r1(tLeft), chainBest, secs: secsOf(w) });
   }
   const data = { n: S.n, kind: S.kind, stars, tLeft, chainBest, coins: 0, newStars: 0, gifts: [], chest: null, milestone: null, nextSkin: null, ...res, ...(ev.data || {}) };
+  const st = w && safe(logic.starTimes, w);
+  data.t3Left = st && stars < 3 ? Math.max(0, Math.ceil(st.t3 - (tLeft - ((w && w.freezeAdded) || 0)))) : 0;
+  data.bigBoss = S.kind === 'level' && S.n > 0 && S.n % 10 === 0;
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
   if (S.kind === 'record') return;
   if (now) go('win', data);
-  else S.pend = { t: S.finBite ? FIN_CARD_S : WIN_CARD_S, screen: 'win', data };
+  else S.pend = { t: S.finBite ? (S.kind === 'level' && C.isMilestone(S.n) ? FIN_BIG_CARD_S : FIN_CARD_S) : WIN_CARD_S, screen: 'win', data };
 }
 /** The Daily level's own IST key (a run started before midnight still pays that day), else today's. */
 function dailyKeyOf() {
@@ -639,8 +644,8 @@ function dailyKeyOf() {
 function dailyStarsOf(w, ev) {
   const lines = S.lvl && S.lvl.daily && S.lvl.daily.lines;
   if (!w || !lines || !has(meta, 'dailyStars')) return null;
-  const st = w.stats || {}, T = w.T || 1;
-  const tl = typeof ev.tLeft === 'number' ? ev.tLeft : (w.tLeft || 0);
+  const st = w.stats || {}, g = S.lvl.grace > 0 ? +S.lvl.grace : 0, T = (w.T || 1) - g; // grace seconds never count as time left
+  const tl = (typeof ev.tLeft === 'number' ? ev.tLeft : (w.tLeft || 0)) - g;
   const run = {
     win: true, eaten: { ...((S.run && S.run.eaten) || {}) }, chainBest: ev.chainBest | 0, big: (S.run && S.run.big) | 0,
     left: Math.max(0, (tl - (w.freezeAdded || 0)) / T), bumps: st.bumps | 0, boosts: (S.run && S.run.boosts) | 0, sizzles: st.sizzles | 0,
@@ -678,7 +683,10 @@ function onFail(ev, now) {
     safe(P.flush);
   }
   const data = { n: S.n, kind: S.kind, why, progress: w ? (safe(logic.sizeBar, w) || 0) : 0, missing: ev.missing || [], canFreeze: canFreeze(why), ...(ev.data || {}) };
-  if (S.kind === 'level' && why === 'timeout' && S.mercyBase) { S.mercy = (S.mercy | 0) + 1; data.mercy = mercySecs(S.mercyBase, S.mercy); }
+  if ((S.kind === 'level' || S.kind === 'daily') && why === 'timeout' && S.mercyBase) {
+    S.mercy = (S.mercy | 0) + 1;
+    data.mercy = mercySecs(S.mercyBase, S.mercy); data.grow = mercyGrow(S.mercy) > 1; data.fails = S.mercy;
+  }
   if (now) go('fail', data);
   else S.pend = { t: FAIL_CARD_S, screen: 'fail', data };
 }
@@ -768,7 +776,9 @@ function next() {
   for (const g of d.gifts || []) q.push(['gift', { kind: g.k, count: g.n, gift: g }]);
   for (const m of d.milestones || (d.milestone ? [d.milestone] : [])) q.push(['gift', { kind: m.boost, count: 1, coins: m.coins, milestone: m }]);
   for (const c of d.chests || (d.chest ? [d.chest] : [])) q.push(['gift', { chest: c, coins: c.coins, town: c.town, boost: c.boost }]);
-  if (S.n === 6 && d.first && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus() }]);
+  // DECISION: a player who is struggling is not pushed into a Daily at L6. The card waits for a calm win, L10 at the latest.
+  const calm = !(save().help > 0) || S.n >= 10;
+  if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus() }]);
   S.queue = { list: q, n: S.n + 1 };
   return advance();
 }

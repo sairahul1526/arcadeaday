@@ -21,7 +21,9 @@ const KINDS = {
   // 101-120: within goal.casual +-7 on 4 -> 12 levels, mean delta +9.1 -> +2.8; seeds 1-40 (verify's): 7 -> 7, +6.4 ->
   // +2.2, and levels where some T in the greedy window meets goal.casual 8 -> 14 of 20. Tried and dropped: sigma as the
   // stationary error (25 deg: L4 42 %, L23 17 %), a 0.25 s hesitation per new target (L4 8 %), a ticket-focus delay.
-  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.40, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 1,   plan: false, look: false, focus: true,  turn: 0, memo: true },
+  // DECISION (11-06 Fri, round 2, hot chili): no bot aims at a chili and steer() takes every bot round one. hotBlind = the share
+  // of a casual bot's decisions spent not looking at chilis, so it runs into one now and then like a casual player does.
+  casual:  { precise: true, every: 0.35, second: 0.2,  lag: 0.40, sigma: 25 * DEG, theta: 3, m: 0.85, idle: 1.0, sight: true,  side: 1,   plan: false, look: false, focus: true,  turn: 0, memo: true, hotBlind: 0.06 },
   average: { precise: true, every: 0.2,  second: 0.1,  lag: 0.20, sigma: 15 * DEG, theta: 3, m: 0.92, idle: 0.6, sight: false, side: 1,   plan: false, look: true,  focus: true,  turn: 0 },
   // DECISION (Wed): the planner gets ticket focus too (it is verify's "best route" reference for gate 3a). On the
   // frozen L4–L9 its time / greedy drops to 0.59–0.86 (from 0.80–0.97); L8 0.96 and L10 0.85 are unchanged (layout).
@@ -49,7 +51,7 @@ export function createBot(kind = 'greedy', seed = 1, opts = {}) {
     t: 0, nextDecide: 0, target: -1, targetT: -9, ban: new Float32Array(256), sideOn: true,
     stuckX: 0, stuckZ: 0, stuckT: 0, escapeT: 0, escapeSign: 1, skip: -1, skipT: 0, ox: 0, oz: 0, rTgt: -1, rT: -1, rWp: null,
     noise: 0, queue: [], out: { x: 0, z: 0, m: 0 }, dir: { x: 0, z: -1 }, plan: [], planT: -9, w: null,
-    lv: null, zNeed: null, foc: false, prevTgt: -1, gullT: null, wp: 0,
+    lv: null, zNeed: null, foc: false, prevTgt: -1, gullT: null, wp: 0, hotI: null, hotOff: false,
   };
 }
 
@@ -179,7 +181,7 @@ function candidates(bot, w) {
   for (let pass = 0; pass < 3 && !out.length; pass++) {
     const s2 = sight * sight;
     for (let i = 0; i < w.n; i++) {
-      if (!L.edible(w, i) || bot.ban[i] > t || i === bot.skip) continue;
+      if (!L.edible(w, i) || w.flags[i] & L.F.HOT || bot.ban[i] > t || i === bot.skip) continue;
       const dx = w.ix[i] - ox, dz = w.iz[i] - oz, d2 = dx * dx + dz * dz;
       if (d2 > s2) continue;
       if (lagged && !(w.flags[i] & L.F.BOSS)) {
@@ -453,7 +455,7 @@ function plan(bot, w) {
   for (let i = 0; i < n; i++) {
     const s = w.st[i];
     if ((s !== 0 && s !== 3) || w.hid[i] || bot.ban[i] > t || i === bot.skip) continue;
-    if (FL[i] & L.F.BOSS) continue;
+    if (FL[i] & (L.F.BOSS | L.F.HOT)) continue;
     if (A[i] <= 0.9 * P.cap + 1e-9 && L.refused(w, i) === false) pool.push(i);
   }
   const lines = tk ? tk.lines.map(l => ({ kid: l.kid, rem: l.need - l.got })) : [];
@@ -571,7 +573,7 @@ function planBeam(bot, w) {
   const pool = [];
   for (let i = 0; i < n; i++) {
     const s = w.st[i];
-    if ((s !== 0 && s !== 3) || w.hid[i] || bot.ban[i] > t) continue;
+    if ((s !== 0 && s !== 3) || w.hid[i] || w.flags[i] & L.F.HOT || bot.ban[i] > t) continue;
     if (w.flags[i] & L.F.BOSS) { if (i === L.curBoss(w)) pool.push(i); continue; }
     if (A[i] <= 0.9 * P.cap + 1e-9 && A[i] <= 0.9 * P.r * 1.6) pool.push(i);
   }
@@ -702,6 +704,12 @@ function predict(bot, w) {
 }
 
 /** Steering toward (tx, tz) from the predicted pot spot, with lateral push around solid blockers ahead. */
+const HOT_CLEAR = 0.4, HOT_LOOK = 2;
+function hotList(w) {
+  const out = [];
+  if (w.level && w.level.hot) for (let i = 0; i < w.n; i++) if (w.flags[i] & L.F.HOT) out.push(i);
+  return out;
+}
 function steer(bot, w, tx, tz, target) {
   const P = w.pot, pr = predict(bot, w);
   const px = pr.x, pz = pr.z;
@@ -728,6 +736,28 @@ function steer(bot, w, tx, tz, target) {
     }
     dx += sx; dz += sz;
     const l = Math.hypot(dx, dz) || 1e-6; dx /= l; dz /= l;
+    // DECISION (11-06 Fri, round 2, hot chili): short range and by the rim, not the block radius: with the nearest chili inside the
+    // pot's swept lane, head for the tangent of its keep-out circle on the side the pot already leans to. A lateral push like
+    // the solids' got 2 to 4 burns a run even from the expert: at r 2 a chili's circle is wider than any push turns. Off
+    // (hotI empty) on every level without chilis, so nothing else moves.
+    if (bot.hotI === null) bot.hotI = hotList(w);
+    if (bot.hotI.length && !bot.hotOff) {
+      const reach = P.rEff + HOT_CLEAR;
+      let bj = -1, bd = 1e9, bl = 0;
+      for (const j of bot.hotI) {
+        if (j === target || w.st[j] !== 0) continue;
+        const ex = w.ix[j] - px, ez = w.iz[j] - pz;
+        const ahead = ex * dx + ez * dz, lat = ex * -dz + ez * dx;
+        if (ahead <= 0 || ahead > d + HOT_CLEAR || ahead > reach + HOT_LOOK || Math.abs(lat) >= reach) continue;
+        const e = Math.hypot(ex, ez);
+        if (e < bd) { bd = e; bj = j; bl = lat; }
+      }
+      if (bj >= 0) {
+        const ux = (w.ix[bj] - px) / bd, uz = (w.iz[bj] - pz) / bd;
+        const sn = reach < bd ? reach / bd : 1, cs = Math.sqrt(1 - sn * sn), sg = bl > 0 ? -1 : bl < 0 ? 1 : (bj & 1 ? 1 : -1);
+        dx = ux * cs - uz * sn * sg; dz = uz * cs + ux * sn * sg;
+      }
+    }
   }
   return { x: dx, z: dz, near: near && d < 1.5 };
 }
@@ -846,6 +876,7 @@ export function decide(bot, w, dt = DT) {
     const nt = pickTarget(bot, w);
     if (nt !== bot.target) { bot.prevTgt = bot.target; bot.target = nt; bot.targetT = t; }
     bot.sideOn = P.side >= 1 || R() < P.side;
+    if (P.hotBlind && w.level && w.level.hot) bot.hotOff = R() < P.hotBlind;   // this draw exists only on chili levels
   }
   let want, aim = bot.target;
   // DECISION: planners with reaction lag (expert) anticipate: when the target will already be swallowed by the
@@ -970,7 +1001,7 @@ export function runLevel(level, kind = 'greedy', seed = 1, { maxT, record = fals
   const win = w.result === 'win';
   const res = {
     win, why: w.result || 'maxT', tUsed: w.tStart === null ? 0 : (w._.biteT >= 0 ? w._.biteT : w.t) - w.tStart, tLeft: w.tLeft, stars: win ? w.stars : 0,
-    progress: L.progress(w), nearMiss: !win && L.nearMiss(w) === 'close', nearMissKind: win ? null : L.nearMiss(w), chainBest: Math.max(chainBest, w.chain.best), tEnd: w.t,
+    progress: L.progress(w), nearMiss: !win && L.nearMiss(w) === 'close', nearMissKind: win ? null : L.nearMiss(w), chainBest: Math.max(chainBest, w.chain.best), tEnd: w.t, hot: w.stats.hot,
   };
   if (inputs) res.inputs = inputs;
   return res;

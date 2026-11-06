@@ -129,7 +129,7 @@ const MODES = ['play', 'card', 'title', 'map'];
 // both the brief's name and the GDD's name for one moment (gull + gullWarn, tier + cakeTier, course + courseDone), both
 // are mapped and de-duplicated here, so either name alone also works.
 export const BUS_EVENTS = ['start', 'bite', 'sizeUp', 'line', 'ticketDone', 'courseDone', 'course', 'padlock', 'bossNudge', 'bump', 'bossBite',
-  'chain', 'sizzle', 'lowTime', 'tick', 'gull', 'gullWarn', 'gullMiss', 'steal', 'nest', 'wobble', 'crack', 'refuse', 'shove', 'boil',
+  'chain', 'sizzle', 'hot', 'lowTime', 'tick', 'gull', 'gullWarn', 'gullMiss', 'steal', 'nest', 'wobble', 'crack', 'refuse', 'shove', 'boil',
   'belt', 'truck', 'truckHorn', 'tier', 'cakeTier', 'spawn', 'feastWipe', 'feastCourse', 'feastTicket', 'boost', 'win', 'fail'];
 // control events from game.js (subscribed by bindBus, not recorded: levelStart carries the whole level and world)
 export const CTRL_EVENTS = ['levelStart', 'freezeContinue', 'boostEmpty'];
@@ -735,6 +735,7 @@ function makeEngine(ctx, offline) {
     bossBite: () => p('bossBite'),
     chain: d => p('chain', d),
     sizzle: () => p('sizzle'),
+    hot: () => { p('sizzle'); p('nope'); },
     lowTime: () => { E.tensionUntil = Math.max(E.tensionUntil, E.base + 11); p('lowTime'); },
     tick: d => { E.tensionUntil = Math.max(E.tensionUntil, E.base + 1.8); p('tick', d); },
     gull,

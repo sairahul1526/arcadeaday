@@ -1954,20 +1954,22 @@ function starterPatch(c) {
 // wide boards with sparse food from L30 on), one of them in view of spawn. A post-pass with its own rng: it appends items
 // after everything else, so a level keeps every item and draw it had, and Daily and Feast (n 0) never get here. A pile uses
 // only T0/T1 food kinds the level already has, so the kind cap holds and the ingredient counts do not move.
-const PILE_FROM = 21, PILE_R = 0.95, PILE_STEP = 0.4, PILE_MIN = 6;
+export const PILE_FROM = 21;
+const PILE_R = 0.95, PILE_STEP = 0.4, PILE_MIN = 6;
 function snackPiles(c, spec, seed) {
   const pc = Object.create(c);
   pc.rng = mulberry32((seed ^ 0x51ac4b1e) >>> 0);
   const ids = [...new Set(c.items.filter(o => o.role === 'junk' && o.tier <= 1 && KIND[o.kind].food).map(o => o.kind))].sort();
   if (!ids.length) return;
   const want = Math.round(5 + (7 * (spec.n - PILE_FROM)) / (LEVELS - PILE_FROM));
+  const room = ITEM_MAX - (HOT_LEVELS[spec.n] || 0);     // a chili level keeps its chilis' slots under the item cap
   const sp = c.spawn, slotsAt = (x, z) => hexSlots(x, z, PILE_R, PILE_STEP);
   const open = (x, z, zone) => slotsAt(x, z).filter(q => canPlace(c, q.x, q.z, 0.2, 1, { zone })).length;
   const fill = (x, z, zone, n) => {
     const kinds = [ids[ri(pc, ids.length)], ids[ri(pc, ids.length)], ids[ri(pc, ids.length)]];
     let done = 0;
     for (const q of slotsAt(x, z)) {
-      if (done >= n || c.items.length >= ITEM_MAX) break;
+      if (done >= n || c.items.length >= room) break;
       for (let j = 0; j < 3; j++) {
         const k = KIND[kinds[(done + j) % 3]];
         if (!canPlace(c, q.x, q.z, k.a, k.tier, { zone }) || !contrastOK(c, k, q.x, q.z)) continue;
@@ -1998,7 +2000,7 @@ function snackPiles(c, spec, seed) {
     spots.sort((a, b) => b.n - a.n || a.d - b.d);
     for (const q of spots) if (q.n < PILE_MIN || fill(q.x, q.z, q.zone, 10)) break;
   }
-  for (let tr = 0; tr < want * 60 && c.piles.length < want && c.items.length < ITEM_MAX - PILE_MIN; tr++) {
+  for (let tr = 0; tr < want * 60 && c.piles.length < want && c.items.length < room - PILE_MIN; tr++) {
     const g = pickRegion(pc, 1), [x, z] = sampleIn(pc, g), zone = g.zone;
     if (zone > 0 && tr < want * 30) continue;
     if (hyp(x - sp.x, z - sp.z) < 6 || c.piles.some(p => hyp(x - p.x, z - p.z) < 5)) continue;
@@ -2059,15 +2061,143 @@ export function genLevel(spec, seed) {
   fixGates(c);
   fixMargin(c);   // DECISION: a second pass, since fixFood / fixGates swaps can move the margin
   c.piles = [];
+  if (spec.n === 1) firstTrail(c);
   if (spec.starter) starterPatch(c);
   addDecor(c);
   if (spec.n >= PILE_FROM) snackPiles(c, spec, seed);
+  hotChilis(c, spec, seed);
   // DECISION (Sim 11-03): the expanded level carries its zone graph (level.zoneGraph) so bots need not import levels.js.
   const lv = finish(c, spec, seed);
   lv.zoneGraph = zoneGraph(lv);
   return lv;
 }
 
+// DECISION (11-06 Fri, round 2, hot chili): the late levels get a hazard. HOT_LEVELS holds the level and its chili count: L31 to L59,
+// never a milestone or a peak (the clock is the hazard there), never a level that opens its own twist, and only levels with
+// room in the kind cap, since chili is one more kind. Read as 10 to 14 chilis on each of 12 levels: one chili would not force a
+// choice. A post-pass with its own rng, after the snack piles, so no earlier draw moves and Daily and Feast (n 0) never get here.
+// A chili sits on the rim of a food cluster (an ingredient spot or a snack pile) or hard against a wall or a big solid, so a straight
+// sweep burns and a line round it does not.
+// Damage cap, three ways: chilis stand HOT_GAP apart, more than a pot's width at the size expected there, so one pass takes one;
+// each must leave every food goal reachable by a clean line at three pot sizes (hotClear); and these are normal levels, so the
+// spare time of the average player pays for a couple of burns (verify's hot gate).
+const HOT_LEVELS = { 31: 10, 32: 10, 35: 10, 36: 11, 38: 11, 42: 12, 43: 12, 45: 12, 48: 13, 51: 13, 55: 14, 56: 14 };
+const HOT_FIRST = Math.min(...Object.keys(HOT_LEVELS).map(Number));
+const HOT_CELL = 0.5, HOT_RIM = 0.3, HOT_SIZES = [0.35, 0.65, 1];
+/** One pot size of the clean-way test: cells the pot cannot stand on, and the cells from which each food goal can be eaten. */
+function hotGrid(c, r, goals) {
+  const cols = Math.ceil(c.W / HOT_CELL) + 1, rows = Math.ceil(c.D / HOT_CELL) + 1;
+  const shut = new Uint8Array(cols * rows), h = 0.5 * r;
+  const disk = (x, z, rad, fn) => {
+    const i0 = Math.max(0, Math.ceil((x - rad - c.x0) / HOT_CELL)), i1 = Math.min(cols - 1, Math.floor((x + rad - c.x0) / HOT_CELL));
+    const j0 = Math.max(0, Math.ceil((z - rad - c.z0) / HOT_CELL)), j1 = Math.min(rows - 1, Math.floor((z + rad - c.z0) / HOT_CELL));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const dx = c.x0 + i * HOT_CELL - x, dz = c.z0 + j * HOT_CELL - z;
+      if (dx * dx + dz * dz <= rad * rad) fn(j * cols + i);
+    }
+  };
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const x = c.x0 + i * HOT_CELL, z = c.z0 + j * HOT_CELL;
+    if (x < c.x0 + h || x > c.x1 - h || z < c.z0 + h || z > c.z1 - h) shut[j * cols + i] = 1;
+  }
+  for (const o of c.items) if (o.role === 'boss' || o.a > FIT * r) disk(o.x, o.z, o.a + h, q => { shut[q] = 1; });
+  const g = { cols, rows, r, shut, disk, eat: [], stack: new Int32Array(cols * rows), seen: new Uint8Array(cols * rows) };
+  for (const o of goals) {
+    if (o.role !== 'boss' && o.a > FIT * r) continue;
+    const cells = [];
+    disk(o.x, o.z, Math.max(HOT_CELL, r - 0.25 * o.a), q => { if (!shut[q]) cells.push(q); });
+    if (cells.length) g.eat.push(cells);
+  }
+  const si = Math.round((c.spawn.x - c.x0) / HOT_CELL), sj = Math.round((c.spawn.z - c.z0) / HOT_CELL);
+  g.start = sj * cols + si;
+  g.eat = g.eat.filter(cells => hotSome(g, g.shut, cells));
+  return g;
+}
+/** Flood from spawn over open cells; true when the flood touches any of the cells. */
+function hotFlood(g, closed) {
+  const { cols, rows, stack, seen } = g;
+  seen.fill(0);
+  let n = 0;
+  stack[n++] = g.start; seen[g.start] = 1;
+  while (n) {
+    const q = stack[--n], i = q % cols, j = (q - i) / cols;
+    if (i > 0 && !seen[q - 1] && !closed[q - 1]) { seen[q - 1] = 1; stack[n++] = q - 1; }
+    if (i < cols - 1 && !seen[q + 1] && !closed[q + 1]) { seen[q + 1] = 1; stack[n++] = q + 1; }
+    if (j > 0 && !seen[q - cols] && !closed[q - cols]) { seen[q - cols] = 1; stack[n++] = q - cols; }
+    if (j < rows - 1 && !seen[q + cols] && !closed[q + cols]) { seen[q + cols] = 1; stack[n++] = q + cols; }
+  }
+  return seen;
+}
+function hotSome(g, closed, cells) {
+  const seen = hotFlood(g, closed);
+  for (const q of cells) if (seen[q]) return true;
+  return false;
+}
+/** True when every goal open at this pot size stays reachable with the chilis' burn disks shut. */
+function hotClear(grids, hot) {
+  for (const g of grids) {
+    const closed = g.shut.slice();
+    const a = KIND.chili.a;
+    for (const p of hot) g.disk(p.x, p.z, g.r - 0.25 * a + HOT_RIM, q => { closed[q] = 1; });
+    closed[g.start] = 0;
+    const seen = hotFlood(g, closed);
+    for (const cells of g.eat) { let ok = false; for (const q of cells) if (seen[q] && !closed[q]) { ok = true; break; } if (!ok) return false; }
+  }
+  return true;
+}
+// DECISION (11-06 Fri, round 2, L1 first bite): the spawn ring feeds any first drag at once (0.13 s in the sim, any direction), then a
+// straight line ran dry: 7 bites in 6 s, and two critics read that as nothing happening. L1 gets a trail of the small food from
+// the ring up to the nearest sandwich, straight up the screen, so the first path keeps biting all the way to the first ticket. No rng, L1 only (not in any Daily).
+const TRAIL_STEP = 0.5;
+function firstTrail(c) {
+  const sp = c.spawn, ing = c.items.filter(o => o.role === 'ing').sort((p, q) => hyp(p.x - sp.x, p.z - sp.z) - hyp(q.x - sp.x, q.z - sp.z));
+  const s = ing[0];
+  if (!s) return;
+  const ids = [...c.pal[0], ...c.pal[1]].filter(k => canFit(c.r0, k.a)).map(k => k.id).sort();
+  if (!ids.length) return;
+  const L = hyp(s.x - sp.x, s.z - sp.z), ux = (s.x - sp.x) / L, uz = (s.z - sp.z) / L;
+  let n = 0;
+  for (let d = 0.9; d < L - 0.4; d += TRAIL_STEP, n++) {
+    place: for (const off of [0, 0.15, -0.15, 0.3, -0.3]) {
+      const side = (n & 1 ? 0.08 : -0.08) + off, x = sp.x + ux * d - uz * side, z = sp.z + uz * d + ux * side;
+      for (let j = 0; j < ids.length; j++) {
+        const k = KIND[ids[(n + j) % ids.length]];
+        if (contrastOK(c, k, x, z) && canPlace(c, x, z, k.a, k.tier, { zone: 0 })) { addItem(c, k.id, x, z, { zone: 0, rot: 0 }); break place; }
+      }
+    }
+  }
+}
+function hotChilis(c, spec, seed) {
+  const want = HOT_LEVELS[spec.n];
+  if (!want) return;
+  const hc = Object.create(c);
+  hc.rng = mulberry32((seed ^ 0x0c41f1e5) >>> 0);
+  const k = KIND.chili, sp = c.spawn, R = c.bossFinal / FIT;
+  const potAt = p => (c.r0 + (R - c.r0) * p) * 1.15;
+  const goals = c.items.filter(o => o.role === 'ing' || o.role === 'boss');
+  for (const p of c.piles) goals.push({ x: p.x, z: p.z, a: 0.2, role: 'pile' });
+  const grids = HOT_SIZES.map(f => hotGrid(c, c.r0 + (R - c.r0) * f, goals));
+  const rims = c.spots.map(s => ({ x: s.x, z: s.z, r: s.r })).concat(c.piles.map(p => ({ x: p.x, z: p.z, r: p.r })));
+  const hard = c.items.filter(o => o.role === 'wall' || o.role === 'gate' || (o.role !== 'boss' && o.tier >= 3)).map(o => ({ x: o.x, z: o.z, r: o.a + 0.3 }));
+  const bosses = c.items.filter(o => o.role === 'boss');
+  const hot = [];
+  for (let tr = 0; tr < want * 100 && hot.length < want && c.items.length < ITEM_MAX; tr++) {
+    const from = tr % 5 < 3 || !hard.length ? rims : hard;
+    if (!from.length) continue;
+    const b = from[ri(hc, from.length)], d = DIRS[ri(hc, 64)], rad = b.r + 0.35 + 0.6 * hc.rng();
+    const x = b.x + d[0] * rad, z = b.z + d[1] * rad, zone = zoneAt(c, x, z);
+    const gap = Math.max(4, 2 * potAt(progAt(c, x, z)) + 1);
+    if (hyp(x - sp.x, z - sp.z) < Math.max(6, R + 0.5)) continue;
+    if (hot.some(p => hyp(x - p.x, z - p.z) < gap)) continue;
+    if (bosses.some(o => hyp(x - o.x, z - o.z) < o.a + 1.5)) continue;
+    if (!canPlace(c, x, z, k.a, k.tier, { zone })) continue;
+    const q = { x: r3(x), z: r3(z) };
+    if (!hotClear(grids, hot.concat(q))) continue;
+    addItem(hc, k.id, q.x, q.z, { zone, role: 'hot', flags: F.HOT });
+    hot.push(q);
+  }
+  c.hot = hot;
+}
 function finish(c, spec, seed) {
   const mir = (seed & 1) === 1;
   const mx = x => (mir ? r3(-x) : x);
@@ -2099,8 +2229,10 @@ function finish(c, spec, seed) {
     roost: c.roost ? { x: mx(c.roost.x), z: c.roost.z } : null, gullEvery: c.gullEvery, gulls: c.gulls,
     truckPath: c.truckPath.map(p => ({ x: mx(p.x), z: p.z, stop: p.stop })), cake: c.cake,
     tickets, zones, seed: seed >>> 0,
-    // Only levels that have them carry these two, so a Daily or Feast level's expansion stays byte for byte the same.
+    // Only levels that have them carry these, so a Daily or Feast level's expansion stays byte for byte the same.
     ...(spec.grace > 0 ? { grace: spec.grace } : null),
     ...(c.piles.length ? { piles: c.piles.map(p => ({ x: mx(p.x), z: p.z, r: p.r })) } : null),
+    ...(c.hot && c.hot.length ? { hot: c.hot.map(p => ({ x: mx(p.x), z: p.z })) } : null),
+    ...(c.hot && c.hot.length && spec.n === HOT_FIRST ? { hotIntro: true } : null),
   };
 }

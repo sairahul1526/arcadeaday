@@ -31,7 +31,10 @@ export const GROUND_TILE = 4.0;                               // world units per
 const TEX = 512, WHITE_PX = 32.5;                              // texel that is white in every town's ground
 // White at canvas (32.5, 32.5) and at its flipY mirror row 479.5, so it holds whatever flipY render uses.
 export const WHITE_UV = [WHITE_PX / TEX, WHITE_PX / TEX];
-export const GROUND_BASE = { picnic: '#F7E9D4', market: '#D9C6A5', harbour: '#C99A63' };
+// R2 (11-06 Fri, round 2, art director): Market and Harbour floors, about 15 % less saturated and darker, and the Harbour planks
+// moved from orange to weathered teak, so tan food has a gap to read against. Display only: catalog.js SURF keeps the old
+// colours because level generation reads them and Dailies may not move.
+export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#AB8E6E' };
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
 // R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
 // catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
@@ -332,6 +335,24 @@ B.strawberry = () => {
     starCap(0.065, 0.028, 0.012, [0, 0.148, 0]),
     stemP(0.04, [0, 0.175, 0], null, '#3F8A3A', 0.009),
   ], [0, 0, 1.2], [0, 0.08, 0]);
+};
+// R7 (11-06 Fri, round 2): a hot chili. A fat glossy crescent lying flat, because the camera looks down and a chili standing in the
+// air reads as a stick. The bend, the green cap and the flame at the tip are what make it no fruit at 390 wide. Flame vertices
+// keep a full-red vertex colour, which is what propMat's flicker and self-light key on (linear r > 0.95); the shine stays under
+// that, so the whole thing is still one instanced draw.
+B.chili = () => {
+  const curve = new T.QuadraticBezierCurve3(V3(-0.235, 0.095, -0.03), V3(0.0, 0.095, 0.2), V3(0.235, 0.115, -0.07));
+  const taper = t => (t < 0.12 ? 0.6 + 0.4 * Math.sin(t / 0.12 * PI / 2) : 1 - 0.84 * ((t - 0.12) / 0.88) ** 2);
+  const shine = (t, s) => { const q = curve.getPoint(t); return P(ico(0.024), '#F9C9C2', [q.x, q.y + 0.076 * taper(t), q.z], [0, 0.45 - t * 1.1, 0], s); };
+  const flame = (r, hgt, seg) => warp(sph(r, seg, seg - 1), (v) => { const t = (v.y + r) / (2 * r), k = 1 - 0.9 * t * t; v.x *= k; v.z *= k; v.y *= hgt / (2 * r); });
+  return [
+    P(ttube(curve, 12, 0.09, 7, taper), { v: (x, y) => mixC('#B01A12', '#EE2A1C', (y - 0.02) / 0.15) }),
+    P(sph(0.066, 6, 5), '#3F8A3A', [-0.238, 0.1, -0.035], null, [1, 0.72, 1]),
+    stemP(0.06, [-0.25, 0.15, -0.045], [0.4, 0, 0.5], '#4E9A44', 0.02),
+    shine(0.3, [2.4, 0.5, 1]), shine(0.48, [1.5, 0.5, 0.9]),
+    P(flame(0.075, 0.28, 6), grad('#FF6A14', '#FF9A1F', -0.1, 0.15), [0.238, 0.21, -0.07]),
+    P(flame(0.045, 0.16, 5), '#FFD23F', [0.238, 0.19, -0.048]),
+  ];
 };
 B.tomato = () => {
   const s = warp(sph(0.15, 10, 7), (v) => { const k = 1 + 0.045 * Math.cos(5 * Math.atan2(v.z, v.x)) * Math.sqrt(Math.max(0, 1 - (v.y / 0.15) ** 2)); v.x *= k; v.z *= k; });
@@ -2140,8 +2161,8 @@ export function boardGeometry(W, D, town = 'picnic') {
 
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
-  market: { blanket: '#2FB5A5', path: '#C2AC88', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#A87A47', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#8F7355', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 function shade(hex, t) { return mixC(hex, t > 0 ? '#FFFFFF' : '#3A2418', Math.abs(t)); }
 function lum(hex) { const c = lin(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
@@ -2205,10 +2226,26 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
 /** R8 floor dressing, one piece from dress.js (origin on the floor, y up). Flat prints are 0.02 u or less, under the blob decals. */
 export function dressGeometry(d) {
   const parts = [], c = d.c | 0, k = d.k, mat = (w, dd, r, h, col, y = 0) => P(slab(rrShape(w, dd, r), h, 0, 4), col, [0, y, 0]);
-  if (k === 'mat') {          // the woven mat under a snack pile: a straw round with two bands
-    const R = d.r, Y = 0.034;
-    parts.push(P(cyl(R, R, 0.006, 18), '#C9A869', [0, Y, 0]), P(cyl(R * 0.86, R * 0.86, 0.006, 18), '#E2C88F', [0, Y + 0.002, 0]),
-      P(cyl(R * 0.56, R * 0.56, 0.006, 16), '#D3B478', [0, Y + 0.004, 0]));
+  if (k === 'mat') {
+    // R3 (11-06 Fri, round 2, art director: "flat beige discs read unfinished"): what a snack pile sits on. A plate with a
+    // raised rim, a market's round chequered mat (every other pile in Market), a harbour's rope-edged canvas. The rim stops at y 0.08, the same
+    // height as the rope prop the pot already rolls over, and the inner floor stays under the blob decals at y 0.042.
+    const R = d.r, Y = 0.03, dsk = (r, hex, i, n = 32) => P(cyl(r, r, 0.006, n), hex, [0, Y + 0.003 * i, 0]);
+    const rim = (r, tube, hex, n = 26) => P(new T.TorusGeometry(r, tube, 5, n).rotateX(PI / 2), hex, [0, Y + 0.012, 0], null, [1, 0.62, 1]);
+    if (d.town === 'market' && c % 2 === 0) {
+      const col = RUGS[(c + 1) % 4], cream = '#F4E6CC', rows = 3, cols = 12, r0 = R * 0.2, r1 = R * 0.9, dr = (r1 - r0) / rows;
+      parts.push(dsk(R, shade(col, -0.2), 0), dsk(r1, cream, 1), dsk(r0, col, 2, 12));
+      for (let a = 0; a < rows; a++) for (let b = a % 2; b < cols; b += 2) {
+        const ring = new T.RingGeometry(r0 + a * dr, r0 + (a + 1) * dr, 3, 1, b * TAU / cols, TAU / cols).rotateX(-PI / 2);
+        parts.push(P(ring, col, [0, Y + 0.0095, 0]));
+      }
+    } else if (d.town === 'harbour') {
+      parts.push(dsk(R, '#2F5F70', 0), dsk(R * 0.8, '#3E7486', 1), dsk(R * 0.5, '#477F90', 2), rim(R * 0.97, 0.075, '#C9A869'), rim(R * 0.97 - 0.1, 0.03, '#9B7B49'));
+      for (let i = 0; i < 12; i++) { const a = i * TAU / 12; parts.push(P(box(0.05, 0.03, 0.2), '#9B7B49', [Math.cos(a) * R * 0.97, Y + 0.05, Math.sin(a) * R * 0.97], [0, -a, 0])); }
+    } else {
+      const band = ['#E5574A', '#3E9BD6', '#5DB04E', '#F2B23A'][c % 4];
+      parts.push(dsk(R, '#EADFCB', 0), dsk(R * 0.93, '#FFFDF7', 1), dsk(R * 0.8, band, 2), dsk(R * 0.74, '#FFFDF7', 3), dsk(R * 0.66, '#F4ECDD', 4), rim(R * 0.97, 0.07, '#FFFFFF'));
+    }
   } else if (k === 'rug') {   // a market rug: body, two stripes, fringe on the short ends
     const col = RUGS[c % 4], w = 3, dd = 2;
     parts.push(mat(w, dd, 0.06, 0.012, col), P(box(w - 0.5, 0.004, 0.16), '#F4E6CC', [0, 0.014, 0.5]), P(box(w - 0.5, 0.004, 0.16), '#F4E6CC', [0, 0.014, -0.5]),
@@ -2275,7 +2312,7 @@ export function groundTexture(town = 'picnic') {
   x.fillStyle = '#FFFFFF';
   x.fillRect(0, 0, TEX, TEX);
   if (town === 'market') {
-    x.fillStyle = tone('#A8916E');
+    x.fillStyle = tone('#8F7E65');
     x.fillRect(0, 0, TEX, TEX);
     const widths = [[96, 112, 80, 128, 96], [112, 96, 128, 80, 96]];
     for (let r = 0; r < 8; r++) {
@@ -2285,7 +2322,7 @@ export function groundTexture(town = 'picnic') {
         const wdt = row[k % row.length], id = r * 31 + k;
         const forced = (r === 0 || r === 7) && xx + 4 <= WHITE_PX - 4 && xx + wdt - 4 >= WHITE_PX + 4;
         const pick = hsh(id);
-        x.fillStyle = forced || pick < 0.5 ? '#FFFFFF' : pick < 0.8 ? tone('#C2AC88') : tone('#CDB896');
+        x.fillStyle = forced || pick < 0.5 ? '#FFFFFF' : pick < 0.8 ? tone('#A5957B') : tone('#AE9F87');
         for (const dx of [0, TEX]) {
           x.beginPath();
           if (x.roundRect) x.roundRect(xx + 4 - dx, y0 + 4, wdt - 8, 56, 14); else x.rect(xx + 4 - dx, y0 + 4, wdt - 8, 56);
@@ -2299,7 +2336,7 @@ export function groundTexture(town = 'picnic') {
       }
     }
   } else if (town === 'harbour') {
-    x.fillStyle = tone('#7A5230');
+    x.fillStyle = tone('#68513C');
     x.fillRect(0, 0, TEX, TEX);
     for (let r = 0; r < 8; r++) {
       const y0 = r * 64, off = (r * 173) % 300, rr = r;
@@ -2308,12 +2345,12 @@ export function groundTexture(town = 'picnic') {
         const forced = (rr === 0 || rr === 7) && xx + 2 <= WHITE_PX && xx + 298 > WHITE_PX;
         for (const dx of [0, TEX]) {
           const X = xx + dx;
-          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#A87A47');
+          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#8F7355');
           x.fillRect(X + 2, y0 + 2, 296, 60);
-          x.fillStyle = tone('#B88A55');
+          x.fillStyle = tone('#9C8061');
           x.fillRect(X + 2, y0 + 16, 296, 2);
           x.fillRect(X + 2, y0 + 47, 296, 2);
-          x.fillStyle = tone('#6B4628');
+          x.fillStyle = tone('#5B4633');
           for (const ny of [y0 + 12, y0 + 52]) for (const nx of [X + 12, X + 288]) { x.beginPath(); x.arc(nx, ny, 3, 0, TAU); x.fill(); }
         }
       }

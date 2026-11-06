@@ -21,7 +21,7 @@ export const RUGS = ['#8A6AA8', '#4E9E94', '#C9685A', '#D9A441'];   // muted, so
 
 export function dressLayout(L, town, low) {
   const out = [];
-  for (const p of L.piles || []) out.push({ k: 'mat', x: +p.x, z: +p.z, r: +p.r + 0.35, rot: 0, c: 0, town });
+  (L.piles || []).forEach((p, i) => out.push({ k: 'mat', x: +p.x, z: +p.z, r: +p.r + 0.35, rot: 0, c: i, town }));   // c: each pile its own colourway
   const T = TABLE[town];
   if (!T) return out;
   const W = +L.W || 10, D = +L.D || 10;

@@ -369,7 +369,7 @@ const REC_Q = 0.92;                                 // every course item fits wi
 const REC_V = 0.86;                                 // planned cruise = 86 % of top speed (the director has headroom)
 const REC_GAP = 0.06, REC_GAP_MAX = 0.5;            // bite spacing (s); 0.5 keeps the chain alive (CHAIN_WIN 0.7)
 const REC_HOLD_D = 4.0;                             // pot centre to cake centre at the padlock (0.5 s rush)
-const REC_ITEMS = 236;                              // course items (+ the cake) stay under ITEM_MAX 240
+const REC_ITEMS = 236;                              // course items (+ the cake), well under ITEM_MAX; the clip is tuned at this count
 // The course's kind ladder (16 kinds + strawberry + cake = KINDS_MAX 18): colourful tiny food, picnic snacks, then
 // the props a hole game is remembered for (cooler, bench, parasol, tree, swing set, gazebo) before the cake.
 const REC_KINDS = ['pea', 'blueberry', 'cherry', 'juicebox', 'cupcake', 'pinwheel', 'sandwich', 'watermelon', 'beachball',

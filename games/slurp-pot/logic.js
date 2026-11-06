@@ -12,7 +12,7 @@
 import {
   DT, R0, R_MAX, SIZEUP_MUL, G, K_ING, BLOCK_K, TIP_T, CHAIN_WIN, SIZZLE_AT, SIZZLE_EVERY, SIZZLE_CAP,
   STAR3, STAR2, V_BASE, V_PER_R, V_CAP, A_ACC, A_BRAKE, BUMP_V, BUMP_CD, DOOM_EVERY, DOOM_GRACE, LOW_TIME,
-  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL,
+  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS,
 } from './consts.js';
 
 // ------------------------------------------------------------------ the fit rule (§3.2; the only definition)
@@ -31,9 +31,9 @@ export function meterX(r, r0, rMaxShown) {
 }
 
 // Item flag bits: same values as catalog.js F (§13.3 order ING SOLID ROLL FRAGILE GATE BOSS STACK BELT, + WALL).
-export const FLAG = Object.freeze({ ING: 1, SOLID: 2, ROLL: 4, FRAGILE: 8, GATE: 16, BOSS: 32, STACK: 64, BELT: 128, WALL: 256 });
+export const FLAG = Object.freeze({ ING: 1, SOLID: 2, ROLL: 4, FRAGILE: 8, GATE: 16, BOSS: 32, STACK: 64, BELT: 128, WALL: 256, HOT: 512 });
 export const F = FLAG;
-const F_SOLID = 2, F_ROLL = 4, F_FRAGILE = 8, F_BOSS = 32, F_BELT = 128;
+const F_SOLID = 2, F_ROLL = 4, F_FRAGILE = 8, F_BOSS = 32, F_BELT = 128, F_HOT = 512;
 
 const GRID = 2;            // spatial hash cell (u), §3.4
 const ROLL_GAP = 0.6;      // roller respawn gap at B (s), §4.5
@@ -260,7 +260,7 @@ export function createWorld(level, { mode = 'level', boosters = {}, recordPath =
     truck, cake,
     boost: { magnet: false, freeze: false, mega: false }, freezeAdded: 0,
     result: null, stars: 0,
-    stats: { bites: 0, bumps: 0, bossNudges: 0, sizzles: 0, steals: 0, gullMiss: 0, cracks: 0, boils: 0, wobbles: 0, tiers: 0 },
+    stats: { bites: 0, bumps: 0, bossNudges: 0, sizzles: 0, steals: 0, gullMiss: 0, cracks: 0, boils: 0, wobbles: 0, tiers: 0, hot: 0 },
     events: [],
     kindNames, hid, stackOf,
     _: {
@@ -313,7 +313,7 @@ export function lineOf(w, i) { return w._.lineRef[w.kind[i]]; }
 /** Simmer refusal: junk that would push r above the cap (§4.5). Ingredients are always eaten. */
 export function refused(w, i) {
   const _ = w._;
-  if (!_.simmer || w.flags[i] & F_BOSS || _.lineRef[w.kind[i]] >= 0) return false;
+  if (!_.simmer || w.flags[i] & (F_BOSS | F_HOT) || _.lineRef[w.kind[i]] >= 0) return false;
   const P = w.pot, a = w._.a[i];
   return P.r0 * P.r0 + G * (P.mass + w.ik[i] * a * a) > P.cap * P.cap + 1e-9;
 }
@@ -605,6 +605,11 @@ function swallowPass(w) {
       swallow(w, i, true);
       continue;
     }
+    if (fl[i] & F_HOT) {
+      const lim = re - 0.25 * a;
+      if (!_.finalBite && lim > 0 && d2 < lim * lim) hotBite(w, i);
+      continue;
+    }
     if (!(a <= FIT * re + 1e-9)) continue;   // canFit(re, a)
     const lim = re - 0.25 * a;
     if (lim <= 0 || d2 >= lim * lim) continue;
@@ -727,7 +732,7 @@ export function step(w, inp, dt) {
     const R = MAGNET.range * P.r, R2 = R * R, mv = MAGNET.v * dt;
     for (let i = 0; i < n; i++) {
       const s = st[i];
-      if ((s !== 0 && s !== 3) || !w.fits[i] || fl[i] & F_BOSS || _.mover[i]) continue;
+      if ((s !== 0 && s !== 3) || !w.fits[i] || fl[i] & (F_BOSS | F_HOT) || _.mover[i]) continue;   // a magnet never drags a chili in
       const dx = P.x - ix[i], dz = P.z - iz[i], d2 = dx * dx + dz * dz;
       if (d2 >= R2 || d2 < 1e-12) continue;
       const d = Math.sqrt(d2), s2 = d < mv ? 1 : mv / d;
@@ -852,6 +857,19 @@ function shove(w, i, dx, dz, d2, lim) {
   if (x < _.x0 + a) x = _.x0 + a; else if (x > _.x1 - a) x = _.x1 - a;
   if (z < _.z0 + a) z = _.z0 + a; else if (z > _.z1 - a) z = _.z1 - a;
   w.ix[i] = x; w.iz[i] = z; _.grid.dirty = true;
+}
+
+// DECISION (11-06 Fri, round 2, hot chili): a chili always goes down but it is not a bite: no 'bite' event (so no coin), no
+// mass, no bar, no recipe credit. It burns HOT_SECS off the clock and ends the chain. The clock floors at 0.1 s so a chili
+// never fails the run by itself, and it cannot touch the stars after the final bite (swallowPass stops at _.finalBite).
+function hotBite(w, i) {
+  const _ = w._, C = w.chain, ev = w.events;
+  w.st[i] = 1; w.tp[i] = 0; _.sx[i] = w.ix[i]; _.sz[i] = w.iz[i];
+  w.fits[i] = 0; w.glow[i] = 0;
+  w.stats.hot++;
+  if (w.timed) { const t = w.tLeft - HOT_SECS; w.tLeft = t > 0.1 ? t : 0.1; }
+  if (C.n > 0) { if (C.n > C.best) C.best = C.n; ev.push({ type: 'chainEnd', n: C.n }); C.n = 0; }
+  ev.push({ type: 'hot', i, x: w.ix[i], z: w.iz[i], add: -HOT_SECS });
 }
 
 // Swallow start (§3.4): st = 1, growth credited now, ingredients, chain, sizzle, sizeUp.

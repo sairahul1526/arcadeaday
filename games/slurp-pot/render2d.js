@@ -13,9 +13,9 @@
 
 import { KINDS, KIND_ID } from './catalog.js';
 import { edible, createWorld } from './logic.js';
-import { DPR_MIN, DPR_STEP, ITEM_MAX } from './consts.js';
+import { DPR_MIN, DPR_STEP, ITEM_MAX, isMilestone } from './consts.js';
 import { dressLayout, RUGS } from './dress.js';
-import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR } from './camw.js';
+import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, bossBoost } from './camw.js';
 
 const PI = Math.PI, TAU = 2 * PI;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -32,12 +32,12 @@ const rnd = mulberry32(0x2D0F2D);          // render-only RNG (blinks, fx): neve
 // ------------------------------------------------------------------ colours (copies of props.js / render3d.js)
 const LID = { sunny: '#F5B323', cauldron: '#C8743A', wok: '#D9412F', teapot: '#2FB5A5', ricecooker: '#E6D6BA',
   dutch: '#8FE3C8', steamer: '#D9B36B', royal: '#FFD23F', ufo: '#C9D3E0', starladle: '#2B3A8C' };
-const GROUND = { picnic: '#F7E9D4', market: '#D9C6A5', harbour: '#C99A63' };
+const GROUND = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#AB8E6E' };   // props.js GROUND_BASE says why
 const BACK = { picnic: '#A99272', market: '#B39D7B', harbour: '#2AA7C9' };   // table / street / sea = clear colour
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
-  market: { blanket: '#2FB5A5', path: '#C2AC88', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#A87A47', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#8F7355', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 const HEM = { picnic: '#2FB5A5', market: '#FF7A59', harbour: '#2AA7C9' };
 const HOOD = { picnic: '#F5B323', market: '#2FB5A5', harbour: '#E04F4F' };
@@ -46,13 +46,13 @@ const AWNING = ['#E8574A', '#2FB5A5', '#F5B323', '#7A4C9E', '#FF7A59'];
 const EV_ALIAS = { courseDone: 'course', tier: 'cakeTier', gullWarn: 'gull' };
 const ALIASED = new Set(Object.values(EV_ALIAS));
 const BIG_STEPS = new Set([2, 5, 8, 11]);   // D31
-const F_ING = 1, F_FRAGILE = 8, F_GATE = 16, F_BOSS = 32;
+const F_ING = 1, F_FRAGILE = 8, F_GATE = 16, F_BOSS = 32, F_HOT = 512;
 const LIFT = 0.5, GULL_Y = 3, MARGIN = 3.5, MAX_PX = 3.2e6, MAX_SIDE = 2048, FXN = 160, SPLAT_MAX = 24;
 // flat toy shape per kind without art (default: a disc); box, wall and umbrella turn with the item's rot
 const SHAPE = {
   plate: 'ring', lifering: 'ring', ropecoil: 'ring', platepile: 'ring', cup: 'cup',
   tree: 'tree', fence: 'wall', hedge: 'wall', ropepost: 'wall',
-  parasol: 'umbrella', sunshade: 'umbrella', beachball: 'umbrella', pinwheel: 'umbrella',
+  chili: 'chili', parasol: 'umbrella', sunshade: 'umbrella', beachball: 'umbrella', pinwheel: 'umbrella',
   juicebox: 'box', crate: 'box', cooler: 'box', aboard: 'box', scooter: 'box', swingset: 'box', crane: 'box', deckchair: 'box',
   bread: 'loaf', pie: 'pie', wafflestack: 'pie', basket: 'basket', eggcrate: 'eggs', bench: 'bench',
   lamp: 'lamp', anchor: 'anchor', bin: 'drum', barrel: 'drum', flowerpot: 'planter', flowerbucket: 'planter',
@@ -102,9 +102,8 @@ const mood = {};
 const lid = { on: false, pop: 0, jig: 0 };
 let punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0, reveal = null, glance = null, bossRing = null;
 let truckSq = 0, truckFlip = false, wipeT = -1, look = null, snapCam = false, freshW = false;
-// R7: the last bite's finisher (render3d's timing: boom at 1.25 s, camera back by 1.9 s) and the warm screen flash
-const FIN_BOOM = 1.25, FIN_BACK = 1.4, FIN_END = 1.9;
-let fin = null, finHold = false, flashA = 0;
+// R7: the last bite's finisher (render3d's timing, FIN_BEAT and FIN_BIG in camw.js) and the warm screen flash. hotT: chili flush.
+let fin = null, finHold = false, flashA = 0, hotT = 0;
 const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const flash = a => { flashA = Math.max(flashA, calm ? a * 0.35 : a); };
 const splats = [];
@@ -311,6 +310,14 @@ function toy(c) {
   const body = (x, y, w, h, rad, fill) => { rr(g, x, y, w, h, rad); g.fillStyle = fill || col; g.fill(); g.stroke(); };
   const lines = (pts, style, lw) => { g.strokeStyle = style; g.lineWidth = lw; g.beginPath(); for (const [a, b, p, q] of pts) { g.moveTo(a, b); g.lineTo(p, q); } g.stroke(); };
   switch (shape) {
+    case 'chili': {   // R7: a fat comma of glossy red, tip up to the right, green cap low left. The flame is drawn live in drawBody.
+      g.strokeStyle = '#7A120C'; g.lineWidth = 0.62 * r; g.beginPath(); g.moveTo(C - 0.55 * r, C + 0.42 * r); g.quadraticCurveTo(C + 0.35 * r, C + 0.5 * r, C + 0.5 * r, C - 0.3 * r); g.stroke();
+      g.strokeStyle = '#E0261C'; g.lineWidth = 0.46 * r; g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 0.09 * r; g.beginPath(); g.moveTo(C - 0.25 * r, C + 0.3 * r); g.quadraticCurveTo(C + 0.15 * r, C + 0.3 * r, C + 0.28 * r, C - 0.05 * r); g.stroke();
+      g.fillStyle = '#3F8A3A'; g.strokeStyle = '#1F4E1E'; g.lineWidth = LW * 0.7; disc(g, C - 0.68 * r, C + 0.42 * r, 0.24 * r); g.fill(); g.stroke();
+      g.strokeStyle = '#3F8A3A'; g.lineWidth = 0.14 * r; g.beginPath(); g.moveTo(C - 0.74 * r, C + 0.4 * r); g.lineTo(C - 0.95 * r, C + 0.15 * r); g.stroke();
+      break;
+    }
     case 'box':
       body(C - 0.86 * r, C - 0.86 * r, 1.72 * r, 1.72 * r, 0.25 * r);
       g.fillStyle = 'rgba(255,255,255,0.25)'; rr(g, C - 0.7 * r, C - 0.7 * r, 1.4 * r, 0.5 * r, 0.15 * r); g.fill();
@@ -539,7 +546,7 @@ function board(g) {
     let k = 0;
     for (let z = z0; z < z1; z += 0.5) for (let x = x0 + (Math.round((z - z0) / 0.5) % 2 ? 0.3 : 0); x < x1; x += 0.6, k++) if (hsh(k) < 0.12) g.rect(x + 0.03, z + 0.03, 0.54, 0.44);
     g.fill();
-    g.strokeStyle = '#C4AF8B'; g.lineWidth = 0.05; g.beginPath();
+    g.strokeStyle = '#A5957B'; g.lineWidth = 0.05; g.beginPath();
     for (let z = z0, r = 0; z < z1; z += 0.5, r++) {
       g.moveTo(x0, z); g.lineTo(x1, z);
       for (let x = x0 + (r % 2 ? 0.3 : 0); x < x1; x += 0.6) { g.moveTo(x, z); g.lineTo(x, z + 0.5); }
@@ -631,9 +638,30 @@ function dressPiece(g, d) {
   const c = d.c | 0, k = d.k, bar = (x, z, w, h, col) => { g.fillStyle = col; g.fillRect(x - w / 2, z - h / 2, w, h); };
   g.save(); g.translate(d.x, d.z); g.rotate(-(d.rot || 0));
   if (k === 'mat') {
-    g.fillStyle = '#C9A869'; disc(g, 0, 0, d.r); g.fill();
-    g.fillStyle = '#E2C88F'; disc(g, 0, 0, d.r * 0.86); g.fill();
-    g.fillStyle = '#D3B478'; disc(g, 0, 0, d.r * 0.56); g.fill();
+    // R3: props.dressGeometry's plate, chequered mat and rope-edged canvas, flat.
+    const R = d.r;
+    if (d.town === 'market' && c % 2 === 0) {
+      const col = RUGS[(c + 1) % 4], r0 = R * 0.2, r1 = R * 0.9, dr = (r1 - r0) / 3;
+      g.fillStyle = shade(col, -0.2); disc(g, 0, 0, R); g.fill();
+      g.fillStyle = '#F4E6CC'; disc(g, 0, 0, r1); g.fill();
+      g.fillStyle = col;
+      for (let a = 0; a < 3; a++) for (let b = a % 2; b < 12; b += 2) {
+        g.beginPath(); g.arc(0, 0, r0 + (a + 1) * dr, b * TAU / 12, (b + 1) * TAU / 12); g.arc(0, 0, r0 + a * dr, (b + 1) * TAU / 12, b * TAU / 12, true); g.closePath(); g.fill();
+      }
+      disc(g, 0, 0, r0); g.fill();
+    } else if (d.town === 'harbour') {
+      g.fillStyle = '#2F5F70'; disc(g, 0, 0, R); g.fill();
+      g.fillStyle = '#3E7486'; disc(g, 0, 0, R * 0.8); g.fill();
+      g.fillStyle = '#477F90'; disc(g, 0, 0, R * 0.5); g.fill();
+      g.strokeStyle = '#C9A869'; g.lineWidth = 0.15; disc(g, 0, 0, R * 0.97); g.stroke();
+      g.strokeStyle = '#9B7B49'; g.lineWidth = 0.05; g.setLineDash([0.08, 0.3]); disc(g, 0, 0, R * 0.97); g.stroke(); g.setLineDash([]);
+    } else {
+      g.fillStyle = '#FFFDF7'; disc(g, 0, 0, R); g.fill();
+      g.strokeStyle = '#D9CDB8'; g.lineWidth = 0.05; disc(g, 0, 0, R * 0.98); g.stroke();
+      g.fillStyle = ['#E5574A', '#3E9BD6', '#5DB04E', '#F2B23A'][c % 4]; disc(g, 0, 0, R * 0.8); g.fill();
+      g.fillStyle = '#FFFDF7'; disc(g, 0, 0, R * 0.74); g.fill();
+      g.fillStyle = '#F4ECDD'; disc(g, 0, 0, R * 0.66); g.fill();
+    }
   } else if (k === 'rug') {
     const col = RUGS[c % 4];
     bar(0, 0, 3, 2, col); bar(0, 0.5, 2.5, 0.16, '#F4E6CC'); bar(0, -0.5, 2.5, 0.16, '#F4E6CC'); bar(0, 0, 2.5, 0.42, shade(col, -0.16));
@@ -734,6 +762,23 @@ function springTo(gx, gz, dt) {   // critically damped, ω = 9 (exact step, stab
   d0 = cam.z - gz; v0 = cam.vz; B = v0 + w * d0;
   cam.z = gz + (d0 + B * dt) * e; cam.vz = (v0 - w * B * dt) * e;
 }
+const playEdges = pad => (play.w > 1 && play.h > 1
+  ? [play.x + pad, play.x + play.w - pad, play.y + pad, play.y + play.h - pad] : [pad, cssW - pad, pad, cssH - pad]);
+/** R6: render3d's keepPot in top-down terms: slide a view centre until the whole pot is inside the play rect. */
+function keepPot(gx, gz, pad) {
+  const r = Math.max(0.05, pot.rVis) * ppu, [l, R, t, b] = playEdges(pad), px = cam.ax + (pot.x - gx) * ppu, py = cam.ay + (pot.z - gz) * ppu;
+  const ox = 2 * r >= R - l ? (l + R) / 2 - px : px - r < l ? l - px + r : px + r > R ? R - px - r : 0;
+  const oy = 2 * r >= b - t ? (t + b) / 2 - py : py - r < t ? t - py + r : py + r > b ? b - py - r : 0;
+  return [gx - ox / ppu, gz - oy / ppu];
+}
+/** R6: render3d's revealFit in top-down terms: the level-start boss shot widens only as far as pot and boss need. */
+function revealFit(Rv, wv0) {
+  const [l, r, t, b] = playEdges(14), rv = Math.max(0.05, pot.rVis);
+  const x0 = Math.min(pot.x - rv, Rv.x - Rv.a), x1 = Math.max(pot.x + rv, Rv.x + Rv.a), z0 = Math.min(pot.z - rv, Rv.z - Rv.a), z1 = Math.max(pot.z + rv, Rv.z + Rv.a);
+  const need = Math.min((r - l) / Math.max(1e-3, x1 - x0), (b - t) / Math.max(1e-3, z1 - z0));
+  const p = Math.max(4, Math.min(scaleFor(Math.max(wv0, Rv.wv)), need));
+  return { ppu: p, x: (x0 + x1) / 2 - ((l + r) / 2 - cam.ax) / p, z: (z0 + z1) / 2 - ((t + b) / 2 - cam.ay) / p };
+}
 function updateCamera(dt) {
   // DECISION (11-04): follow width, anchor ease, SIZE UP punch, boss shake, the levelStart boss reveal and the
   // two-course glance are render3d's; the title centres the board with a slow drift (no orbit in 2D).
@@ -763,14 +808,17 @@ function updateCamera(dt) {
   if (fin) {
     fin.t += dt;
     const t = fin.t;
-    if (!fin.boom && t >= FIN_BOOM) { fin.boom = true; finBoom(); }
-    finK = sstep(0, 0.3, t) * (1 - sstep(FIN_BACK, FIN_END, t));
-    holdK = sstep(0, 0.3, t);
+    const B = fin.B, big = B === FIN_BIG;
+    if (!fin.boom && t >= B.boom) { fin.boom = true; finBoom(big); }
+    finK = calm ? 0 : sstep(0, B.push, t) * (1 - sstep(B.back, B.end, t));   // reduced motion: the camera stays put, the boss still goes in
+    holdK = sstep(0, B.push, t);
     wv *= Math.exp(finK * Math.log(Math.min(1, 2 * pot.rVis / 0.72 / wv)));
-    const pk = t < 0.2 ? 0.45 * (1 - t / 0.2) : t >= FIN_BOOM && t < FIN_BOOM + 0.4 ? 1 - (t - FIN_BOOM) / 0.4 : 0;
+    if (big && !calm) wv *= 1 - 0.06 * sstep(B.sink, B.hold, t) * (1 - sstep(B.boom, B.back, t));   // the slow creep in on the held frame
+    const rum = big && t >= B.sink && t < B.boom ? 0.16 * sstep(B.sink, B.hold, t) : 0;
+    const pk = t < 0.2 ? 0.45 * (1 - t / 0.2) : t >= B.boom && t < B.boom + (big ? 0.6 : 0.4) ? (big ? 1.4 : 1) * (1 - (t - B.boom) / (big ? 0.6 : 0.4)) : rum;
     const amp = calm ? 0 : 0.022 * wv * pk;
     shakeX = (rnd() * 2 - 1) * amp; shakeZ = (rnd() * 2 - 1) * amp;
-    if (t > FIN_END) { fin = null; finHold = true; shakeX = shakeZ = 0; }
+    if (t > B.end) { fin = null; finHold = true; shakeX = shakeZ = 0; }
   }
   let fx0 = pot.x, fz0 = pot.z;
   if (glance && !titleOn) {   // 35 % toward the course-② boss and back over 1.2 s, kept within 70 % of the room
@@ -791,6 +839,8 @@ function updateCamera(dt) {
     gx = BB ? (BB.x0 + BB.x1) / 2 + Math.sin(time * 0.11) * 1.2 : pot.x;
     gz = BB ? (BB.z0 + BB.z1) / 2 + Math.sin(time * 0.07) * 1.6 : pot.z;
   } else [gx, gz] = clampGoal(fx0, fz0);
+  const keep = !titleOn && !REC && holdK <= 0;   // the finisher frames the pot itself
+  if (keep) [gx, gz] = keepPot(gx, gz, 12);
   if (holdK > 0) { gx = lerp(gx, pot.x, holdK); gz = lerp(gz, pot.z, holdK); if (finK > 0) { cam.x = lerp(cam.x, pot.x, finK * 0.35); cam.z = lerp(cam.z, pot.z, finK * 0.35); } }
   if (reveal && !titleOn) {   // hold on the ticket boss 0.7 s, then glide to the pot over 0.6 s
     reveal.t += dt;
@@ -798,13 +848,14 @@ function updateCamera(dt) {
     if (t >= 1.3) reveal = null;
     else {
       cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0;
-      const e = t < 0.7 ? 0 : inOut((t - 0.7) / 0.6);
-      view.x = lerp(reveal.x, gx, e); view.z = lerp(reveal.z, gz, e);
-      ppu = scaleFor(lerp(Math.max(wv, reveal.wv), wv, e));
+      const F = reveal.fit || (reveal.fit = revealFit(reveal, wv));
+      const e = t < 0.7 ? 0 : inOut((t - 0.7) / 0.6), p = Math.exp(lerp(Math.log(F.ppu), Math.log(ppu), e)), k = (1 - e) * F.ppu / p;
+      view.x = gx + (F.x - gx) * k; view.z = gz + (F.z - gz) * k; ppu = p;
       return;
     }
   }
   if (titleOn || (snapCam && W)) { cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0; snapCam = snapCam && !W; } else springTo(gx, gz, dt);
+  if (keep) [cam.x, cam.z] = keepPot(cam.x, cam.z, 3);   // the spring lags a pot at full speed
   view.x = cam.x + shakeX; view.z = cam.z + shakeZ;
 }
 
@@ -815,11 +866,19 @@ function spawn(x, y, z, vx, vy, vz, life, size, col, shape = 0, grav = 6, grow =
   fV[i * 3] = vx; fV[i * 3 + 1] = vy; fV[i * 3 + 2] = vz;
   fLife[i] = life; fL0[i] = life; fSz[i] = size; fShape[i] = shape; fGrav[i] = grav; fGrow[i] = grow; fA[i] = a; fCol[i] = col;
 }
-function finBoom() {   // the boss lands in the stew: warm flash, gulp, confetti from the pot, sparkle ring
-  const v = 2.6 + 6.6 * pot.rVis, M = mood;
-  flash(0.62); M.biteT = 0.18; M.sizeT = 0.2; M.happyT = 2;
-  burst(pot.x, 0.3, pot.z, 110, ['#FFD34D', '#E5483B', '#4CC26A', '#FFF6E6', '#FF9EC4', '#4AA8E8'], { speed: 0.8 * v, up: 0.9 * v, size: 0.045 * v, shape: 1, grav: v, life: 1.6 });
-  sparkleRing(14, '#FFE27A', 0.4 * v);
+function celebrate() {
+  const M = mood;
+  M.celebrateT = 0; M.happyT = 1.6; M.worried = false;
+  spawn(pot.x, 0.3 + pot.rVis * 0.3, pot.z, 0, 1.0, 0, 1.3, Math.max(0.16, 0.35 * pot.rVis), '#FF6F8E', 3, -0.2, 0.6);
+  sparkleRing(10, '#FFE27A', 2.2);
+}
+function finBoom(big = false) {   // the boss lands in the stew: warm flash, gulp, confetti from the pot, sparkle ring
+  const v = camW(pot.rVis), M = mood;
+  flash(big ? 0.85 : 0.62); M.biteT = 0.18; M.sizeT = 0.2; M.happyT = 2;
+  if (big) bossRing = { t: 0, x: pot.x, z: pot.z, R: 1.5 * pot.rVis };
+  burst(pot.x, 0.3, pot.z, big ? 150 : 110, ['#FFD34D', '#E5483B', '#4CC26A', '#FFF6E6', '#FF9EC4', '#4AA8E8'], { speed: 0.8 * v, up: 0.9 * v, size: 0.045 * v, shape: 1, grav: v, life: 1.6 });
+  sparkleRing(big ? 22 : 14, '#FFE27A', (big ? 0.55 : 0.4) * v);
+  if (fin && fin.win) celebrate();
 }
 function burst(x, y, z, n, col, opt = {}) {
   const sp = opt.speed || 1.5, up = opt.up ?? 2, life = opt.life || 0.6, size = opt.size || 0.06;
@@ -887,6 +946,13 @@ export function onFx(ev, data) {
       M.wideT = 0.9;
       const [x, z] = itemXZ(d.i);
       burst(x, 1, z, 18, ['#FFD34D', '#FFF3C4', '#F5B323'], { speed: 1.6, up: 2.4, size: 0.1, shape: 2, grav: 3 });
+      if (W && d.i >= 0 && d.i < ITEM_MAX) { popT[d.i] = 0.25; bossRing = { t: 0, x, z, R: 1.5 * W.ia[d.i] }; }   // R4: the unlock lands
+      break;
+    }
+    case 'hot': {   // R7: the pot bit a chili: squint, red flush, steam out of the top
+      const v = camW(pot.rVis);
+      M.squintT = 0.5; hotT = 0.75;
+      burst(pot.x, 0.1, pot.z, 10, ['#FFFFFF', '#FFE3D2'], { speed: 0.07 * v, up: 0.32 * v, size: 0.05 * v, shape: 4, grav: -0.08 * v, grow: 1.6, life: 0.85, a: 0.7 });
       break;
     }
     case 'bossNudge': if (d.i >= 0 && d.i < ITEM_MAX) rattleT[d.i] = 0.4; M.squintT = 0.3; break;
@@ -898,15 +964,14 @@ export function onFx(ev, data) {
     }
     case 'bossBite': {
       const [x, z] = itemXZ(d.i);
-      if (!REC && d.final) { fin = { t: 0, i: d.i, boom: false, ang: Math.atan2(x - pot.x, z - pot.z) }; glance = null; flash(0.28); M.wideT = FIN_BOOM; }
+      if (!REC && d.final) { const B = W && W.level && isMilestone(W.level.n) ? FIN_BIG : FIN_BEAT; fin = { t: 0, i: d.i, boom: false, B, ang: Math.atan2(x - pot.x, z - pot.z) }; glance = null; flash(0.28); M.wideT = B.boom; }
       else { bossCamT = 0; M.wideT = 0.8; if (!REC) flash(0.2); }
       burst(x, 0.4 + pot.rVis * 0.5, z, 70, ['#FFD34D', '#E5483B', '#4CC26A', '#FFF6E6'], { speed: 2.6, up: 4.2, size: 0.11, shape: 1, grav: 5, life: 1.6 });
       break;
     }
     case 'win':
-      M.celebrateT = 0; M.happyT = 1.6; M.worried = false;
-      spawn(pot.x, 0.3 + pot.rVis * 0.3, pot.z, 0, 1.0, 0, 1.3, Math.max(0.16, 0.35 * pot.rVis), '#FF6F8E', 3, -0.2, 0.6);
-      sparkleRing(10, '#FFE27A', 2.2);
+      if (fin && !fin.boom) { fin.win = true; M.worried = false; break; }   // mid-way through a milestone's held frame: the party waits for the gulp
+      celebrate();
       break;
     case 'fail': M.sad = true; M.worried = false; break;
     case 'lowTime': M.worried = true; break;
@@ -932,14 +997,14 @@ export function onFx(ev, data) {
       burst(pot.x, 0.1, pot.z, 4, '#FFFFFF', { speed: 0.2, up: 1.0, size: 0.1 * Math.max(0.6, pot.rVis), shape: 4, grav: -0.5, grow: 1.6, life: 1.0, a: 0.55 });
       break;
     case 'chain': if ((d.n | 0) >= 3) sparkleRing(3, '#FFF3C4', 1.0); break;
-    case 'start': reveal = null; break;
+    case 'start': if (reveal) reveal.t = Math.max(reveal.t, 0.7); break;   // straight into the glide: a cut from the wide shot jars
     case 'levelStart': {
       resetMood();
-      lid.on = false; lid.pop = lid.jig = 0; glance = bossRing = null; fin = null; finHold = false; flashA = 0;
+      lid.on = false; lid.pop = lid.jig = 0; glance = bossRing = null; fin = null; finHold = false; flashA = 0; hotT = 0;
       const w = d.w || W;
       if (!d.retry && w && w.tickets && w.tickets.length) {
         const b = w.tickets[w.ti | 0] && w.tickets[w.ti | 0].boss;
-        if (b >= 0 && b < w.n) reveal = { t: 0, x: w.ix[b], z: w.iz[b], wv: (2.2 * w.ia[b]) / 0.6 };
+        if (b >= 0 && b < w.n) reveal = { t: 0, x: w.ix[b], z: w.iz[b], a: w.ia[b], wv: (2.2 * w.ia[b]) / 0.6, fit: null };
       }
       break;
     }
@@ -1045,6 +1110,7 @@ export function update(w, dt, alpha = 1) {
   updateMood(dt, w);
   truckSq = Math.max(0, truckSq - dt);
   if (bossRing) { bossRing.t += dt; if (bossRing.t > 0.6) bossRing = null; }
+  hotT = Math.max(0, hotT - dt);
   if (wipeT >= 0) { wipeT += dt / 0.6; if (wipeT >= 1) wipeT = -1; }
   flashA *= Math.exp(-dt / 0.13);
 }
@@ -1056,6 +1122,7 @@ function itemPos(w, i) {   // interpolated position → XS/ZS (and YS = height f
   XS[i] = x; ZS[i] = z; YS[i] = y;
 }
 
+const finHeld = (i, s) => !!fin && fin.i === i && (s === 1 || (s === 2 && !fin.boom));
 function updateItems(w, dt) {
   const n = itemCat.length, st = w.st;
   let best = null, bestPri = 0, bestD = 1e9;
@@ -1065,6 +1132,7 @@ function updateItems(w, dt) {
       rollA[i] = 0; lastX[i] = w.ix[i]; lastZ[i] = w.iz[i]; crackT[i] = 0;
     }
     const s = st[i];
+    if (s === 2 && finHeld(i, s)) continue;   // a milestone's boss outlives its sim tip: the crumbs wait for the boom
     if (s === 2) {
       if (prevSt[i] === 1) {   // swallowed: crumbs fly out of the stew in the kind colour
         const K = KINDS[itemCat[i]], tn = K ? K.tier | 0 : 0;
@@ -1090,7 +1158,7 @@ function updateItems(w, dt) {
     // look-at priority: open-line ingredient > open boss > edible item within 3 r
     const fl = w.flags[i], open = w.glow[i] > 0, dist = Math.hypot(x - pot.x, z - pot.z);
     let pri = fl & F_ING && open ? 3 : fl & F_BOSS && open ? 2 : 0;
-    if (!pri && dist < 3 * pot.r && edible(w, i)) pri = 1;
+    if (!pri && dist < 3 * pot.r && !(fl & F_HOT) && edible(w, i)) pri = 1;
     if (pri > 0 && (pri > bestPri || (pri === bestPri && dist < bestD))) { bestPri = pri; bestD = dist; best = [x - pot.x, z - pot.z]; }
   }
   return best;
@@ -1238,6 +1306,7 @@ function drawPot() {
   ctx.strokeStyle = 'rgba(255,240,200,0.35)'; ctx.lineWidth = Math.max(1.2 / ppu, 0.07 * rv);
   ctx.beginPath(); ctx.arc(pot.x, pot.z, sr * 0.62, a, a + 1.6); ctx.moveTo(pot.x + Math.cos(a + PI) * sr * 0.32, pot.z + Math.sin(a + PI) * sr * 0.32); ctx.arc(pot.x, pot.z, sr * 0.32, a + PI, a + PI + 1.8);
   ctx.stroke(); ops++;
+  if (hotT > 0) { ctx.fillStyle = 'rgba(232,36,18,' + (0.62 * sstep(0, 0.2, hotT)).toFixed(3) + ')'; disc(ctx, pot.x, pot.z, sr); ctx.fill(); ops++; }
   if (M.dim < 0.98) { ctx.fillStyle = 'rgba(30,18,10,' + (0.6 * (1 - M.dim)).toFixed(3) + ')'; disc(ctx, pot.x, pot.z, sr); ctx.fill(); ops++; }
 }
 
@@ -1256,7 +1325,7 @@ function drawItems(w) {
   let m = 0;
   for (let i = 0; i < n; i++) {
     const s = st[i];
-    if (s === 2 || (hid && hid[i]) || itemCat[i] < 0) continue;
+    if ((s === 2 && !finHeld(i, s)) || (hid && hid[i]) || itemCat[i] < 0) continue;
     itemPos(w, i);
     const pad = w.ia[i] * 2.5 + 0.5, x = XS[i], z = ZS[i] - YS[i] * LIFT;
     if (x + pad < vx0 || x - pad > vx1 || z + pad < vz0 || z - pad > vz1 + pad) continue;
@@ -1264,15 +1333,16 @@ function drawItems(w) {
   }
   const keys = KEY.subarray(0, m);
   keys.sort();
-  const Ck = w.cake, ckI = Ck && Ck.i >= 0 && Ck.n > 0 ? Ck.i : -1;
+  const Ck = w.cake, ckI = Ck && Ck.i >= 0 && Ck.n > 0 ? Ck.i : -1, mile = !!w.level && isMilestone(w.level.n);
   // pass 1: radii, shadows and halos (under every body)
   for (let k = 0; k < m; k++) {
     const i = keys[k] % 1024, K = KINDS[itemCat[i]], a = w.ia[i], fl = w.flags[i];
     const openIng = !!(fl & F_ING) && w.glow[i] > 0;
-    let R = a * boostOf(K, a, openIng);
-    if (fin && fin.i === i && st[i] === 1) {   // R7: swells to the pot's size whatever the boss's real size, then shrinks to nothing
-      const q = sstep(0.32, FIN_BOOM, fin.t), pop = 1 + 0.16 * Math.sin(PI * sstep(0.12, 0.42, fin.t));
-      R *= lerp(1, Math.max(1.25, 1.05 * pot.rVis / Math.max(1e-3, R)), sstep(0, 0.28, fin.t)) * pop * (1 - 0.94 * q * q);
+    const boss = fl & F_BOSS;
+    let R = a * (boss && mile ? bossBoost(a, XS[i], ZS[i], BB) : boostOf(K, a, openIng));
+    if (finHeld(i, st[i])) {   // R7: swells to the pot's size whatever the boss's real size, then shrinks to nothing
+      const big = fin.B === FIN_BIG, q = finQ(fin.B, fin.t), pop = 1 + 0.16 * Math.sin(PI * sstep(0.12, big ? 0.6 : 0.42, fin.t));
+      R *= lerp(1, Math.max(1.25, (big ? 1.25 : 1.05) * pot.rVis / Math.max(1e-3, R)), sstep(0, big ? 0.42 : 0.28, fin.t)) * pop * (1 - 0.94 * q * q);
       RS[i] = R;
       continue;
     }
@@ -1280,6 +1350,10 @@ function drawItems(w) {
     if (popT[i] > 0) R *= 1 + 0.3 * Math.sin(PI * (1 - popT[i] / 0.25));
     RS[i] = R;
     if (st[i] === 5) continue;
+    if (boss && st[i] !== 1 && (w.glow[i] > 0 || mile)) {   // R4: the boss stands in a pool of light that breathes
+      const H = 4.2 * R; ctx.globalAlpha = (w.glow[i] > 0 ? 1 : 0.6) * (0.62 + 0.3 * Math.sin(time * 3.77));
+      ctx.drawImage(haloCv, XS[i] - H / 2, ZS[i] - H / 2, H, H); ctx.globalAlpha = 1; ops++;
+    }
     const S = 2.3 * (i === ckI ? (+Ck.tiers[Ck.n - 1] || a) * (R / a) : R);
     if (st[i] !== 1) { ctx.drawImage(shadowCv, XS[i] - S / 2 + 0.08 * R, ZS[i] - S / 2 + 0.12 * R, S, S); ops++; }
     if (openIng && st[i] !== 1) {
@@ -1301,7 +1375,7 @@ function drawItems(w) {
   let nE = 0;
   for (let k = 0; k < m; k++) {
     const i = keys[k] % 1024, s = st[i];
-    if (s === 1 || s === 5 || w.flags[i] & F_BOSS) continue;
+    if (s === 1 || s === 5 || w.flags[i] & (F_BOSS | F_HOT)) continue;   // R7: a chili goes down but is no invitation
     const x = XS[i], z = ZS[i];
     if (Math.hypot(x - pot.x, z - pot.z) >= 3 * pot.r || !edible(w, i)) continue;
     const r = RS[i] + 2.5 / ppu;
@@ -1310,12 +1384,17 @@ function drawItems(w) {
   if (nE) { ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 2 / ppu; ctx.stroke(); ops++; }
   for (let k = 0; k < m; k++) {
     const i = keys[k] % 1024, fl = w.flags[i], s = st[i];
-    if (s === 1 || s === 5) continue;
+    if (s === 1 || s === 2 || s === 5) continue;
     const x = XS[i], z = ZS[i], a = w.ia[i];
+    if (KINDS[itemCat[i]].id === 'chili') {   // R7: a thin warm hazard ring with an ink edge
+      const r = Math.max(1.55 * RS[i], 13 / ppu);
+      ctx.strokeStyle = 'rgba(58,36,24,0.5)'; ctx.lineWidth = 4.5 / ppu; disc(ctx, x, z, r); ctx.stroke();
+      ctx.strokeStyle = '#FF5C1A'; ctx.lineWidth = 2.5 / ppu; disc(ctx, x, z, r); ctx.stroke(); ops += 2;
+    }
     if (fl & F_BOSS) {
       if (w.glow[i] > 0) {
         ctx.strokeStyle = '#FFD23F'; ctx.lineWidth = Math.max(3 / ppu, 0.06 * a);
-        disc(ctx, x, z, 1.12 * a * (1 + 0.03 * Math.sin(time * 5))); ctx.stroke(); ops++;
+        disc(ctx, x, z, 1.12 * RS[i] * (1 + 0.03 * Math.sin(time * 3.77))); ctx.stroke(); ops++;
       } else drawPadlock(x + (rattleT[i] > 0 ? Math.sin(time * 60) * 0.05 * a : 0), z - 0.25 * a, Math.max(28 / ppu, 0.42 * a));
     } else if (fl & F_GATE) {
       ctx.save(); ctx.setLineDash([0.18, 0.12]); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = Math.max(1.5 / ppu, 0.04);
@@ -1332,10 +1411,11 @@ function drawItems(w) {
 function drawBody(w, i, isCake, isTruck) {
   const K = KINDS[itemCat[i]], a = w.ia[i], s = w.st[i], R = RS[i];
   let x = XS[i], z = ZS[i] - YS[i] * LIFT;
-  const finI = fin && fin.i === i && s === 1;
+  const finI = finHeld(i, s);
   if (finI) {   // R7: pulled in along a tightening spiral (ctx rotation below spins it)
-    const q = sstep(0.32, FIN_BOOM, fin.t), ang = fin.ang + TAU * 1.6 * q * q, rad = 0.42 * pot.rVis * (1 - q), inP = sstep(0, 0.28, fin.t);
+    const q = finQ(fin.B, fin.t), ang = fin.ang + TAU * 1.6 * q * q, rad = 0.42 * pot.rVis * (1 - q), inP = sstep(0, fin.B === FIN_BIG ? 0.42 : 0.28, fin.t);
     x = lerp(x, pot.x + Math.sin(ang) * rad, inP); z = lerp(z, pot.z + Math.cos(ang) * rad, inP);
+    if (fin.B === FIN_BIG && !calm && fin.t > 0.8 && fin.t < fin.B.boom) x += Math.sin(fin.t * 34) * 0.05 * R;   // the pot strains on it
   } else if (s === 1) { const t = 0.8 * sstep(0, 1, w.tp[i]); x = lerp(x, pot.x, t); z = lerp(z, pot.z, t); ctx.globalAlpha = 1 - 0.5 * w.tp[i]; }
   // jitter: boss rattle, wobble, the fragile shiver (a 0.5 s tremble every 2.5 s)
   if (rattleT[i] > 0) x += Math.sin(time * 60) * 0.05 * a * (rattleT[i] / 0.4);
@@ -1346,7 +1426,7 @@ function drawBody(w, i, isCake, isTruck) {
     const shape = SHAPE[K.id] || 'disc', e = K.icon ? art(K.icon) : null;
     let rot = TURNS.has(shape) && !(e && e.ok) ? itemRot[i] : 0;
     if (K.roll) rot += rollA[i];
-    if (finI) { const q = sstep(0.32, FIN_BOOM, fin.t); rot += TAU * 1.6 * q * q; }
+    if (finI) { const q = finQ(fin.B, fin.t), sp = fin.B === FIN_BIG ? sstep(0.5, 1, q) : q; rot += TAU * 1.6 * sp * sp; }   // a flat sprite stays upright through the hold
     if (e && e.ok) {
       const L = 2.1 * R, mx = Math.max(e.sw, e.sh), dw = L * e.sw / mx, dh = L * e.sh / mx;
       if (isTruck) {
@@ -1363,6 +1443,13 @@ function drawBody(w, i, isCake, isTruck) {
       else ctx.drawImage(cv, x - S / 2, z - S / 2, S, S);
     }
     ops++;
+    if (K.id === 'chili') {   // R7: the flame at the tip, flickering
+      const f = 1 + 0.18 * Math.sin(time * 15 + i * 2.1), fx = x + 0.5 * R + 0.05 * R * Math.sin(time * 21 + i), fz = z - 0.42 * R, h = 0.6 * R * f;
+      for (const [c, k] of [['#FF7A1A', 1], ['#FFD23F', 0.58]]) {
+        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(fx - 0.24 * R * k, fz); ctx.quadraticCurveTo(fx - 0.24 * R * k, fz - 0.45 * h * k, fx, fz - h * k); ctx.quadraticCurveTo(fx + 0.24 * R * k, fz - 0.45 * h * k, fx + 0.24 * R * k, fz); ctx.quadraticCurveTo(fx, fz + 0.2 * R * k, fx - 0.24 * R * k, fz); ctx.fill();
+      }
+      ops += 2;
+    }
     // stack contents ride on top until the stack cracks
     const so = w.stackOf && w.stackOf[i];
     if (so && so.length && !(w.cracked && w.cracked[i])) {

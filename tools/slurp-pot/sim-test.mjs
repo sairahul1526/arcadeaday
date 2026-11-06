@@ -386,5 +386,87 @@ if (existsSync(lvPath) && existsSync(join(ROOT, 'games/slurp-pot/feast.js'))) {
   } catch (e) { ok(false, 'pen routing (L34)', String(e && e.stack || e).split('\n').slice(0, 3).join(' / ')); }
 }
 
+// ------------------------------------------------------------------ hot chili (round 2)
+console.log('hot chili');
+{
+  const chili = (x, z) => item('chili', x, z, 0.26, { k: 0, h: 0.2, flags: F.HOT });
+  const hotLevel = (extra = {}, z = 5.4) => { const lv = scriptLevel(extra); lv.items.push(chili(0, z)); lv.hot = [{ x: 0, z }]; return lv; };
+  const untilHot = (lv, input = goDown, cap = 600) => {
+    const w = L.createWorld(lv, { mode: 'level' });
+    let e = null, before = 0, r0 = 0;
+    for (let s = 0; s < cap && !w.result && !e; s++) { before = w.tLeft; r0 = w.pot.r; L.step(w, input(w, s), DT); e = w.events.find(q => q.type === 'hot') || null; if (!e) w.events.length = 0; }
+    return { w, e, before, r0 };
+  };
+  const a = untilHot(hotLevel());
+  ok(a.e && a.e.add === -C.HOT_SECS && a.e.i === a.w.level.items.length - 1 && Math.abs(a.e.z - 5.4) < 1e-5, "swallowing a chili emits 'hot' with i, x, z and add = -HOT_SECS", JSON.stringify(a.e));
+  ok(a.e && Math.abs(a.before - DT - C.HOT_SECS - a.w.tLeft) < 1e-9, 'it takes HOT_SECS off the clock', `${a.before.toFixed(2)} -> ${a.w.tLeft.toFixed(2)}`);
+  const f = untilHot(hotLevel({ T: 2 }));
+  ok(f.e && Math.abs(f.w.tLeft - 0.1) < 1e-9 && !f.w.result, 'the clock floors at 0.1 s, the chili itself never ends the run', `tLeft ${f.w.tLeft}`);
+  // let the tip animation finish: no growth, no bite count, no ticket progress
+  const w = a.w, bites = w.stats.bites, mass = w.pot.mass, ticket = JSON.stringify(w.tickets);
+  w.events.length = 0;
+  for (let s = 0; s < 90; s++) { L.step(w, { x: 0, z: 0, m: 0 }, DT); w.events.length = 0; }
+  ok(w.st[a.e.i] === 2 && w.stats.hot === 1 && w.stats.bites === bites && w.pot.mass === mass && JSON.stringify(w.tickets) === ticket, 'a chili goes without growth, bite, ticket or bar', `st ${w.st[a.e.i]} bites ${bites} mass ${mass}`);
+  // chain: bites straight into a chili
+  const chain = (() => {
+    const lv = scriptLevel({ T: 60 });
+    lv.items.push(chili(0, 3.6));   // between the cheeses on the straight path
+    const q = L.createWorld(lv, { mode: 'level' });
+    let n = 0, ended = false, hit = false;
+    for (let s = 0; s < 600 && !hit; s++) { L.step(q, goDown(), DT); for (const e of q.events) { if (e.type === 'chainEnd') ended = true; if (e.type === 'hot') { hit = true; n = q.chain.n; } } q.events.length = 0; }
+    return { hit, n, ended };
+  })();
+  ok(chain.hit && chain.n === 0 && chain.ended, 'a chili breaks the chain', JSON.stringify(chain));
+  // always swallowable: never refused, even for a pot far under its size and at the cap
+  const small = hotLevel({ r0: 0.3 }), big = hotLevel({ r0: 1, cap: 1 });
+  const refused = lv => { const q = L.createWorld(lv, { mode: 'level' }); let n = 0, h = false; for (let s = 0; s < 400 && !h; s++) { L.step(q, goDown(), DT); for (const e of q.events) { if (e.type === 'refuse' && e.i === q.level.items.length - 1) n++; if (e.type === 'hot') h = true; } q.events.length = 0; } return { n, h }; };
+  ok(refused(small).h && !refused(small).n && refused(big).h && !refused(big).n, 'always swallowable, never refused');
+  // a magnet leaves it where it is
+  const wm = L.createWorld(hotLevel({}, 6.2), { mode: 'level' });
+  wm.pot.z = 7; L.useBooster(wm, 'magnet');
+  const z0 = wm.iz[wm.level.items.length - 1];
+  for (let s = 0; s < 30; s++) { L.step(wm, { x: 0, z: 0, m: 0 }, DT); wm.events.length = 0; }
+  ok(wm.iz[wm.level.items.length - 1] === z0, 'the magnet does not pull a chili');
+  // after the final bite the clock is safe
+  const wf = L.createWorld(hotLevel(), { mode: 'level' });
+  wf._.finalBite = true; wf.tStart = 0;
+  let late = 0;
+  for (let s = 0; s < 120; s++) { L.step(wf, goDown(), DT); late += wf.events.filter(e => e.type === 'hot').length; wf.events.length = 0; }
+  ok(late === 0, 'no chili bite after the final bite');
+  // determinism with a chili
+  const h1 = hashWorld(untilHot(hotLevel()).w), h2 = hashWorld(untilHot(hotLevel()).w);
+  ok(h1 === h2, 'chili run deterministic');
+  // bots: a careful bot goes round, the casual one sometimes does not
+  const lane = () => { const lv = scriptLevel({ T: 60 }); const hot = []; for (let k = 0; k < 4; k++) { const z = 3.4 - k * 2.4; lv.items.push(chili(k % 2 ? 0.5 : -0.5, z)); hot.push({ x: k % 2 ? 0.5 : -0.5, z }); } lv.hot = hot; return lv; };
+  const hits = kind => { let n = 0; for (let s = 1; s <= 8; s++) n += B.runLevel(lane(), kind, s).hot; return n / 8; };
+  ok(hits('average') <= 1.5, 'the average bot steers round chilis', `mean hits ${hits('average')}`);
+  try {
+    const LV = await import(lvPath);
+    const list = [];
+    for (let n = 1; n <= C.LEVELS; n++) { const lv = LV.getLevel(n); if (lv.hot) list.push(lv); }
+    const ns = list.map(l => l.n);
+    ok(ns.length >= 10 && ns.length <= 14 && ns.every(n => n >= 31 && n <= 59 && !C.isMilestone(n)), 'chilis on about 12 levels in L31 to L59, none on a milestone', ns.join(' '));
+    ok(list.filter(l => l.hotIntro).length === 1 && list[0].hotIntro === true, 'hotIntro only on the first chili level', `L${list[0].n}`);
+    let spawnOK = true, kindOK = true, gapOK = true, cnt = [];
+    for (const l of list) {
+      cnt.push(l.hot.length);
+      const its = l.items.filter(o => o.kind === 'chili');
+      if (its.length !== l.hot.length || its.some(o => !(o.flags & F.HOT))) kindOK = false;
+      for (const h of l.hot) if (Math.hypot(h.x - l.spawn.x, h.z - l.spawn.z) < 6) spawnOK = false;
+      for (let i = 0; i < l.hot.length; i++) for (let j = 0; j < i; j++) if (Math.hypot(l.hot[i].x - l.hot[j].x, l.hot[i].z - l.hot[j].z) < 4 - 1e-9) gapOK = false;
+    }
+    ok(kindOK, 'level.hot matches the chili items, all flagged HOT');
+    ok(spawnOK, 'no chili within 6 u of the spawn');
+    ok(gapOK, 'chilis stay at least 4 u apart, so they cannot chain', cnt.join(' '));
+    ok(cnt.every(c => c >= 8 && c <= 14), '8 to 14 chilis a level', cnt.join(' '));
+    const CAT = await import(join(ROOT, 'games/slurp-pot/catalog.js'));
+    ok(CAT.KINDS[CAT.KINDS.length - 1].id === 'chili', 'chili is the last row of the kind table');
+    let plain = true;
+    for (const key of ['2026-11-06', '2026-12-25', '2027-03-01']) for (const cur of [7, 30, 45]) { const d = LV.getDaily(key, cur); if (d.hot || d.items.some(o => o.kind === 'chili')) plain = false; }
+    for (const town of ['picnic', 'market', 'harbour']) for (const cc of [1, 3, 6]) { const d = LV.feastCourse(cc, town, 3, { cur: 60 }); if (d.hot || d.items.some(o => o.kind === 'chili')) plain = false; }
+    ok(plain, 'no chili on a Daily or a Feast course');
+  } catch (e) { ok(false, 'chili levels', String(e && e.stack || e).split('\n').slice(0, 3).join(' / ')); }
+}
+
 console.log(`\n${failN ? 'RED' : 'GREEN'}: ${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

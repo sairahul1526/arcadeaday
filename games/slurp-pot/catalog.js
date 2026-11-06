@@ -121,6 +121,10 @@ export const KINDS = [
   {id: "boss-weddingcake", i: 101, town: "harbour", towns: ["harbour"], a: 1.8, h: 1.2, tier: 5, ing: false, k: 0, roll: false, fragile: false, gate: false, wall: false, boss: true, food: true, surface: false, color: "#FFF6E3", lum: 0.927, hue: 41, icon: "boss-weddingcake"},
   {id: "boss-lighthouse", i: 102, town: "harbour", towns: ["harbour"], a: 3.3, h: 4, tier: 5, ing: false, k: 0, roll: false, fragile: false, gate: false, wall: false, boss: true, food: false, surface: false, color: "#E04F4F", lum: 0.22, hue: 0, icon: "boss-lighthouse"},
   {id: "platepile", i: 103, town: "picnic", towns: ["picnic","harbour"], a: 0.44, h: 0.4, tier: 2, ing: false, k: 1, roll: false, fragile: true, gate: false, wall: false, boss: false, food: false, surface: false, color: "#FFF6E3", lum: 0.927, hue: 41, icon: ""},
+  // DECISION (11-06 Fri, round 2, hot chili): the one hazard kind, last in the table so no index moves. towns [] keeps it out of
+  // every palette, Daily and Feast (kindsForTown); only hotChilis in levels.js places it. a 0.26 fits any pot (FIT x 0.3 = 0.27).
+  // food true: it is food to look at and for the food share. It gives nothing: k 0, never on a ticket, and logic gives it no bite.
+  {id: "chili", i: 104, town: "all", towns: [], a: 0.26, h: 0.2, tier: 2, ing: false, k: 0, roll: false, fragile: false, gate: false, wall: false, boss: false, food: true, surface: false, color: "#E0241B", lum: 0.17, hue: 3, icon: ""},
 ];
 
 export const KIND_ID = Object.freeze(Object.fromEntries(KINDS.map(k => [k.id, k.i])));
@@ -134,7 +138,7 @@ export function kindsForTown(town) {
 // Item flag bits for expanded-level items (`items[i].flags`) and logic's `w.flags` (§13.3 order:
 // ING SOLID ROLL FRAGILE GATE BOSS STACK BELT). logic.js must use the same values.
 // SOLID is never written by the generator (solid is dynamic, §3.4). WALL marks pen/wall pieces (k 0.6).
-export const F = Object.freeze({ ING: 1, SOLID: 2, ROLL: 4, FRAGILE: 8, GATE: 16, BOSS: 32, STACK: 64, BELT: 128, WALL: 256 });
+export const F = Object.freeze({ ING: 1, SOLID: 2, ROLL: 4, FRAGILE: 8, GATE: 16, BOSS: 32, STACK: 64, BELT: 128, WALL: 256, HOT: 512 });
 
 // Ground and surface colours per town (§7.2) with literal luminances, for the contrast rule (§4.2):
 // every T0/T1 item sits on a surface whose luminance differs from the item's main colour by ≥ 0.25.

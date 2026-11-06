@@ -20,7 +20,7 @@ import * as L from '../../games/slurp-pot/logic.js';
 import * as B from '../../games/slurp-pot/bots.js';
 import { KIND, SURF, CONTRAST_MIN } from '../../games/slurp-pot/catalog.js';
 import { SPECS, REC, kindMax as KM_OLD } from '../../games/slurp-pot/levels-data.js';
-import { K_ING, ITEM_MAX, DAILY_START, STAR3 } from '../../games/slurp-pot/consts.js';
+import { K_ING, ITEM_MAX, DAILY_START, STAR3, isMilestone } from '../../games/slurp-pot/consts.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 export const DATA_PATH = join(ROOT, 'games/slurp-pot/levels-data.js');
@@ -58,18 +58,39 @@ export function writeLevelsData(path, specs, rec, kindMax) {
 // (45-59), so the average bot still wins but with seconds left, and the average 3-star floor drops to 0: on a peak the
 // third star belongs to a fast hand. The every-5th boss levels that §4.4 calls breathers stay breathers (the brief wants
 // a breather after each peak). L43, L53 and L59 keep their Thu cliff fixes and are not peaks.
-export const PEAKS = [29, 33, 37, 40, 44, 49, 54, 57, 60];
+// DECISION (11-06 Fri, round 2, L4): L30 and L50 join the peaks and leave the breathers, so every tenth level is a peak
+// (the milestone levels, consts.isMilestone). Levels with snack piles (L21+) are timed by spareBand below, not by greedy.
+export const PEAKS = [29, 30, 33, 37, 40, 44, 49, 50, 54, 57, 60];
+/** Levels with snack piles (levels.js snackPiles): the piles speed the bots unevenly, so greedy no longer measures pace. */
+export const onPiles = spec => spec.n >= LV.PILE_FROM;
+/**
+ * Gate 2 on a pile level: the average bot's spare time, % of the pace clock (T − grace), median of its runs, a loss
+ * counting 0. Sizzle and chili seconds are inside it, because the player has them too.
+ */
+// DECISION (11-06 Fri, round 2, L4, the mobile designer's tension curve): the greedy share gate failed on eight pile levels and
+// its fixes pulled T the wrong way: a pile can hand greedy 20 s while the average bot gets 5, so T set from greedy left
+// the average bot 2.9 s on L29 and lost it at 82 % on L26. The player's pace is the average bot's, so that is the measure:
+// peaks and milestones 8 to 14 % spare, normal levels 20 to 30 %, breathers 35 % or more. The curve is a saw-tooth on purpose.
+// Gate 2 keeps the greedy window on L1 to L20. Every other gate stays.
+export function spareBand(spec) {
+  if (!onPiles(spec) || spec.timed === false) return null;
+  if (PEAKS.includes(spec.n) || isMilestone(spec.n)) return [8, 14];
+  return BREATHERS.includes(spec.n) ? [35, 100] : [20, 30];
+}
 export function bandOf(n) {
   if (n <= 3) return { avg: [100, 99, 85][n - 1], exp: 100, plan: null, avg3: null, cas3: null };
   if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [20, 45], cas3: 15 };
   if (n <= 20) return { avg: 75, exp: 97, plan: 0.80, avg3: [15, 40], cas3: 15 };
-  if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [PEAKS.includes(n) ? 0 : 15, 35], cas3: 15 };
-  return { avg: 70, exp: 95, plan: 0.76, avg3: [PEAKS.includes(n) ? 0 : 15, 30], cas3: 15 };
+  // DECISION (11-06 Fri, round 2, L4): a breather at 35 % spare or more is a level the average bot three-stars at least half the
+  // time (3 stars is left >= 0.35, the same number), so the 3-star ceiling cannot hold there: it is lifted on pile breathers.
+  const top = BREATHERS.includes(n) && n >= LV.PILE_FROM ? 100 : n <= 40 ? 35 : 30;
+  if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [PEAKS.includes(n) ? 0 : 15, top], cas3: 15 };
+  return { avg: 70, exp: 95, plan: 0.76, avg3: [PEAKS.includes(n) ? 0 : 15, top], cas3: 15 };
 }
-// DECISION (11-04 Wed, §4.4): breathers (6 12 15 25 30 35 45 50 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
+// DECISION (11-04 Wed, §4.4, L30 and L50 moved to the peaks on 11-06): breathers (6 12 15 25 35 45 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
 // each twist's first level (4 10 16 22 28 34 41 47 53) greedy ≤ 74 %, casual ≥ 80 %. Both clip the table windows
 // (goal.greedy ± 4, goal.casual ± 7); a casual goal under 80 (L55 78) keeps its own value as the floor.
-export const BREATHERS = [6, 12, 15, 25, 30, 35, 45, 50, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
+export const BREATHERS = [6, 12, 15, 25, 35, 45, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
 // DECISION (11-06 Fri, L1 grace): a level's grace buys no stars, so every pace gate reads the pace T = T − grace. Greedy %
 // and the 3★ bands keep their meaning on a grace level; casual has the grace on top, so only its floor stays (see below).
 export const paceT = o => o.T - (o.grace > 0 ? o.grace : 0);
@@ -79,7 +100,7 @@ export function greedyWindow(spec) {
   // DECISION (11-06 Fri, L1 grace): on a grace level the win is never in doubt for greedy, and the pace only prices the stars, so
   // the average 3-star band sets it. Greedy is the slowest fast bot on these boards (L5 greedy 46 s, average 37 s; L10 53 s,
   // 45 s), so a greedy window pulled T the other way from the star band. Gate 1 still needs greedy to win.
-  if (!g || spec.grace > 0) return null;
+  if (!g || spec.grace > 0 || onPiles(spec)) return null;
   let lo = g - 4, hi = g + 4;
   if (PEAKS.includes(spec.n)) return [80, 95];
   if (spec.n >= 10) { lo = Math.max(lo, 70); hi = Math.min(hi, 85); }
@@ -319,13 +340,16 @@ export function determinismGate(spec, lv) {
 const pct = (k, n) => (n ? (100 * k) / n : 0);
 function many(lv, kind, runs, opts = {}) {
   let win = 0, s3 = 0, close = 0, fails = 0;
-  const ts = [];
+  const ts = [], lefts = [], hots = [], g = lv.grace > 0 ? lv.grace : 0;
   for (let s = 1; s <= runs; s++) {
     const r = B.runLevel(lv, kind, s, opts);
+    lefts.push(r.win ? (100 * (r.tLeft - g)) / (lv.T - g) : 0);
+    hots.push(r.hot);
     if (r.win) { win++; ts.push(r.tUsed); if (r.stars === 3) s3++; } else { fails++; if (r.nearMissKind === 'close') close++; }
   }
-  ts.sort((p, q) => p - q);
-  return { win: pct(win, runs), s3: pct(s3, runs), near: fails ? close / fails : null, med: ts.length ? ts[ts.length >> 1] : null, runs };
+  const up = (p, q) => p - q;
+  ts.sort(up); lefts.sort(up); hots.sort(up);
+  return { win: pct(win, runs), s3: pct(s3, runs), near: fails ? close / fails : null, med: ts.length ? ts[ts.length >> 1] : null, runs, left: lefts[lefts.length >> 1], hot: hots[hots.length >> 1], hotMax: hots[hots.length - 1] };
 }
 /**
  * Bot runs for one expanded level. opts.runs = casual/average/expert runs (GDD 100); noise 20 seeds; planner 1
@@ -342,7 +366,7 @@ export function botStats(lv, spec, { runs = 100, xruns = runs, kinds = ['casual'
   st.noise = pct(nw, 20);
   const p = B.runLevel(lv, 'planner', 1);
   st.planner = { win: p.win, t: +p.tUsed.toFixed(2), stars: p.stars, ratio: g.win && p.win ? +(p.tUsed / g.tUsed).toFixed(3) : null };
-  for (const k of kinds) { const r = many(lv, k, k === 'expert' ? xruns : runs); st[k] = { win: +r.win.toFixed(1), s3: +r.s3.toFixed(1), near: r.near == null ? null : +r.near.toFixed(2), med: r.med == null ? null : +r.med.toFixed(1) }; }
+  for (const k of kinds) { const r = many(lv, k, k === 'expert' ? xruns : runs); st[k] = { win: +r.win.toFixed(1), s3: +r.s3.toFixed(1), near: r.near == null ? null : +r.near.toFixed(2), med: r.med == null ? null : +r.med.toFixed(1), left: +r.left.toFixed(1), hot: r.hot, hotMax: r.hotMax }; }
   // bakeoff ratio (reported only): planner 3★ share / greedy 3★ share over the 20 noise seeds is the same as
   // the deterministic runs here, so it is planner 3★ (0/1) over greedy 3★ (0/1).
   st.bakeoff = g.stars === 3 ? (p.stars === 3 ? 1 : 0) : (p.stars === 3 ? Infinity : null);
@@ -355,6 +379,8 @@ export function botGates(spec, lv, st) {
   if (st.noise < 98) fails.push(`1 greedy ±3° noise wins ${st.noise}% (< 98)`);
   const gw = greedyWindow(spec);
   if (gw && st.greedy.win && (st.greedy.pct < gw[0] || st.greedy.pct > gw[1])) fails.push(`2 greedy uses ${st.greedy.pct}% of T, want ${gw[0]}–${gw[1]}`);
+  const sb = spareBand(spec);
+  if (sb && st.average && (st.average.left == null || st.average.left < sb[0] || st.average.left > sb[1])) fails.push(`2 average spare ${st.average.left}% of T, want ${sb[0]}–${sb[1]}`);
   if (band.plan && lv.timed !== false) {
     if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
     if (st.average && (st.average.s3 < band.avg3[0] || st.average.s3 > band.avg3[1])) fails.push(`3b average 3★ ${st.average.s3}% outside ${band.avg3[0]}–${band.avg3[1]}`);
@@ -364,6 +390,13 @@ export function botGates(spec, lv, st) {
   if (st.casual && cw && (st.casual.win < cw[0] - 1e-9 || st.casual.win > cw[1] + 1e-9)) fails.push(`4 casual ${st.casual.win}% vs target ${ct} (window ${cw[0]}–${cw[1]})`);
   if (st.average && st.average.win < band.avg) fails.push(`4 average ${st.average.win}% < ${band.avg}`);
   if (st.expert && st.expert.win < band.exp) fails.push(`4 expert ${st.expert.win}% < ${band.exp}`);
+  // DECISION (11-06 Fri, round 2, hot chili): the cap on chili damage is geometry (levels.js hotClear and the gap), and this gate proves
+  // it held: a level has enough chilis to matter, and a careful hand pays for at most two (average) or one (expert), median.
+  if (lv.hot) {
+    if (lv.hot.length < 8) fails.push(`H only ${lv.hot.length} chilis`);
+    if (st.average && st.average.hot > 2) fails.push(`H average bot hits ${st.average.hot} chilis`);
+    if (st.expert && st.expert.hot > 1) fails.push(`H expert bot hits ${st.expert.hot} chilis`);
+  }
   if ((n === 3 || n === 7) && st.casual && st.casual.win < 100 && (st.casual.near == null || st.casual.near < 0.6)) fails.push(`D32 near-miss share ${st.casual.near} < 0.6`);
   return fails;
 }
@@ -454,7 +487,7 @@ export function rowText(spec, r) {
   if (st) parts.push(`greedy ${st.greedy.win ? st.greedy.t + 's' : 'LOSS'} ${f(st.greedy.pct)}% ${st.greedy.stars}★ noise ${st.noise}%`,
     `planner ${st.planner.win ? st.planner.t + 's' : 'LOSS'} ratio ${f(st.planner.ratio)}`,
     `casual ${f(st.casual && st.casual.win)}% (3★ ${f(st.casual && st.casual.s3)}, near ${f(st.casual && st.casual.near)})`,
-    `average ${f(st.average && st.average.win)}% (3★ ${f(st.average && st.average.s3)})`, `expert ${f(st.expert && st.expert.win)}%`);
+    `average ${f(st.average && st.average.win)}% (3★ ${f(st.average && st.average.s3)}, spare ${f(st.average && st.average.left)})`, `expert ${f(st.expert && st.expert.win)}%`);
   parts.push(`margin ${m.margin.toFixed(2)} food ${m.food.toFixed(2)} items ${m.items} kinds ${m.kinds}`);
   parts.push(r.fails.length ? 'FAIL: ' + r.fails.join('; ') : 'PASS');
   return parts.join(' | ');

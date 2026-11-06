@@ -19,12 +19,16 @@
 //   duplicate coins; the cost is that coins earned in an older-ts tab are dropped (spendables are last-writer-wins by design).
 //   Known limit: a skin bought in tab A is kept by the union but its price is not deducted if tab B (newer ts, unaware) wins.
 // DECISION (11-06 Fri, critics: the first session's reward loop was lean): stars pay 5 / 10 / 20, so the third star is worth
-//   twice the second. First win 10 + STAR_PAY[stars], replay 3 + the star pay gained, x2 on L20/40/60. A coin chest rides the
+//   twice the second (scaled by level since round 2, see below). A coin chest rides the
 //   first win of L1 (the first-win gift, 30), L5 (40), L10 (50), L15 (60), so a chest lands about every 5 levels up to the L20
 //   town chest. It rides `first`, so it needs no save field and cannot pay twice, and it goes out in `chests` as { coins } with
-//   no town or boost, which the chest card already draws. Start 50 + L1 30 + gift 30 = 110 coins on L2: the 60-coin continue
-//   is there from L2 on, and still after one early booster. Every other price stays, so the shop keeps its pull: this adds at
-//   most 480 coins over the whole game against 5,900 of skins.
+//   no town or boost, which the chest card already draws. Start 50 + L1 32 + gift 30 = 112 coins on L2: the 60-coin continue
+//   is there from L2 on, and still after one early booster. Every other price stays, so the shop keeps its pull.
+// DECISION (11-06 Fri, round 2, late economy): pay rises with the level: a first win pays 10 + n plus the star pay scaled by
+//   1 + n / 30 (rounded), replays pay 3 + the scaled star pay gained, x2 on L20/40/60 as before. L1 stays about where it was
+//   (3 stars 32, was 30), L30 pays 50 / 60 / 80, L59 pays 84 / 99 / 128. The flat 15 to 30 made every skin past the
+//   second a 25 win grind. Coins by level for average play are in GDD §3.9. Prices stay: the shop and the 60 coin continue
+//   are still real choices at about one win each, and all the skins cost 5,900 of the 6,900 or so an average run of the campaign pays.
 // DECISION: levelResult pays only the win payout (see above). In-level coin
 //   pops (bites, sizzle, gull miss) are credited by game.js through addCoins(n, why). `coins` returned is the win payout only;
 //   gifts/milestone/chest carry their own already-credited amounts.
@@ -70,8 +74,10 @@ export const MILESTONE_EVERY = 15, MILESTONE_COINS = 60;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS * 10 + 99; // 18,699
 export const TUT = { drag: 1, recipe: 2, padlock: 4, stars: 8, pens: 16, rolling: 32, fragile: 64, belt: 128, twocourse: 256, simmer: 512, gulls: 1024, truck: 2048, layered: 4096, freeze: 8192 };
 const WIN_A = 10, STAR_PAY = [0, 5, 10, 20], REPLAY_A = 3, DAILY_A = 40, DAILY_B = 10;
+const starPay = (n, st) => Math.round(STAR_PAY[st] * (1 + n / 30));
 const SMALL_CHEST = { 1: 30, 5: 40, 10: 50, 15: 60 };
 const CHEST_COINS = [150, 150, 300], CHEST_BOOST = 2;
+const HELP_MAX = 2; // carryAfterWin(MERCY_MAX) in mercy.js: a win always takes one step off, so 3 never carries
 const MAX_COINS = 9999999, MAX_BOOST = 99, DAILY_KEEP = 30, GHOST_MAX = 99, FEAST_MAX = 9999;
 const IST_MS = 5.5 * 3600e3, DAY_MS = 86400e3;
 const KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -123,6 +129,7 @@ function defaults() {
     seen: [],          // v2: one-time flags ('alldone', 'stuck:<id>', ...)
     dailyLines: {},    // v2: { 'YYYY-MM-DD': mask } star lines met that day (bit0 serve, bit1 line 2, bit2 line 3), last 30
     feastTown: '',     // v2: the Feast town last chosen ('' = the town of the current level)
+    help: 0,           // v2: mercy step carried to the next level (mercy.js), 0 to 2. Top level so an older tab keeps it
   };
 }
 export const DEFAULT_SAVE = defaults();
@@ -193,6 +200,7 @@ function sanitize(src) {
     }
   }
   o.feastTown = TOWNS.includes(s.feastTown) ? s.feastTown : '';
+  o.help = int(s.help, 0, HELP_MAX, 0);
   return o;
 }
 
@@ -254,6 +262,7 @@ export function merge(a, b) {
   m.daily.starPot = A.daily.starPot || B.daily.starPot;
   const fb = B.feast.best > A.feast.best || (B.feast.best === A.feast.best && nw === B) ? B.feast : A.feast;
   m.feast = { best: fb.best, bestBites: fb.bestBites, plays: Math.max(A.feast.plays, B.feast.plays), ghost: fb.ghost.slice() };
+  m.help = Math.min(A.help, B.help); // mercy is a gift, not progress: the calmer tab wins, so two tabs never add up to more help
   return sanitize(m);
 }
 
@@ -533,7 +542,7 @@ export function levelResult(n, r = {}) {
   const prev = d.stars[n - 1] | 0;
   const first = prev === 0;
   const newStars = Math.max(0, st - prev);
-  let pay = first ? WIN_A + STAR_PAY[st] : REPLAY_A + STAR_PAY[Math.max(st, prev)] - STAR_PAY[prev];
+  let pay = first ? WIN_A + n + starPay(n, st) : REPLAY_A + starPay(n, Math.max(st, prev)) - starPay(n, prev);
   if (isFinale(n)) pay *= 2;
   d.stars[n - 1] = Math.max(prev, st);
   d.cur = Math.max(d.cur, Math.min(LEVELS + 1, n + 1));

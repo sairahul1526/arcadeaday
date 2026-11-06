@@ -19,7 +19,7 @@ import { SPECS, REC, kindMax } from '../../games/slurp-pot/levels-data.js';
 import { STAR3, STAR2, SIZZLE_CAP } from '../../games/slurp-pot/consts.js';
 import { writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 import { BUMPS as OLD_BUMPS, DAILY_T as OLD_T } from '../../games/slurp-pot/dailies-data.js';
-import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, casualWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
+import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, spareBand, casualWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
 
 const BIG = 999;
 // Score weights per point outside a gate: greedy % window and casual target (--wg / --wc).
@@ -31,7 +31,8 @@ const SEED_STEP = 7919, SEED_MAX = 40;
 function run(lv, kind, seed, opts, maxT) {
   const r = B.runLevel(lv, kind, seed, { ...opts, maxT });
   const win = r.win;
-  return { win, t: r.tUsed, sz: win ? Math.max(0, Math.round(r.tLeft - BIG + r.tUsed)) : 0 };
+  // chili seconds come off the clock, so sz goes negative on a chili level (no Math.max here, 11-06)
+  return { win, t: r.tUsed, sz: win ? Math.round(r.tLeft - BIG + r.tUsed) : 0 };
 }
 /**
  * Same loop as bots.runLevel, plus a trace every 0.5 s of play: [Sizzle adds so far, near-miss 'close' then?],
@@ -54,7 +55,7 @@ function runTrace(lv, kind, seed, maxT) {
   }
   const win = w.result === 'win';
   const t = w.tStart === null ? 0 : (w._.biteT >= 0 ? w._.biteT : w.t) - w.tStart;
-  return { win, t, sz: win ? Math.max(0, Math.round(w.tLeft - BIG + t)) : 0, tr };
+  return { win, t, sz: win ? Math.round(w.tLeft - BIG + t) : 0, tr };
 }
 /** Is this run's fail card 'close' when the timer of length T runs out? */
 function closeAt(r, T) {
@@ -82,6 +83,11 @@ const starsAt = (r, T, timed, g = 0) => {
   const left = (T + Math.min(r.sz, SIZZLE_CAP * (T - g)) - r.t - g) / (T - g);
   return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
 };
+/** Average bot's spare time at T, % of T − grace, median, a loss counting 0 (verify gate 2 on pile levels). */
+const spareAt = (arr, T, timed, g = 0) => {
+  const v = arr.map(r => (winAt(r, T, timed, g) ? (100 * (T + Math.min(r.sz, SIZZLE_CAP * (T - g)) - r.t - g)) / (T - g) : 0)).sort((p, q) => p - q);
+  return v.length ? v[v.length >> 1] : null;
+};
 const pctOf = (arr, f) => (arr.length ? (100 * arr.filter(f).length) / arr.length : null);
 /** Predicted gate numbers at T. */
 export function predict(spec, S, T) {
@@ -91,18 +97,20 @@ export function predict(spec, S, T) {
     ratio: S.greedy.win && S.planner.win ? S.planner.t / S.greedy.t : null,
   };
   for (const k of ['casual', 'average', 'expert']) { p[k] = pctOf(S[k], r => winAt(r, T, timed, g)); p[k + '3'] = pctOf(S[k], r => starsAt(r, T, timed, g) === 3); }
+  p.spare = spareAt(S.average, T, timed, g);
   const lost = S.casual.filter(r => !winAt(r, T, timed, g));
   p.near = lost.length ? lost.filter(r => closeAt(r, T)).length / lost.length : null;
   return p;
 }
 /** Lower is better; 0 = every predicted gate passes. */
 export function score(spec, p) {
-  const band = bandOf(spec.n), gw = greedyWindow(spec), timed = spec.timed !== false;
+  const band = bandOf(spec.n), gw = greedyWindow(spec), sb = spareBand(spec), timed = spec.timed !== false;
   let s = 0;
   const out = (v, lo, hi) => (v < lo ? lo - v : v > hi ? v - hi : 0);
   if (!p.gWin) s += 100;
   s += ((100 - p.noise) / 5) * 4;
   if (gw && timed) s += W.greedy * out(p.gPct, gw[0], gw[1]);
+  if (sb && timed && p.spare != null) s += W.greedy * out(p.spare, sb[0], sb[1]);
   if (band.plan && timed) s += p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);
   if (band.avg3 && timed && p.average3 != null) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
   if (band.cas3 && timed) s += 0.5 * Math.max(0, p.casual3 - band.cas3);

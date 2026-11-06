@@ -78,9 +78,11 @@ function checkCards(L, ctx) {
     // ---- cards ----
     const cards = [
       ['title', { firstBoot: true }], ['title', { firstBoot: false, showMute: true }], ['title', { firstBoot: false, showMute: false }],
-      ['win', {}], ['win', { nextSkin: true }], ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
-      ['pause', { showMute: true }], ['pause', {}], ['settings', {}], ['map', {}],
-      ['shop', {}], ['cookbook', {}], ['daily', {}], ['daily', { primary: false }], ['ladder', {}],
+      ['win', {}], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
+      ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
+      ['fail', { canFreeze: true, help: true }], ['fail', { canFreeze: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, help: true, tip: true }], ['fail', { canFreeze: false, help: true, tip: true }],
+      ['pause', { showMute: true }], ['pause', {}], ['pause', { showMute: true, stars: true }], ['pause', { stars: true }], ['settings', {}], ['map', {}],
+      ['shop', {}], ['cookbook', {}], ['daily', {}], ['daily', { primary: false }], ['daily', { town: false }], ['ladder', {}],
       ['feast', { towns: 1 }], ['feast', { towns: 3 }], ['feastend', {}],
       ['alldone', { primary: true, second: true }], ['info', { locked: 'daily' }], ['info', { locked: 'feast' }], ['gift', { primary: true, noBack: true }], ['lid', { primary: true, noBack: true }],
     ];
