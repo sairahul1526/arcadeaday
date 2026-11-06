@@ -458,11 +458,12 @@ async function secShots(browser, bname) {
       await sleep(700);
       const rot = await qa(s.page);
       await shot(s, `play-rotated-${sz.height}x${sz.width}.png`);
-      const scroll = await s.page.evaluate(() => ({ sw: document.documentElement.scrollWidth, sh: document.documentElement.scrollHeight, iw: innerWidth, ih: innerHeight }));
+      // the site build adds a how-to-play sheet below the fixed stage, so the web page is meant to scroll down; sideways never
+      const scroll = await s.page.evaluate(() => ({ sw: document.documentElement.scrollWidth, sh: document.documentElement.scrollHeight, iw: innerWidth, ih: innerHeight, sheet: !!document.querySelector('.sheet') }));
       await s.page.setViewportSize({ width: sz.width, height: sz.height });
       await sleep(500);
       const back = await qa(s.page);
-      const noScroll = scroll.sw <= scroll.iw + 1 && scroll.sh <= scroll.ih + 1;
+      const noScroll = scroll.sw <= scroll.iw + 1 && (scroll.sheet || scroll.sh <= scroll.ih + 1);
       const wrong = got.filter(x => x.endsWith('!)'));
       rec('shots', bname, tag, !s.errors.length && !!rot && !!back && ['play', 'win', 'fail'].includes(back.screen) && noScroll && !wrong.length,
         `${got.length} screens: ${got.join(' ')}; rotate ${rot && rot.screen}->${back && back.screen}${noScroll ? '' : ', PAGE SCROLLS ' + JSON.stringify(scroll)}${errs(s) ? ', ' + errs(s) : ', no console errors'}`);
