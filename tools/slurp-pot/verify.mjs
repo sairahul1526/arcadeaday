@@ -394,8 +394,11 @@ export function botGates(spec, lv, st) {
   const sb = spareBand(spec);
   if (sb && st.average && (st.average.left == null || st.average.left < sb[0] || st.average.left > sb[1])) fails.push(`2 average spare ${st.average.left}% of T, want ${sb[0]}–${sb[1]}`);
   if (band.plan && lv.timed !== false) {
-    // a greedy loss is allowed on piles, so there it leaves no ratio to read and is no 3a fail; a planner loss still is
-    if (piles && st.greedy.win === false && st.planner.win) { /* no ratio */ } else if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
+    // DECISION (11-06 Fri, round 3, the coordinator's call): on piles 3a asks the question the ratio stood for, does a planned route earn the
+    // third star. Dividing by greedy's time stopped meaning anything once greedy stopped measuring pace there (see above), and T cannot move it.
+    // L52 fails this, and it is a real fail: every bot needs about 55 s, so no route reached 35 % left at T 68.
+    if (piles) { if (!st.planner.win || st.planner.stars < 3) fails.push(`3a planner earns ${st.planner.win ? st.planner.stars : 0} stars, want 3`); }
+    else if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
     if (st.average && (st.average.s3 < band.avg3[0] || st.average.s3 > band.avg3[1])) fails.push(`3b average 3★ ${st.average.s3}% outside ${band.avg3[0]}–${band.avg3[1]}`);
     if (st.casual && st.casual.s3 > band.cas3) fails.push(`3b casual 3★ ${st.casual.s3}% > ${band.cas3}`);
   }

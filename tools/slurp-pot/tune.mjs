@@ -98,6 +98,7 @@ export function predict(spec, S, T) {
   };
   for (const k of ['casual', 'average', 'expert']) { p[k] = pctOf(S[k], r => winAt(r, T, timed, g)); p[k + '3'] = pctOf(S[k], r => starsAt(r, T, timed, g) === 3); }
   p.spare = spareAt(S.average, T, timed, g);
+  p.plan3 = starsAt(S.planner, T, timed, g) === 3;
   const lost = S.casual.filter(r => !winAt(r, T, timed, g));
   p.near = lost.length ? lost.filter(r => closeAt(r, T)).length / lost.length : null;
   return p;
@@ -113,7 +114,7 @@ export function score(spec, p) {
   }
   if (gw && timed) s += W.greedy * out(p.gPct, gw[0], gw[1]);
   if (sb && timed && p.spare != null) s += W.greedy * out(p.spare, sb[0], sb[1]);
-  if (band.plan && timed) s += p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);
+  if (band.plan && timed) s += onPiles(spec) ? (p.plan3 ? 0 : 30) : p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);   // 3a on piles is the planner's third star (verify botGates)
   if (band.avg3 && timed && p.average3 != null) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
   if (band.cas3 && timed) s += 0.5 * Math.max(0, p.casual3 - band.cas3);
   const ct = spec.goal && spec.goal.casual, cw = casualWindow(spec);
@@ -178,8 +179,8 @@ export function tuneSpec(spec, { seeds = 24, from = 0, runs = 20, noise = 10, xr
       if (gMiss > 3) { near.push(c); log(`  L${spec.n} bump ${b} margin ${kn.margin}: screen greedy ${S.greedy.t.toFixed(1)}s`); continue; }
       S.planner = run(lv, 'planner', 1, {}, maxT);
       const ratio = S.planner.win ? S.planner.t / S.greedy.t : null;
-      if (band.plan && timed) c.pen += ratio == null ? 30 : 100 * Math.max(0, ratio - band.plan);
-      if (band.plan && timed && (ratio == null || ratio > band.plan + 0.02)) { near.push(c); log(`  L${spec.n} bump ${b} margin ${kn.margin}: screen planner ratio ${ratio == null ? '-' : ratio.toFixed(2)}`); continue; }
+      if (band.plan && timed && !onPiles(spec)) c.pen += ratio == null ? 30 : 100 * Math.max(0, ratio - band.plan);
+      if (band.plan && timed && !onPiles(spec) && (ratio == null || ratio > band.plan + 0.02)) { near.push(c); log(`  L${spec.n} bump ${b} margin ${kn.margin}: screen planner ratio ${ratio == null ? '-' : ratio.toFixed(2)}`); continue; }
       stageC(c);
       pool.push(c);
       log(`  L${spec.n} bump ${b} margin ${kn.margin}: survivor, partial score ${c.bt.score.toFixed(1)} (T ${c.bt.T}, greedy ${S.greedy.t.toFixed(1)}s, ratio ${ratio == null ? '-' : ratio.toFixed(2)}, casual ${c.bt.p.casual.toFixed(0)})`);
