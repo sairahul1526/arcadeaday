@@ -486,6 +486,7 @@ export async function computeKindMax({ days = 400, specs = SPECS } = {}) {
   };
   for (const s of specs) add(LV.genLevel(s, s.seed));
   add(LV.genLevel(REC, REC.seed));
+  add((await import('../../games/slurp-pot/modes.js')).recPlan(LV.getRecord()).level); // the video's course has its own kinds (gazebo)
   for (const key of dailyKeys(days)) for (const cur of DAILY_CURS) add(LV.getDaily(key, cur));
   // DECISION (11-04, Render): every Feast course counts too (courses 1–6, cur 12 / 30 / 60, 20 seeds a town), stack
   // contents included, since Render sizes its pools from kindMax.

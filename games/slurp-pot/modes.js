@@ -390,6 +390,9 @@ const REC_ITEMS = 236;                              // course items (+ the cake)
 // the props a hole game is remembered for (cooler, bench, parasol, tree, swing set, gazebo) before the cake.
 const REC_KINDS = ['pea', 'blueberry', 'cherry', 'juicebox', 'cupcake', 'pinwheel', 'sandwich', 'watermelon', 'beachball',
   'bin', 'cooler', 'bench', 'parasol', 'tree', 'swingset', 'gazebo'];
+// DECISION (11-07 Sat): no cap let the planner take 9 swing sets in the last 0.7 s, one red pile in front of the cake.
+//   Gazebos share the job. No level uses one, so kindMax has no entry and its pool falls back to render3d capFor's 48.
+const REC_CAP = { swingset: 4, gazebo: 3 };
 const r3 = v => Math.round(v * 1000) / 1000;
 const frac = v => v - Math.floor(v);
 const knotAt = (K, t) => {
@@ -479,7 +482,7 @@ export function recPlan(base) {
   for (const tf of REC_FIRST) add(pea, tf, false);
   while (R() < rOpen && bites.length < REC_ITEMS) {
     const lim = REC_Q * Lg.FIT * R();
-    const c = pool.filter(k => k.a <= lim && (used[k.id] | 0) < num(KIND_MAX[k.id], 0));
+    const c = pool.filter(k => k.a <= lim && (used[k.id] | 0) < num(REC_CAP[k.id], num(KIND_MAX[k.id], 0)));
     if (!c.length) break;
     const want = 1 / knotAt(REC_RATE, t);
     const sc = c.map(k => { const g = rawT(k) - t; return { k, g, s: Math.abs(Math.log(Math.max(g, 0.005) / want)) + (g > REC_GAP_MAX ? 9 : 0) }; });
