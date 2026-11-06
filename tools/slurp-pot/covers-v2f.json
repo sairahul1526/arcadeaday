@@ -1,0 +1,22 @@
+{
+  "style": "Soft 3D clay-and-vinyl toy render, tabletop diorama miniature, rounded chunky shapes with generous bevels, smooth matte surfaces with a gentle satin sheen, warm sunny lighting from the upper left, soft contact shadow, saturated warm palette (golden yellow, tomato red, fresh green, teal), cheerful and cute, NO outlines, NO line art, NO text, NO letters, NO writing on any sign, awning, van or stall, NO logos, NO watermark, family friendly.",
+  "outDir": "studio/art-raw/slurp-pot/covers-growth-webp",
+  "rawDir": "studio/art-raw/slurp-pot/covers-growth",
+  "defaults": { "res": "2K", "cutout": false, "max": 1600, "q": 82 },
+  "items": [
+    {
+      "id": "cover-growth-tall",
+      "aspect": "2:3",
+      "max": 1200,
+      "refs": ["../../studio/art-raw/slurp-pot/covers-growth/cover-growth-1.png", "../../studio/art-raw/slurp-pot/art/pot-hero.png"],
+      "prompt": "Tall portrait frame. Same scene as the first reference image (cover-growth-1), recomposed: the same HUGE golden pot with EXACTLY TWO eyes on the front of the rim, NO mouth, smooth plain gold body, pink blush, same red-and-white striped market stall with its crates tipping into the open top, same teal delivery van sliding in, orange stew splashing, tan cobblestone street, toy shopfronts with striped awnings down both sides, tiny crates and a small red toy car in the bottom corner to show the pot's scale. The pot fills the middle and lower part of the frame. The top 20% of the frame is plain bright blue sky (nothing important there). Only the pot has a face; everything else is inanimate. Empty environment: NO animals, NO people, NO birds."
+    },
+    {
+      "id": "cover-growth-square",
+      "aspect": "1:1",
+      "max": 1024,
+      "refs": ["../../studio/art-raw/slurp-pot/covers-growth/cover-growth-1.png", "../../studio/art-raw/slurp-pot/art/pot-hero.png"],
+      "prompt": "Square frame. Same scene as the first reference image (cover-growth-1), recomposed: the same HUGE golden pot with EXACTLY TWO eyes on the front of the rim, NO mouth, smooth plain gold body, pink blush, same red-and-white striped market stall with its crates tipping into the open top, same teal delivery van sliding in, orange stew splashing, tan cobblestone street, toy shopfronts with striped awnings, tiny crates and a small red toy car at the lower left to show the pot's scale. The pot sits in the upper two thirds. The bottom 18% of the frame is plain tan cobblestone street with nothing important on it. Only the pot has a face; everything else is inanimate. Empty environment: NO animals, NO people, NO birds."
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "cover-growth-tall": {
+    "prompt": "Tall portrait frame. Same scene as the first reference image (cover-growth-1), recomposed: the same HUGE golden pot with EXACTLY TWO eyes on the front of the rim, NO mouth, smooth plain gold body, pink blush, same red-and-white striped market stall with its crates tipping into the open top, same teal delivery van sliding in, orange stew splashing, tan cobblestone street, toy shopfronts with striped awnings down both sides, tiny crates and a small red toy car in the bottom corner to show the pot's scale. The pot fills the middle and lower part of the frame. The top 20% of the frame is plain bright blue sky (nothing important there). Only the pot has a face; everything else is inanimate. Empty environment: NO animals, NO people, NO birds.",
+    "aspect": "2:3",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1200,
+    "tasks": [
+      "9842356775ff52f276555bfc13f85aeb"
+    ],
+    "bytes": 62636,
+    "at": "2026-11-06T14:32:34.770Z"
+  },
+  "cover-growth-square": {
+    "prompt": "Square frame. Same scene as the first reference image (cover-growth-1), recomposed: the same HUGE golden pot with EXACTLY TWO eyes on the front of the rim, NO mouth, smooth plain gold body, pink blush, same red-and-white striped market stall with its crates tipping into the open top, same teal delivery van sliding in, orange stew splashing, tan cobblestone street, toy shopfronts with striped awnings, tiny crates and a small red toy car at the lower left to show the pot's scale. The pot sits in the upper two thirds. The bottom 18% of the frame is plain tan cobblestone street with nothing important on it. Only the pot has a face; everything else is inanimate. Empty environment: NO animals, NO people, NO birds.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "bd9ad73c02e5e3109c2ebe9dac616deb"
+    ],
+    "bytes": 90196,
+    "at": "2026-11-06T14:32:37.904Z"
+  }
+}

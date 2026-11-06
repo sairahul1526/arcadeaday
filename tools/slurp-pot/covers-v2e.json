@@ -1,0 +1,18 @@
+{
+  "style": "Soft 3D clay-and-vinyl toy render, tabletop diorama miniature, rounded chunky shapes with generous bevels, smooth matte surfaces with a gentle satin sheen, warm sunny lighting from the upper left, soft contact shadow, saturated warm palette (golden yellow, tomato red, fresh green, teal), cheerful and cute, NO outlines, NO line art, NO text, NO letters, NO logos, NO watermark, family friendly.",
+  "outDir": "studio/art-raw/slurp-pot/covers-growth-webp",
+  "rawDir": "studio/art-raw/slurp-pot/covers-growth",
+  "defaults": { "aspect": "16:9", "res": "2K", "cutout": false, "max": 1600, "q": 82 },
+  "items": [
+    {
+      "id": "cover-growth-1",
+      "refs": ["../../studio/art-raw/slurp-pot/art/pot-hero.png"],
+      "prompt": "Sunny toy-town market street, wide shot from a high three-quarter angle. The golden pot from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints on the front of the rim, pink blush, no mouth, chunky loop handles, glowing orange stew) is HUGE, filling the right half of the frame, mid-gulp, a whole red-and-white striped market stall with its awning tipping into the open top, wooden crates, oranges and a teal toy delivery van sliding toward the rim, stew splashing. The pot has EXACTLY TWO eyes in total. Tan cobblestone street, colourful striped awnings and small toy shopfronts in the background, bright blue sky. In the lower left, tiny crates and a toy car show how big the pot has grown. The top-left quarter is plain bright sky and distant rooftops (nothing important there). Only the pot has a face; all food, stalls and vehicles are inanimate with no faces. Empty environment: NO animals, NO people, NO birds, NO text, NO letters."
+    },
+    {
+      "id": "cover-growth-2",
+      "refs": ["../../studio/art-raw/slurp-pot/art/pot-hero.png"],
+      "prompt": "Sunny toy-town street, high three-quarter angle. The golden pot from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints on the front of the rim, pink blush, no mouth, chunky loop handles, glowing orange stew) is giant and centred-right, eyes wide and joyful, mid-gulp, swallowing a whole toy food truck (yellow and red) that tilts into its open top, with fruit crates, a toy car and market awning pieces swirling in a spiral into the stew. The pot has EXACTLY TWO eyes in total. Tan cobblestone road, striped awnings and toy shopfronts behind, bright blue sky with soft clouds, a trail of tiny crumbs on the road behind the pot. The top-left quarter is plain bright sky (nothing important there). Only the pot has a face; all food, trucks and cars are inanimate with no faces. Empty environment: NO animals, NO people, NO birds, NO text, NO letters."
+    }
+  ]
+}

@@ -18,14 +18,17 @@ const RAW = join(ROOT, 'studio', 'art-raw', slug, 'media'), OUT = join(ROOT, 'di
 // (lines, align, x, y = centre of the block, s = line height as a fraction of output height); null = clean
 const words = title.split(' '), two = [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')];
 const L = { lines: two, align: 'left', x: 0.045, y: 0.5, s: 0.15 };
+// Per game: a wide title that sits in clear sky instead of mid-left, and the title colours of its own title screen.
+const TOP = { 'slurp-pot': { lines: [title], align: 'left', x: 0.025, y: 0.105, s: 0.135 } }[slug];
+const LOOK = { 'slurp-pot': { ink: '#3A2418', fill: ['#FBD053', '#F5B323', '#F5B323'] } }[slug] || { ink: '#2B2440', fill: ['#FFF1C9', '#FFC25A', '#FF8A3D'] };
 const JOBS = [
-  ['cover-1920x1080', 'cover-wide', 1920, 1080, 0.5, L],
+  ['cover-1920x1080', 'cover-wide', 1920, 1080, 0.5, TOP || L],
   ['cover-800x1200', 'cover-tall', 800, 1200, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.085, s: 0.1 }],
   ['cover-800x800', 'cover-square', 800, 800, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['thumb-512x512', 'cover-square', 512, 512, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
-  ['thumb-512x384', 'cover-wide', 512, 384, 0.42, { ...L, s: 0.16 }],
+  ['thumb-512x384', 'cover-wide', 512, 384, 0.42, TOP ? { ...TOP, s: 0.112 } : { ...L, s: 0.16 }],
   ['thumb-200x120', 'cover-wide', 200, 120, 0.45, { ...L, s: 0.17 }],
-  ['fb-cover-1200x630', 'cover-wide', 1200, 630, 0.5, L],
+  ['fb-cover-1200x630', 'cover-wide', 1200, 630, 0.5, TOP || L],
   ['fb-cover-1080x1080', 'cover-square', 1080, 1080, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['fb-banner-1200x400', 'cover-wide', 1200, 400, 0.5, { ...L, s: 0.2 }],
 ];
@@ -41,7 +44,7 @@ const page = await browser.newPage();
 await page.evaluate(async font => { const f = new FontFace('Lilita One', `url(${font})`); await f.load(); document.fonts.add(f); }, font);
 
 async function render(src, w, h, fx, t, type, fy = 0.5) {
-  return page.evaluate(async ({ src, w, h, fx, fy, t, type }) => {
+  return page.evaluate(async ({ src, w, h, fx, fy, t, type, look }) => {
     const im = new Image(); im.src = src; await im.decode();
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
@@ -54,14 +57,14 @@ async function render(src, w, h, fx, t, type, fy = 0.5) {
       t.lines.forEach((line, i) => {
         const x = t.x * w, y = top + s * (i + 0.5);
         g.save(); g.shadowColor = 'rgba(20,14,36,0.45)'; g.shadowOffsetY = s * 0.07; g.shadowBlur = s * 0.08;
-        g.lineWidth = s * 0.2; g.strokeStyle = '#2B2440'; g.strokeText(line, x, y); g.restore();
+        g.lineWidth = s * 0.2; g.strokeStyle = look.ink; g.strokeText(line, x, y); g.restore();
         const gr = g.createLinearGradient(0, y - s / 2, 0, y + s / 2);
-        gr.addColorStop(0, '#FFF1C9'); gr.addColorStop(0.55, '#FFC25A'); gr.addColorStop(1, '#FF8A3D');
+        gr.addColorStop(0, look.fill[0]); gr.addColorStop(0.55, look.fill[1]); gr.addColorStop(1, look.fill[2]);
         g.fillStyle = gr; g.fillText(line, x, y);
       });
     }
     return c.toDataURL(type, 0.9).split(',')[1];
-  }, { src, w, h, fx, fy, t, type });
+  }, { src, w, h, fx, fy, t, type, look: LOOK });
 }
 
 const save = async (name, b64) => { await writeFile(join(OUT, name), Buffer.from(b64, 'base64')); console.log(`✓ ${name}`); };

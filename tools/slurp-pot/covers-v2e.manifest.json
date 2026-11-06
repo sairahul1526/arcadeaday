@@ -1,0 +1,26 @@
+{
+  "cover-growth-2": {
+    "prompt": "Sunny toy-town street, high three-quarter angle. The golden pot from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints on the front of the rim, pink blush, no mouth, chunky loop handles, glowing orange stew) is giant and centred-right, eyes wide and joyful, mid-gulp, swallowing a whole toy food truck (yellow and red) that tilts into its open top, with fruit crates, a toy car and market awning pieces swirling in a spiral into the stew. The pot has EXACTLY TWO eyes in total. Tan cobblestone road, striped awnings and toy shopfronts behind, bright blue sky with soft clouds, a trail of tiny crumbs on the road behind the pot. The top-left quarter is plain bright sky (nothing important there). Only the pot has a face; all food, trucks and cars are inanimate with no faces. Empty environment: NO animals, NO people, NO birds, NO text, NO letters.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "6cfe486c98733ee04b91cfe92839f884"
+    ],
+    "bytes": 84648,
+    "at": "2026-11-06T14:30:56.039Z"
+  },
+  "cover-growth-1": {
+    "prompt": "Sunny toy-town market street, wide shot from a high three-quarter angle. The golden pot from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints on the front of the rim, pink blush, no mouth, chunky loop handles, glowing orange stew) is HUGE, filling the right half of the frame, mid-gulp, a whole red-and-white striped market stall with its awning tipping into the open top, wooden crates, oranges and a teal toy delivery van sliding toward the rim, stew splashing. The pot has EXACTLY TWO eyes in total. Tan cobblestone street, colourful striped awnings and small toy shopfronts in the background, bright blue sky. In the lower left, tiny crates and a toy car show how big the pot has grown. The top-left quarter is plain bright sky and distant rooftops (nothing important there). Only the pot has a face; all food, stalls and vehicles are inanimate with no faces. Empty environment: NO animals, NO people, NO birds, NO text, NO letters.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "58fd4d8d39ab729dae99523707a715c8"
+    ],
+    "bytes": 98662,
+    "at": "2026-11-06T14:30:20.610Z"
+  }
+}
