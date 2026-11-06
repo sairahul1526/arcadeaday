@@ -63,6 +63,7 @@ export function writeLevelsData(path, specs, rec, kindMax) {
 export const PEAKS = [29, 30, 33, 37, 40, 44, 49, 50, 54, 57, 60];
 /** Levels with snack piles (levels.js snackPiles): the piles speed the bots unevenly, so greedy no longer measures pace. */
 export const onPiles = spec => spec.n >= LV.PILE_FROM;
+const isPeak = n => PEAKS.includes(n) || isMilestone(n);
 /**
  * Gate 2 on a pile level: the average bot's spare time, % of the pace clock (T − grace), median of its runs, a loss
  * counting 0. Sizzle and chili seconds are inside it, because the player has them too.
@@ -72,10 +73,14 @@ export const onPiles = spec => spec.n >= LV.PILE_FROM;
 // the average bot 2.9 s on L29 and lost it at 82 % on L26. The player's pace is the average bot's, so that is the measure:
 // peaks and milestones 8 to 14 % spare, normal levels 20 to 30 %, breathers 35 % or more. The curve is a saw-tooth on purpose.
 // Gate 2 keeps the greedy window on L1 to L20. Every other gate stays.
+// DECISION (11-06 Fri, round 3, the coordinator's call): that peak band of 8 to 14 % was wrong. Casual is about 20 % slower than
+// average, so it left casual 1 to 19 % on a peak, a wall and not tension. Pile levels are a saw-tooth in CASUAL first-try wins:
+// peaks about 50, normals about 80, breathers 90 or more. So a peak's T is set by casual (goal.casual 52 within +-7) and the band
+// follows it: peaks 16 to 26 % spare, normals 26 to 34, breathers 35 or more.
 export function spareBand(spec) {
   if (!onPiles(spec) || spec.timed === false) return null;
-  if (PEAKS.includes(spec.n) || isMilestone(spec.n)) return [8, 14];
-  return BREATHERS.includes(spec.n) ? [35, 100] : [20, 30];
+  if (isPeak(spec.n)) return [16, 26];
+  return BREATHERS.includes(spec.n) ? [35, 100] : [26, 34];
 }
 export function bandOf(n) {
   if (n <= 3) return { avg: [100, 99, 85][n - 1], exp: 100, plan: null, avg3: null, cas3: null };
@@ -84,8 +89,9 @@ export function bandOf(n) {
   // DECISION (11-06 Fri, round 2, L4): a breather at 35 % spare or more is a level the average bot three-stars at least half the
   // time (3 stars is left >= 0.35, the same number), so the 3-star ceiling cannot hold there: it is lifted on pile breathers.
   const top = BREATHERS.includes(n) && n >= LV.PILE_FROM ? 100 : n <= 40 ? 35 : 30;
-  if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [PEAKS.includes(n) ? 0 : 15, top], cas3: 15 };
-  return { avg: 70, exp: 95, plan: 0.76, avg3: [PEAKS.includes(n) ? 0 : 15, top], cas3: 15 };
+  // DECISION (11-06 Fri, round 3): on pile levels the average 3-star floor is 5 on normals (0 on peaks, ceiling unchanged): at 26 to 34 %
+  // spare the third star (left >= .35) sits just past the median run. avg and exp are gate 1 here, see botGates.
+  return { avg: 90, exp: 99, plan: n <= 40 ? 0.78 : 0.76, avg3: [isPeak(n) ? 0 : 5, top], cas3: 15 };
 }
 // DECISION (11-04 Wed, §4.4, L30 and L50 moved to the peaks on 11-06): breathers (6 12 15 25 35 45 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
 // each twist's first level (4 10 16 22 28 34 41 47 53) greedy ≤ 74 %, casual ≥ 80 %. Both clip the table windows
@@ -108,10 +114,13 @@ export function greedyWindow(spec) {
   if (TWIST_FIRST.includes(spec.n)) hi = Math.min(hi, 74);
   return [lo, hi];
 }
-/** Casual win window (gate 4): goal.casual ± 7; breathers and twist intros at least min(80, goal). */
+/** Casual win window (gate 4): goal.casual ± 7; breathers and twist intros at least min(80, goal). Pile levels: see below. */
+// DECISION (11-06 Fri, round 3): on pile levels only peaks keep goal.casual ± 7. A normal is casual 60 to 92 and a breather 85 or more,
+// instead of the table goals, and a twist intro on the piles is a normal like any other (the old floor of 80 came from the greedy days).
 export function casualWindow(spec) {
   const c = spec.goal && spec.goal.casual;
   if (c == null) return null;
+  if (onPiles(spec) && !isPeak(spec.n)) return BREATHERS.includes(spec.n) ? [85, 100] : [60, 92];
   let lo = c - 7;
   if (BREATHERS.includes(spec.n) || TWIST_FIRST.includes(spec.n)) lo = Math.max(lo, Math.min(80, c));
   // DECISION (11-06 Fri, L1 grace): grace exists to lift a slow hand over the table's casual goal, so a grace level has no ceiling.
@@ -375,25 +384,30 @@ export function botStats(lv, spec, { runs = 100, xruns = runs, kinds = ['casual'
 /** Gates 1–4 (+ near-miss share on L3 / L7, D32) from botStats. Returns [fail text]. */
 export function botGates(spec, lv, st) {
   const fails = [], n = spec.n, band = bandOf(n);
-  if (!st.greedy.win) fails.push('1 greedy loses (deterministic)');
-  if (st.noise < 98) fails.push(`1 greedy ±3° noise wins ${st.noise}% (< 98)`);
+  // DECISION (11-06 Fri, round 3): greedy stops gating on pile levels and stays printed. A pile can hand it 20 s or cost it the level, so it
+  // says nothing about the player. Gate 1 there is the average bot at 90 % or more and the expert at 99 % or more (bandOf).
+  const piles = onPiles(spec);
+  if (!piles && !st.greedy.win) fails.push('1 greedy loses (deterministic)');
+  if (!piles && st.noise < 98) fails.push(`1 greedy ±3° noise wins ${st.noise}% (< 98)`);
   const gw = greedyWindow(spec);
   if (gw && st.greedy.win && (st.greedy.pct < gw[0] || st.greedy.pct > gw[1])) fails.push(`2 greedy uses ${st.greedy.pct}% of T, want ${gw[0]}–${gw[1]}`);
   const sb = spareBand(spec);
   if (sb && st.average && (st.average.left == null || st.average.left < sb[0] || st.average.left > sb[1])) fails.push(`2 average spare ${st.average.left}% of T, want ${sb[0]}–${sb[1]}`);
   if (band.plan && lv.timed !== false) {
-    if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
+    // a greedy loss is allowed on piles, so there it leaves no ratio to read and is no 3a fail; a planner loss still is
+    if (piles && st.greedy.win === false && st.planner.win) { /* no ratio */ } else if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
     if (st.average && (st.average.s3 < band.avg3[0] || st.average.s3 > band.avg3[1])) fails.push(`3b average 3★ ${st.average.s3}% outside ${band.avg3[0]}–${band.avg3[1]}`);
     if (st.casual && st.casual.s3 > band.cas3) fails.push(`3b casual 3★ ${st.casual.s3}% > ${band.cas3}`);
   }
   const ct = spec.goal && spec.goal.casual, cw = casualWindow(spec);
   if (st.casual && cw && (st.casual.win < cw[0] - 1e-9 || st.casual.win > cw[1] + 1e-9)) fails.push(`4 casual ${st.casual.win}% vs target ${ct} (window ${cw[0]}–${cw[1]})`);
-  if (st.average && st.average.win < band.avg) fails.push(`4 average ${st.average.win}% < ${band.avg}`);
-  if (st.expert && st.expert.win < band.exp) fails.push(`4 expert ${st.expert.win}% < ${band.exp}`);
+  const gA = piles ? 1 : 4;
+  if (st.average && st.average.win < band.avg) fails.push(`${gA} average ${st.average.win}% < ${band.avg}`);
+  if (st.expert && st.expert.win < band.exp) fails.push(`${gA} expert ${st.expert.win}% < ${band.exp}`);
   // DECISION (11-06 Fri, round 2, hot chili): the cap on chili damage is geometry (levels.js hotClear and the gap), and this gate proves
   // it held: a level has enough chilis to matter, and a careful hand pays for at most two (average) or one (expert), median.
   if (lv.hot) {
-    if (lv.hot.length < 8) fails.push(`H only ${lv.hot.length} chilis`);
+    if (lv.hot.length < 7) fails.push(`H only ${lv.hot.length} chilis`);
     if (st.average && st.average.hot > 2) fails.push(`H average bot hits ${st.average.hot} chilis`);
     if (st.expert && st.expert.hot > 1) fails.push(`H expert bot hits ${st.expert.hot} chilis`);
   }

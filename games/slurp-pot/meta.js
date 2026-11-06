@@ -27,8 +27,9 @@
 // DECISION (11-06 Fri, round 2, late economy): pay rises with the level: a first win pays 10 + n plus the star pay scaled by
 //   1 + n / 30 (rounded), replays pay 3 + the scaled star pay gained, x2 on L20/40/60 as before. L1 stays about where it was
 //   (3 stars 32, was 30), L30 pays 50 / 60 / 80, L59 pays 84 / 99 / 128. The flat 15 to 30 made every skin past the
-//   second a 25 win grind. Coins by level for average play are in GDD §3.9. Prices stay: the shop and the 60 coin continue
-//   are still real choices at about one win each, and all the skins cost 5,900 of the 6,900 or so an average run of the campaign pays.
+//   second a 25 win grind. Coins by level for average play are in GDD §3.9. Round 3 cut Royal Gold to 1000 and UFO to 1300 (consts.js):
+//   the shop and the 60 coin continue are still real choices at about one win each, and all the skins cost 5,000 of the 7,100 or so
+//   an average run of the campaign pays, about 8.7 wins a pot at the top of the shop.
 // DECISION: levelResult pays only the win payout (see above). In-level coin
 //   pops (bites, sizzle, gull miss) are credited by game.js through addCoins(n, why). `coins` returned is the win payout only;
 //   gifts/milestone/chest carry their own already-credited amounts.

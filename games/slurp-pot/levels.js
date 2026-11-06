@@ -2081,7 +2081,8 @@ export function genLevel(spec, seed) {
 // Damage cap, three ways: chilis stand HOT_GAP apart, more than a pot's width at the size expected there, so one pass takes one;
 // each must leave every food goal reachable by a clean line at three pot sizes (hotClear); and these are normal levels, so the
 // spare time of the average player pays for a couple of burns (verify's hot gate).
-const HOT_LEVELS = { 31: 10, 32: 10, 35: 10, 36: 11, 38: 11, 42: 12, 43: 12, 45: 12, 48: 13, 51: 13, 55: 14, 56: 14 };
+// DECISION (11-06 Fri, round 3): 7 to 9 a level, down from 10 to 14. The loop keeps its draw order, so these are the first chilis of the old set.
+const HOT_LEVELS = { 31: 7, 32: 7, 35: 7, 36: 8, 38: 8, 42: 8, 43: 8, 45: 8, 48: 9, 51: 9, 55: 9, 56: 9 };
 const HOT_FIRST = Math.min(...Object.keys(HOT_LEVELS).map(Number));
 const HOT_CELL = 0.5, HOT_RIM = 0.3, HOT_SIZES = [0.35, 0.65, 1];
 /** One pot size of the clean-way test: cells the pot cannot stand on, and the cells from which each food goal can be eaten. */

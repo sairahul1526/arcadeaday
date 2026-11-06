@@ -19,7 +19,7 @@ import { SPECS, REC, kindMax } from '../../games/slurp-pot/levels-data.js';
 import { STAR3, STAR2, SIZZLE_CAP } from '../../games/slurp-pot/consts.js';
 import { writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 import { BUMPS as OLD_BUMPS, DAILY_T as OLD_T } from '../../games/slurp-pot/dailies-data.js';
-import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, spareBand, casualWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
+import { staticGates, doomGate, verifySpec, bandOf, greedyWindow, spareBand, onPiles, casualWindow, rowText, statsFor, writeLevelsData, report, DATA_PATH, computeKindMax, verifyDaily, dailyKeys } from './verify.mjs';
 
 const BIG = 999;
 // Score weights per point outside a gate: greedy % window and casual target (--wg / --wc).
@@ -107,8 +107,10 @@ export function score(spec, p) {
   const band = bandOf(spec.n), gw = greedyWindow(spec), sb = spareBand(spec), timed = spec.timed !== false;
   let s = 0;
   const out = (v, lo, hi) => (v < lo ? lo - v : v > hi ? v - hi : 0);
-  if (!p.gWin) s += 100;
-  s += ((100 - p.noise) / 5) * 4;
+  if (!onPiles(spec)) {   // greedy does not gate a pile level (verify botGates, 11-06 round 3)
+    if (!p.gWin) s += 100;
+    s += ((100 - p.noise) / 5) * 4;
+  }
   if (gw && timed) s += W.greedy * out(p.gPct, gw[0], gw[1]);
   if (sb && timed && p.spare != null) s += W.greedy * out(p.spare, sb[0], sb[1]);
   if (band.plan && timed) s += p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);

@@ -458,7 +458,7 @@ console.log('hot chili');
     ok(kindOK, 'level.hot matches the chili items, all flagged HOT');
     ok(spawnOK, 'no chili within 6 u of the spawn');
     ok(gapOK, 'chilis stay at least 4 u apart, so they cannot chain', cnt.join(' '));
-    ok(cnt.every(c => c >= 8 && c <= 14), '8 to 14 chilis a level', cnt.join(' '));
+    ok(cnt.every(c => c >= 7 && c <= 9), '7 to 9 chilis a level', cnt.join(' '));
     const CAT = await import(join(ROOT, 'games/slurp-pot/catalog.js'));
     ok(CAT.KINDS[CAT.KINDS.length - 1].id === 'chili', 'chili is the last row of the kind table');
     let plain = true;

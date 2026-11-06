@@ -23,7 +23,7 @@ export const DAILY_UNLOCK = 6, FEAST_UNLOCK = 12, DAILY_START = '2026-11-08';
 export const FEAST = { start: 45, add0: 12, addMin: 6, tickets: 4, needMax: 6, sizzleCap: 3, coins: 2, pbCoins: 25 };
                                                         // add(c) = c <= 4 ? 12 : max(6, 12 − (c − 4)) (add0 14 → 12 on 11-04: runs were 1.5× the target); need from c5 [2+(c−4), 3+(c−4)] ≤ 6
 export const LADDER = [{coins:40},{chest:{coins:60, boost:'freeze'}},{lid:1},{coins:80},{boost:['magnet','mega']},{coins:120},{skin:'starladle', else:{coins:200, boost:'all'}}];
-export const SKINS = [['sunny',0],['cauldron',150],['wok',250],['teapot',350],['ricecooker',500],['dutch',650],['steamer',800],['royal',1200],['ufo',2000],['starladle',-1]];
+export const SKINS = [['sunny',0],['cauldron',150],['wok',250],['teapot',350],['ricecooker',500],['dutch',650],['steamer',800],['royal',1000],['ufo',1300],['starladle',-1]];
 export const TOWNS = ['picnic', 'market', 'harbour'];
 export const LEVELS = 60, ITEM_MAX = 340, DECOR_MAX = 40, KINDS_MAX = 18;
 export const isMilestone = n => n > 0 && n % 10 === 0;  // L10 ... L60: every level ends on a boss bite, these are the big ones
