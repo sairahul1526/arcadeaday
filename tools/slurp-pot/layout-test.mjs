@@ -78,7 +78,7 @@ function checkCards(L, ctx) {
     // ---- cards ----
     const cards = [
       ['title', { firstBoot: true }], ['title', { firstBoot: false, showMute: true }], ['title', { firstBoot: false, showMute: false }],
-      ['win', {}], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
+      ['win', {}], ['win', { strip: true }], ['win', { strip: true, nextSkin: true }], ['win', { strip: true, goal: true }], ['win', { strip: true, goal: true, nextSkin: true }], ['win', { strip: true, goal: true, nextSkin: true, buySkin: true }], ['win', { strip: true, nextSkin: true, buySkin: true }], ['info', { primary: true, second: true, ending: true }], ['info', { primary: true, second: false, ending: true }], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
       ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
       ['fail', { canFreeze: true, help: true }], ['fail', { canFreeze: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, help: true, tip: true }], ['fail', { canFreeze: false, help: true, tip: true }],
       ['pause', { showMute: true }], ['pause', {}], ['pause', { showMute: true, stars: true }], ['pause', { stars: true }], ['settings', {}], ['map', {}],

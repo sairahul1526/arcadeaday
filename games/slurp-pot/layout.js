@@ -353,6 +353,8 @@ export function cardLayout(L, name, opts = {}) {
     const tipRow = { id: 'tip', h: Math.max(fs.body * 1.7, U(30)), min: fs.small * 1.5, gap: gap * 0.6 };
     const helpRow = { id: 'help', h: Math.max(fs.body * 1.5, U(26)), min: fs.small * 1.4, gap: gap * 0.8 };
     const buyRow = { id: 'hint', h: Math.max(44, U(46)), min: 44, gap: gap * 0.5 };
+    // 11-07 Sat, U6: what this win paid beyond its coins (gift, chest, star bonus), so NEXT can go straight on.
+    const stripRow = { id: 'strip', h: Math.max(40, U(46)), min: 36, gap: gap * 0.5 };
     const rowsL = [
       { id: 'head', h: headH, min: fs.head * 1.15 },
       ...(fail ? [{ id: 'sub', h: Math.max(fs.body * 1.6, U(28)), min: fs.body * 1.4 }] : []),
@@ -360,6 +362,7 @@ export function cardLayout(L, name, opts = {}) {
       // Friday fix 2: on two columns (short landscape phones only) the right column is full, so the extra lines ride under the hero.
       ...(fail && opts.help && twoCol ? [helpRow] : []),
       ...(fail && opts.tip && twoCol ? [tipRow] : []),
+      ...(!fail && opts.strip && twoCol ? [stripRow] : []),
       ...(!fail && opts.buySkin && twoCol ? [buyRow] : []),
     ];
     const rowsR = fail ? [
@@ -367,10 +370,11 @@ export function cardLayout(L, name, opts = {}) {
       ...(opts.noBar ? [] : [{ id: 'bar', h: Math.max(40, U(56)), min: 38, gap }]),
       { id: 'lines', h: opts.noBar ? Math.max(70, U(96)) : Math.max(42, U(52)), min: opts.noBar ? 56 : 40, gap },
       ...(opts.tip && !twoCol ? [tipRow] : []),
-      ...(opts.canFreeze ? [{ id: 'freeze', h: Math.max(48, U(54)), min: 48, gap: gap * 1.4 }] : []),
       // Friday fix 2, U8: the mercy line sits right on top of the button it explains.
       ...(opts.help && !twoCol ? [helpRow] : []),
       { id: 'retry', h: retryH, min: retryH, gap: opts.help && !twoCol ? gap * 0.5 : gap * 1.4 },
+      // 11-07 Sat, U2: RETRY is the first thing the thumb lands on; paying to go on sits under it.
+      ...(opts.canFreeze ? [{ id: 'freeze', h: Math.max(48, U(54)), min: 48, gap: gap * 0.8 }] : []),
       { id: 'sec', h: secH, min: secH, gap },
     ] : [
       { id: 'stars', h: Math.max(44, U(66)), min: 40, gap },
@@ -378,12 +382,18 @@ export function cardLayout(L, name, opts = {}) {
       ...(opts.goal ? [{ id: 'goal', h: Math.max(fs.small * 2.9, U(46)), min: fs.small * 2.5, gap: gap * 0.5 }] : []),
       { id: 'stats', h: Math.max(fs.stat * 1.6, U(34)), min: fs.stat * 1.45, gap },
       { id: 'coins', h: Math.max(fs.stat * 1.7, U(40)), min: fs.stat * 1.5, gap: gap * 0.5 },
+      ...(opts.strip && !twoCol ? [stripRow] : []),
       // Friday fix 2, U3: an affordable pot is a real button (44 px), a pot still out of reach is one line of text.
       ...(opts.buySkin ? (twoCol ? [] : [buyRow])
         : opts.nextSkin ? [{ id: 'hint', h: Math.max(fs.small * 1.6, U(24)), min: fs.small * 1.4 }] : []),
       { id: 'next', h: primH, min: primH, gap: gap * 1.4 },
       { id: 'sec', h: secH, min: secH, gap },
     ];
+    // 11-07 Sat, U6: a very short single column with the strip too: the third-star line goes, the buttons stay on the card.
+    if (!fail && !twoCol && [...rowsL, ...rowsR].reduce((s, r) => s + (r.min ?? r.h) + (r.gap || 0), 0) > inner.h) {
+      const gi = rowsR.findIndex(r => r.id === 'goal');
+      if (gi >= 0) rowsR.splice(gi, 1);
+    }
     let A, Bk;
     if (twoCol) {
       A = stack(colL.x, colL.y, colL.w, colL.h, rowsL);
@@ -716,13 +726,14 @@ export function cardLayout(L, name, opts = {}) {
     const rows = opts.locked ? [
       { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2 },
       ...(opts.locked === 'daily' ? [{ id: 'sub', h: fs.body * 2.6, min: fs.body * 1.5, gap: gap * 0.4 }] : []),
-      { id: 'icon', h: U(opts.locked === 'daily' ? 110 : 150), min: 48, gap },
+      { id: 'icon', h: U(opts.locked === 'daily' ? 84 : 150), min: 48, gap },
       { id: 'body', h: fs.body * 2.4, min: fs.body * 1.5, gap },
       { id: 'back', h: secH, min: secH, gap: gap * 1.4 },
     ] : [
       { id: 'icon', h: U(120), min: 48 },
       { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2, gap },
-      { id: 'body', h: fs.body * 3.4, min: fs.body * 2.8, gap },
+      { id: 'body', h: fs.body * (opts.ending ? 2.6 : 3.4), min: fs.body * (opts.ending ? 1.5 : 2.8), gap: opts.ending ? gap * 0.5 : gap },
+      ...(opts.ending ? [{ id: 'left', h: fs.body * 2.6, min: fs.body * 1.5, gap: gap * 0.4 }] : []),
       ...(opts.primary ? [{ id: 'primary', h: primH, min: primH, gap: gap * 1.5 }] : []),
       ...(opts.second && !wide ? [{ id: 'second', h: secH + 4, min: secH, gap: gap * 1.1 }] : []),
       ...(opts.noBack ? [] : [{ id: 'back', h: secH, min: secH, gap: gap * 1.2 }]),
@@ -732,7 +743,8 @@ export function cardLayout(L, name, opts = {}) {
     // DECISION: spare card height goes to the icon/art block first (as the win/fail hero), then the rest is centred.
     let s = stack(inner.x, inner.y, inner.w, inner.h, rows);
     const spare = inner.h - (s._end - inner.y);
-    if (spare > 8) { rows[ri].h += Math.min(spare * 0.6, U(opts.locked ? 70 : 130)); s = stack(inner.x, inner.y, inner.w, inner.h, rows); }
+    // U10: the 7-day ladder is a fixed-height strip: extra height only opened a gap above and below it
+    if (spare > 8 && opts.locked !== 'daily') { rows[ri].h += Math.min(spare * 0.6, U(opts.locked ? 70 : 130)); s = stack(inner.x, inner.y, inner.w, inner.h, rows); }
     const used = s._end - inner.y, d = Math.max(0, (inner.h - used) / 2);
     for (const k in s) if (k !== '_end') { s[k].y += d; B[k] = s[k]; }
     hug();   // Friday fix 2 (U6): the chest card stood with its lower third blank

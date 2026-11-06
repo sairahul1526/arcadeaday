@@ -114,7 +114,7 @@ export function score(spec, p) {
   }
   if (gw && timed) s += W.greedy * out(p.gPct, gw[0], gw[1]);
   if (sb && timed && p.spare != null) s += W.greedy * out(p.spare, sb[0], sb[1]);
-  if (band.plan && timed) s += onPiles(spec) ? (p.plan3 ? 0 : 30) : p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);   // 3a on piles is the planner's third star (verify botGates)
+  if (band.plan && timed) s += onPiles(spec) || spec.grace > 0 ? (p.plan3 ? 0 : 30) : p.ratio == null ? 30 : 100 * Math.max(0, p.ratio - band.plan);   // 3a on piles is the planner's third star (verify botGates)
   if (band.avg3 && timed && p.average3 != null) s += 0.5 * out(p.average3, band.avg3[0], band.avg3[1]);
   if (band.cas3 && timed) s += 0.5 * Math.max(0, p.casual3 - band.cas3);
   const ct = spec.goal && spec.goal.casual, cw = casualWindow(spec);

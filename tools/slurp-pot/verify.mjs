@@ -84,8 +84,13 @@ export function spareBand(spec) {
 }
 export function bandOf(n) {
   if (n <= 3) return { avg: [100, 99, 85][n - 1], exp: 100, plan: null, avg3: null, cas3: null };
-  if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [20, 45], cas3: 15 };
-  if (n <= 20) return { avg: 75, exp: 97, plan: 0.80, avg3: [15, 40], cas3: 15 };
+  // DECISION (11-07 Sat, r3 critics): the old L4-L20 bands (average 3-star 15 to 45, casual 15 at most) are what left a casual player with 0 to 5 %
+  // three-stars from L4 to L20 while winning nearly every time: the kid called L5-L9 stingy and the viral marketer's early win card read
+  // "Finish 29s faster". Early stars are a welcome, not a test: L4-L10 an average player mostly three-stars and a casual one mostly two-stars,
+  // L11-L20 the third star is about a coin flip for average. The clock did not move for this: seconds went from grace (buys no stars) to pace.
+  if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [40, 100], cas3: 50 };
+  if (n <= 10) return { avg: 75, exp: 97, plan: 0.80, avg3: [40, 100], cas3: 50 };
+  if (n <= 20) return { avg: 75, exp: 97, plan: 0.80, avg3: [25, 65], cas3: 15 };
   // DECISION (11-06 Fri, round 2, L4): a breather at 35 % spare or more is a level the average bot three-stars at least half the
   // time (3 stars is left >= 0.35, the same number), so the 3-star ceiling cannot hold there: it is lifted on pile breathers.
   const top = BREATHERS.includes(n) && n >= LV.PILE_FROM ? 100 : n <= 40 ? 35 : 30;
@@ -93,10 +98,10 @@ export function bandOf(n) {
   // spare the third star (left >= .35) sits just past the median run. avg and exp are gate 1 here, see botGates.
   return { avg: 90, exp: 99, plan: n <= 40 ? 0.78 : 0.76, avg3: [isPeak(n) ? 0 : 5, top], cas3: 15 };
 }
-// DECISION (11-04 Wed, §4.4, L30 and L50 moved to the peaks on 11-06): breathers (6 12 15 25 35 45 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
+// DECISION (11-04 Wed, §4.4, L30 and L50 moved to the peaks on 11-06): breathers (6 12 15 25 35 45 52 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
 // each twist's first level (4 10 16 22 28 34 41 47 53) greedy ≤ 74 %, casual ≥ 80 %. Both clip the table windows
 // (goal.greedy ± 4, goal.casual ± 7); a casual goal under 80 (L55 78) keeps its own value as the floor.
-export const BREATHERS = [6, 12, 15, 25, 35, 45, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
+export const BREATHERS = [6, 12, 15, 25, 35, 45, 52, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
 // DECISION (11-06 Fri, L1 grace): a level's grace buys no stars, so every pace gate reads the pace T = T − grace. Greedy %
 // and the 3★ bands keep their meaning on a grace level; casual has the grace on top, so only its floor stays (see below).
 export const paceT = o => o.T - (o.grace > 0 ? o.grace : 0);
@@ -397,7 +402,9 @@ export function botGates(spec, lv, st) {
     // DECISION (11-06 Fri, round 3, the coordinator's call): on piles 3a asks the question the ratio stood for, does a planned route earn the
     // third star. Dividing by greedy's time stopped meaning anything once greedy stopped measuring pace there (see above), and T cannot move it.
     // L52 fails this, and it is a real fail: every bot needs about 55 s, so no route reached 35 % left at T 68.
-    if (piles) { if (!st.planner.win || st.planner.stars < 3) fails.push(`3a planner earns ${st.planner.win ? st.planner.stars : 0} stars, want 3`); }
+    // DECISION (11-07 Sat, round 3): the same goes for grace levels. Their greedy window went for this reason on 11-06, and with L6's starter patch
+  // greedy eats as fast as any plan (27.6 s, planner 27.0), so the ratio read a tie on a breather where the planner three-stars easily.
+  if (piles || spec.grace > 0) { if (!st.planner.win || st.planner.stars < 3) fails.push(`3a planner earns ${st.planner.win ? st.planner.stars : 0} stars, want 3`); }
     else if (st.planner.ratio == null || st.planner.ratio > band.plan) fails.push(`3a planner/greedy ${st.planner.ratio} > ${band.plan}`);
     if (st.average && (st.average.s3 < band.avg3[0] || st.average.s3 > band.avg3[1])) fails.push(`3b average 3★ ${st.average.s3}% outside ${band.avg3[0]}–${band.avg3[1]}`);
     if (st.casual && st.casual.s3 > band.cas3) fails.push(`3b casual 3★ ${st.casual.s3}% > ${band.cas3}`);
@@ -614,7 +621,7 @@ async function main() {
     const rows = list.map(statsRow), np = rows.filter(r => r.pass).length;
     const out = [`verify.mjs ${args.join(' ')} — §5.3 table from the stored stats in levels-data.js (tune confirm / verify runs:`,
       `100 casual + 100 average runs, expert 34 in a tune confirm, greedy + 20 ±3° noise seeds, planner deterministic); static gates re-run now.`,
-      `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 20–45 | L8–20 75/97/.80/15–40 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
+      `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 40+ cas3★ ≤50 | L8–10 75/97/.80/40+ cas3★ ≤50 | L11–20 75/97/.80/25–65 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
       `casual 3★ ≤15 from L4; casual win within goal.casual ± 7; greedy % of T within goal.greedy ± 4 (70–85 from L10); D32 near ≥.6 on L3/L7;`,
       `§4.4: peaks ${PEAKS.join(' ')} greedy 80–95 casual 45–59 avg3★ floor 0; breathers ${BREATHERS.join(' ')} greedy ≤76 casual ≥80; twist intros ${TWIST_FIRST.join(' ')} greedy ≤74 casual ≥80.`,
       `${np}/${list.length} levels pass every gate`, ...rows.map(r => r.row), ...cliffLines(list)];

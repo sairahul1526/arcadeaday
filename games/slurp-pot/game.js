@@ -26,8 +26,10 @@ import { createInput } from './input.js';
 
 const PAPER = '#FFF6E3', PAPER_SHADE = '#EBD9B8', INK = '#3A2418', GOLD = '#F5B323', GOLD_SHADE = '#B9770E', STAMP = '#E5483B';
 const WIN_CARD_S = 1.2 + 1.6;   // slow-mo (real s) + the ORDER UP stamp hold
+const WIN_STRIP_MAX = 20;        // up to here NEXT goes straight on and rewards ride on the win card (see next())
+const START_KEYS = new Set(['Enter', 'NumpadEnter', 'Space']);
 const FIN_CARD_S = 0.8;          // after a final boss bite: `win` lands ~1.3 s in, the finisher ends at 1.9, so the card comes at ~2.1 s
-const FIN_BIG_CARD_S = 1.5;      // milestones (L10 ... L60): the finisher ends at 2.6 s and booms at 1.9, so the card comes at ~2.8 s
+const FIN_BIG_CARD_S = 2.0;      // milestones (L10 ... L60): the render lane holds the close-up 0.5 s longer, so the card comes at ~3.3 s
 // DECISION (11-06 Fri, mercy, see mercy.js): a fixed long clock took the sweat away from everyone (casual 100 % on L4 to L15), so the
 //   help follows the player instead. Each time-out on a level or Daily makes the next try easier, a win carries one step less to the
 //   next one (save.help), and the seconds are grace, so stars keep the old pace. Spoiled orders get none because time cannot help.
@@ -415,6 +417,7 @@ function go(screen, data, returning) {
   if (!SCREENS.includes(screen)) screen = 'title';
   const prev = S.screen;
   if (S.live && screen !== 'play' && screen !== 'pause' && !(screen === 'settings' && prev === 'pause')) quitLevel();
+  if (screen === 'title' || screen === 'map') S.resumeN = 0;
   if (screen === 'title' || screen === 'play') S.stack.length = 0;
   else if (OVERLAYS.has(screen) && prev !== screen && !returning && prev !== 'loading') S.stack.push(prev);
   S.pend = null;
@@ -438,6 +441,7 @@ function go(screen, data, returning) {
 function back() {
   if (S.queue) return advance();
   if (S.screen === 'lid') safe(meta.lidCard, true);
+  if (S.screen === 'ladder' && S.resumeN) { const n = S.resumeN; S.resumeN = 0; S.stack.length = 0; return n > C.LEVELS ? toAllDone() : startLevel(n); }
   if (S.screen === 'ladder' || S.screen === 'feastend') { S.stack.length = 0; go('title'); return true; }
   let to = S.stack.pop() || 'title';
   while (to === S.screen || (to === 'pause' && !S.live) || to === 'loading' || to === 'play' || to === 'win' || to === 'fail') {
@@ -473,6 +477,7 @@ function startLevel(n, opt = {}) {
   const kind = opt.kind || 'level';
   if (kind === 'level') {
     n = Math.max(1, Math.min(C.LEVELS, n | 0 || 1));
+    S.resumeN = 0;                                  // back in the campaign, whichever way
   }
   let lvl = null, fs = null;
   // DECISION: a Feast "Restart" (pause card) replays the same seed; a new run (Start Feast, Again) gets a fresh one.
@@ -512,13 +517,19 @@ function startLevel(n, opt = {}) {
   if (render3d) safe(render3d.loadLevel, lvl, save().wear || 'sunny');
   if (audio) { safe(audio.setTown, town); if (has(audio, 'setFeast')) safe(audio.setFeast, kind === 'feast'); }
   S.bot = (S.botOn && bots && safe(bots.createBot, S.botKind, (lvl.seed | 0) + 1)) || null;
-  S.qaBot = (M.qa && bots && !S.bot && safe(bots.createBot, 'greedy', (lvl.seed | 0) + 7)) || null;
+  S.qaBot = (M.qa && bots && !S.bot && qaSteerBot((lvl.seed | 0) + 7)) || null;
   if (input) input.reset();
   bus.emit('levelStart', { n: S.n, kind, retry: S.retry, town, level: lvl, w });
   S.live = false; // the old level (if any) was quit by the caller; go('play') must not send quit_level
   go('play', { n: S.n, kind, retry: S.retry, town, level: lvl });
   S.live = true;
   return true;
+}
+/** The bot behind __qaInput. SLOW_HAND is the slow-hand model of tools/slurp-pot/slow-hand.mjs; keep the two the same. */
+const SLOW_HAND = { m: 0.55, lag: 0.7, sigma: 35 * Math.PI / 180, every: 0.5 };
+function qaSteerBot(seed) {
+  const k = S.qaKind || 'greedy';
+  return safe(bots.createBot, k, seed, k === 'greedy' ? {} : { P: SLOW_HAND });
 }
 function retry() {
   if (S.kind === 'feast') return startLevel(0, { kind: 'feast', town: S.fsTown, retry: S.screen !== 'feastend' });
@@ -625,6 +636,7 @@ function onWin(ev, now) {
   const st = w && safe(logic.starTimes, w);
   data.t3Left = st && stars < 3 ? Math.max(0, Math.ceil(st.t3 - (tLeft - ((w && w.freezeAdded) || 0)))) : 0;
   data.bigBoss = S.kind === 'level' && S.n > 0 && S.n % 10 === 0;
+  data.strip = S.kind === 'level' && S.n <= WIN_STRIP_MAX;
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
   if (S.kind === 'record') return;
   if (now) go('win', data);
@@ -686,6 +698,7 @@ function onFail(ev, now) {
   if ((S.kind === 'level' || S.kind === 'daily') && why === 'timeout' && S.mercyBase) {
     S.mercy = (S.mercy | 0) + 1;
     data.mercy = mercySecs(S.mercyBase, S.mercy); data.grow = mercyGrow(S.mercy) > 1; data.fails = S.mercy;
+    data.growPct = Math.round((mercyGrow(S.mercy) - 1) * 100);
   }
   if (now) go('fail', data);
   else S.pend = { t: FAIL_CARD_S, screen: 'fail', data };
@@ -763,6 +776,9 @@ function freezeContinue() {
 /**
  * Win card NEXT (§9.5): P.breakpoint(), then the gift / milestone / chest cards, then (first L6 win only) the Daily
  * card, then the next level (or All-done after L60). Daily and Feast results go back to the title.
+ * DECISION (11-07 Sat, U6): up to L20 NEXT goes straight on. Everything is already paid inside meta.levelResult, so the
+ *   full-screen cards only cost taps in the stretch where players leave; the win card shows the same rewards as a strip.
+ *   From L21 the cards stay: by then they are rare, and a town chest deserves its moment.
  */
 function next() {
   if (S.screen === 'ladder' || S.screen === 'feastend') return back(); // "Nice!" / a stray NEXT on an end card
@@ -773,9 +789,11 @@ function next() {
   if (S.kind === 'daily') return go('ladder', { ...d, status: dailyStatus() });
   if (S.kind === 'feast') return go('title');
   const q = [];
-  for (const g of d.gifts || []) q.push(['gift', { kind: g.k, count: g.n, gift: g }]);
-  for (const m of d.milestones || (d.milestone ? [d.milestone] : [])) q.push(['gift', { kind: m.boost, count: 1, coins: m.coins, milestone: m }]);
-  for (const c of d.chests || (d.chest ? [d.chest] : [])) q.push(['gift', { chest: c, coins: c.coins, town: c.town, boost: c.boost }]);
+  if (S.n > WIN_STRIP_MAX) {
+    for (const g of d.gifts || []) q.push(['gift', { kind: g.k, count: g.n, gift: g }]);
+    for (const m of d.milestones || (d.milestone ? [d.milestone] : [])) q.push(['gift', { kind: m.boost, count: 1, coins: m.coins, milestone: m }]);
+    for (const c of d.chests || (d.chest ? [d.chest] : [])) q.push(['gift', { chest: c, coins: c.coins, town: c.town, boost: c.boost }]);
+  }
   // DECISION: a player who is struggling is not pushed into a Daily at L6. The card waits for a calm win, L10 at the latest.
   const calm = !(save().help > 0) || S.n >= 10;
   if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus() }]);
@@ -891,7 +909,11 @@ function command(name, d) {
     case 'togglePause': return S.screen === 'pause' ? resume() : pause();
     case 'booster': case 'boost': return useBooster(d.kind);
     case 'magnet': case 'mega': return useBooster(name);
-    case 'daily': return ((S.screen === 'daily' || d.go) && dailyUnlocked() && startDaily()) || (S.screen === 'daily' ? false : toScreen('daily', d));
+    case 'daily': {
+      // U6: a Daily taken from the win-chain intro comes back to the campaign, at the level the chain was heading to.
+      if (S.screen === 'daily' && S.queue && S.data && S.data.intro) S.resumeN = S.queue.n;
+      return ((S.screen === 'daily' || d.go) && dailyUnlocked() && startDaily()) || (S.screen === 'daily' ? false : toScreen('daily', d));
+    }
     case 'startDaily': return startDaily();
     case 'feast': return ((S.screen === 'feast' || d.go || d.town) && feastOpen() && startFeast(d.town)) || (S.screen === 'feast' ? false : toScreen('feast', d));
     case 'startFeast': return startFeast(d.town);
@@ -944,6 +966,13 @@ const api = {
     if (S.bot && input) input.reset();
     return !!S.bot;
   },
+  /** QA (U17): what __qaInput steers from. 'greedy' is the default; any other kind plays as a slow first-time hand. */
+  setQaSteer(kind) {
+    S.qaKind = kind || 'greedy';
+    S.qaBot = M.qa && bots && !S.bot && S.lvl ? qaSteerBot((S.lvl.seed | 0) + 7) : null;
+    return !!S.qaBot;
+  },
+  botPush: () => { const b = S.bot || S.qaBot; return b && b.out ? num(b.out.m, 0) : 0; },
   setTime(s) { if (S.w) { S.w.tLeft = +s; return true; } return false; },
   botDir() {
     const b = S.bot || S.qaBot;
@@ -1045,7 +1074,10 @@ addEventListener('keydown', e => {
   const onMap = S.screen === 'map';
   if (!(GAME_KEYS.has(e.code) || (onMap && MAP_KEYS.has(e.code))) || e.ctrlKey || e.metaKey || e.altKey) return;
   if (S.fatal) { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); location.reload(); } return; }
-  if (S.ready !== true || hostPaused()) return;
+  // DECISION (11-07 Sat, U7): Enter was never broken. A press inside the boot warm-up was dropped here, so a first key at 2.5 s did
+  //   nothing and the second one looked like the only key that worked. A start key during boot now waits for the title.
+  if (S.ready !== true) { if (START_KEYS.has(e.code)) S.startKey = true; return; }
+  if (hostPaused()) return;
   if (S.screen !== 'play' && scrollY > 40) return;
   if (e.code !== 'Escape') e.preventDefault();
   if (e.repeat && !(onMap && MAP_REPEAT.has(e.code))) return;
@@ -1228,6 +1260,7 @@ async function boot() {
   // §9.4 "Saved by a lid!": the first visit after a missed day that used a Streak Lid (never in capture runs).
   if (!M.record && !M.og && has(meta, 'lidCard') && safe(meta.lidCard)) go('lid', dailyStatus());
   paint(0, true);
+  if (S.startKey && S.screen === 'title' && !M.record && !M.og && ui && has(ui, 'key')) { S.startKey = false; try { ui.key({ key: 'Enter' }); } catch (e) { report(e); } }
   // DECISION: under ?qa=1 only, the Core api is also window.__spApi so test tools can find live buttons
   //   (ui.primaryButton) and the bot's direction without going through modes.js.
   if (P.qa) try { window.__spApi = api; } catch {}

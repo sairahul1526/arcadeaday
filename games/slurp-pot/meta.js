@@ -375,6 +375,15 @@ export function nextMilestone() {
   const have = totalStars(), max = LEVELS * 3;
   return { have, need: Math.min(max, (Math.floor(have / MILESTONE_EVERY) + 1) * MILESTONE_EVERY) };
 }
+/** The next chest ahead of the player for the teasers: { n, left } (left = wins to get there), or null. Reads only. */
+export function nextChest() {
+  const d = D();
+  if (!d) return null;
+  const at = Object.keys(SMALL_CHEST).map(Number);
+  TOWNS.forEach((t, ti) => { if (!d.chests.includes(t)) at.push((ti + 1) * TOWN_LEVELS); });
+  const n = Math.min(...at.filter(v => v >= d.cur));
+  return Number.isFinite(n) ? { n, left: n - d.cur + 1 } : null;
+}
 export const qaOldSave = () => ({ save: '{"v":0,"best":120,"lv":3}', progress: 2 });
 /** true when all 60 levels have at least one star. */
 export const allDone = () => !!D() && D().stars.every(v => v > 0);

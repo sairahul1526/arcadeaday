@@ -1893,7 +1893,8 @@ function addDecor(c) {
 // moves next to it, so supply, margin, counts and every kind stay as they were. Items move in place: bossPos and other
 // indices hold, and nothing here touches c.rng, so decor and the rest of the level keep their draws. A pen line cannot
 // lead (pulling a pen's apple out would undo the pen): the first line with an open item leads the order on the card.
-const SCREEN_HX = 2.3, SCREEN_HZ = 5, PATCH_R = 1.6, PATCH_N = 14, SLOT = 0.5;
+// DECISION (11-07 Sat, viral r3): 14 stopped short of a big number; 24 lands a x20 chain in the opening seconds, the beat a clip needs.
+const SCREEN_HX = 2.3, SCREEN_HZ = 5, PATCH_R = 1.6, PATCH_N = 24, SLOT = 0.5;
 /** Hex grid of slots inside radius rad of (x, z), centre first. */
 function hexSlots(x, z, rad, step) {
   const out = [];

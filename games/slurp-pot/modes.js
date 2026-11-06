@@ -266,6 +266,13 @@ function qaState(api) {
  * DECISION: every action carries x/y, 'up' included (at the last pointer position): the Playables checker clamps
  * a.x/a.y and synthesizes touch pointer events at elementFromPoint(x, y) in Firefox/WebKit, so a bare up is NaN there.
  */
+/** How far __qaInput leans on the stick: 0.8 (greedy, the old fixed push), or the steering bot's own speed under __qaSteer. */
+let qaSteerKind = 'greedy';
+function steerPush(api) {
+  if (qaSteerKind === 'greedy' || !isFn(api.botPush)) return 0.8;
+  return clamp(num(api.botPush(), 0.55), 0, 1);
+}
+
 function makeQaInput(api) {
   let down = false; // is the (virtual) pointer we asked the checker to press still down?
   let lx = 0, ly = 0; // last pointer position we sent
@@ -285,8 +292,8 @@ function makeQaInput(api) {
       if (!down) { down = true; return [at('down', c.cx, c.cy)]; }
       // DECISION: if the game dropped the pointer (pause/resume, level reset, a lost touch), press again.
       if (api.input && api.input.held === false) return [up(), at('down', c.cx, c.cy)];
-      const d = botDirection(api, w), rad = stickRad(api);
-      if (d) return [at('move', c.cx + d.dx * 0.8 * rad, c.cy + d.dy * 0.8 * rad)];
+      const d = botDirection(api, w), rad = stickRad(api), push = steerPush(api);
+      if (d) return [at('move', c.cx + d.dx * push * rad, c.cy + d.dy * push * rad)];
       return [at('move', c.cx, c.cy)]; // null = hold still
     }
     if (down) { down = false; return [up()]; } // a card/pause is up: release before tapping
@@ -313,6 +320,15 @@ function installQa(api, M) {
     const ok = api.setBot(!!on, kind);
     return { on: !!on, kind, ok: !!on ? !!ok : true };
   }, { on: false, kind: '', ok: false });
+  /**
+   * U17: __qaSteer(kind) picks who steers __qaInput: 'greedy' (default) or any other bot kind on the SLOW hand model, so a run
+   * plays like a slow casual person. Holds across levels. Only exists under ?qa=1.
+   */
+  W.__qaSteer = (kind = 'greedy') => safe(api, '__qaSteer', () => {
+    kind = BOT_POLL_KINDS.includes(kind) ? kind : 'greedy';
+    qaSteerKind = kind;
+    return { kind, ok: isFn(api.setQaSteer) ? !!api.setQaSteer(kind) : false };
+  }, { kind: '', ok: false });
   W.__qaTime = s => safe(api, '__qaTime', () => !!api.setTime(+s), false);
   W.__qaWin = () => safe(api, '__qaWin', () => !!api.forceResult('win', { stars: 3, tLeft: 21.4, chainBest: 12 }), false);
   /** DECISION: __qaFail(why) -> plausible card data: progress 0.62, the ticket's open lines, canFreeze true. */

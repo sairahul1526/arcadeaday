@@ -22,12 +22,11 @@ import P from '../shared/platform.js';
 import { computeLayout, cardLayout, insets as safeInsets, setTicketLines } from './layout.js';
 import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, LID_MAX, TOWNS, isMilestone, HOT_SECS } from './consts.js';
 import { FIN_BEAT, FIN_BIG } from './camw.js';
+import { guide } from './guide.js';
 
 // Optional sibling modules: the UI keeps drawing with local fallbacks until they load.
 let LG = null, CAT = null, LV = null;
 import('./logic.js').then(m => { LG = m; }, () => {});
-let BOTS = null;
-import('./bots.js').then(m => { BOTS = m; }, () => {});
 import('./levels.js').then(m => { LV = m; specCache.clear(); }, () => {});
 const specCache = new Map();
 function specOf(n) {
@@ -64,8 +63,8 @@ const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const back = t => { t = clamp(t, 0, 1); const s = 1.7; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); };
 
 export const STR = {
-  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', allDoneBtn: 'All done!', retry: 'RETRY', retryMore: 'RETRY +{n}s',
-  mercyLine: 'Extra time to help you.', mercyGrow: 'And a bigger pot!', mercyBoth: 'Extra time and a bigger pot!',
+  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', allDoneBtn: 'FINISH', retry: 'RETRY', retryMore: 'RETRY +{n} s',
+  mercyLine: '{n} s extra this try', mercyBoth: '{n} s extra this try. Pot {p}% bigger!', mercyBothShort: '+{n} s. Pot {p}% bigger!',
   mercyRetry: 'Extra time to help you! +{n}s', mercyRetryGrow: 'Extra time and a bigger pot to help you!',
   mercyGift: 'A little gift: +{n}s on the clock!', mercyGiftGrow: 'A little gift: extra time and a bigger pot!',
   tipArrows: 'Follow the arrows to the food you still need.', tipSmall: 'Eat small things first to grow.', tipBig: "Big things have to wait until you're bigger.",
@@ -76,8 +75,9 @@ export const STR = {
   hotIntro: 'Hot chili! It burns {n} seconds. Steer around it.', hotIntroShort: 'Hot chili! Steer around it.', hotPop: '-{n}s',
   replay: 'Replay', map: 'Map', resume: 'Resume', restart: 'Restart', settings: 'Settings', paused: 'Paused',
   orderUp: 'ORDER UP!', serveIt: 'Serve it!', soClose: 'SO CLOSE!', almost: 'Almost!', outOfTime: 'Out of time!',
-  spoiled: 'Spoiled!', spoilLeft: 'Not enough {name} left', spoilLeftShort: 'Ran out of food', spoilGrow: 'Not enough food left to grow', spoilGrowShort: 'Ran out of food', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', timeLeft: '{t} left',
-  bestChain: 'Best chain ×{n}', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} more coins', nextSkinShort: 'Next pot: {n} more coins', nextSkin1: 'Next pot: {skin}, 1 more coin', nextSkinShort1: 'Next pot: 1 more coin',
+  spoiled: 'Spoiled!', spoilLeft: 'Not enough {name} left', spoilLeftShort: 'Ran out of food', spoilGrow: 'Not enough food left to grow', spoilGrowShort: 'Ran out of food', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', freezeLeft: '{n} left', timeLeft: '{t} left',
+  bestChain: '{n} in a row!', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} more coins', nextSkinShort: 'Next pot: {n} more coins', nextSkin1: 'Next pot: {skin}, 1 more coin', nextSkinShort1: 'Next pot: 1 more coin',
+  backIn: 'Back in {t}', chestIn: 'Win {n} more for a chest', chestIn1: 'Win 1 more for a chest', giftIn: '{n} more stars for a gift', giftIn1: '1 more star for a gift',
   dragToMove: 'Drag to move', growToOpen: 'Grow to open', lidOn: 'Lid on! Go around',
   daily: 'Daily', feast: 'Feast', cookbook: 'Cookbook', cookbookShort: 'Book', shop: 'Shop', back: 'Back', done: 'Done',
   music: 'Music', sound: 'Sound', showStick: 'Show joystick', reset: 'Reset progress', resetSure: 'Tap again to reset',
@@ -85,13 +85,13 @@ export const STR = {
   cookToday: "Cook today's order", startFeast: 'Start Feast', allDone: 'All 60 orders served!',
   dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', dailyDone: 'Order served! Come back tomorrow.',
   feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
-  cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Head chef! Try the Daily Order and the Feast.',
+  cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Harbour is done. You ate the lighthouse!', allDoneStamp: 'HEAD CHEF!', allDoneLeft: 'The Daily Order and the Feast stay open.', allDoneLeft2: 'Feast is open. A new Daily tomorrow.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
   giftBody: 'Tap them during a level.', giftMagnet: 'Tap it during a level to pull food in.', giftFreeze: 'Tap it during a level for more time.',
   giftMega: 'Tap it during a level to eat bigger food.', tooBig: 'Too big! Eat smaller food', chestT: 'Town chest!', chestSmall: 'Bonus chest!', starBonus: 'Star bonus!',
   giftCoins: '+{n} coins', eachBooster: '{n} of each booster', levelLabel: 'L{n} · {name}', levelShort: 'L{n}', dailyLabel: 'Daily',
   feastLabel: 'Feast', mute: 'Sound', newBest: 'NEW BEST!', stars: '{n}', loading: 'Cooking…',
-  thisWay: 'Try this way!', tip_magnet: 'Magnet pulls food in', tip_freeze: 'Freeze adds 10 seconds', tip_mega: 'Mega eats bigger food', magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
+  goAround: 'Go around the {w}', goAroundIt: 'Go around it', growFirst: 'Eat more to grow', starsLive: '3 stars: {t}', beatLeft: '{n} to go!', beatBig: 'Bigger pot!', feastOneMore: '1 more order to beat your best', tip_magnet: 'Magnet pulls food in', tip_freeze: 'Freeze adds 10 seconds', tip_mega: 'Mega eats bigger food', magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
   nice: 'Nice!', phew: 'Phew!', savedLid: 'Saved by a lid!', lidBody: 'Your streak is safe. {n} lid left.',
   lidBody0: 'Your streak is safe!', again: 'Again', titleBtn: 'Title', feastOver: 'Feast over!', opensAt: 'Opens at L{n}',
   later: 'Later', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
@@ -443,12 +443,13 @@ function bindBus(bus) {
   on('bite', d => {
     hud.lastBite = T; hud.bites = (hud.bites || 0) + 1;
     if (d.ing) {
+      hud.beatAsk = hud.beatAsk || 'order';
       const li = typeof d.ing === 'number' ? d.ing : lineIndexOf(d.kind);
       if (li >= 0) { if (hud.chipXY[li] && hud.ups.length < 8) hud.ups.push({ t0: T, li }); else hud.chipPop[li] = T; }
     }
   });
   on('sizeUp', d => {
-    hud.sizeUps++;
+    hud.sizeUps++; hud.beatAsk = 'size';
     if (hud.n === 1 && hud.sizeUps === 1 && !hud.flown) startFly();
   });
   on('line', d => { hud.lineDone[d.li] = T; if (d.ti === hud.ti) hud.chipPop[d.li] = T; });
@@ -469,9 +470,14 @@ function bindBus(bus) {
   on('course', d => { if (T - hud.course > 1) hud.course = T; hud.courseK = d.k != null ? d.k : (hud.courseK || 0) + 1; });
   on('tier', d => { hud.tierPop = T; hud.tierK = d.k | 0; hud.lastBite = T; });
   on('refuse', () => { hud.refuse = T; });
-  on('feastTicket', d => { hud.fServed = d.n | 0; hud.fPop = T; hud.lastBite = T; });
+  on('feastTicket', d => {
+    hud.fServed = d.n | 0; hud.fPop = T; hud.lastBite = T;
+    // U16: the best is only written when the run ends, so this still reads the score to beat
+    const best = safe(() => (M && M.feastBest ? M.feastBest() : 0), 0);
+    if (!hud.fOne && !REC_M.record && best >= 2 && hud.fServed === best - 1) { hud.fOne = true; callout('gift-feast', 'icon-chefhat', STR.feastOneMore, 3000); }
+  });
   on('bump', () => { hud.bumpPop = T; });
-  on('chain', d => { hud.chainPop = T; });
+  on('chain', d => { hud.chainPop = T; hud.beatAsk = 'chain'; });
   on('chainEnd', d => { hud.chainDrop = T; hud.chainLast = d.n || hud.chainLast; });
   on('sizzle', () => { hud.sizzle = T; });
   on('lowTime', () => { hud.low = T; });
@@ -892,7 +898,7 @@ export function draw(state, w, dt) {
       else if (screen === 'feast') drawFeast(st);
       else if (screen === 'feastend') drawFeastEnd(st);
       else if (screen !== 'play') drawInfo(st, screen);
-      if (screen === 'play' && !finOn() && w) { if (!unlockOn()) drawCallout(dt); drawBossBanner(w); drawUnlock(w); }
+      if (screen === 'play' && !finOn() && w) { if (!unlockOn()) drawCallout(dt); drawBossBanner(w); drawUnlock(w); drawBeat(w); }
     }
   } catch (e) { try { P.error(e); } catch {} }
   lastBtns = btns;
@@ -909,7 +915,7 @@ function drawHud(st, w, dt) {
   //   coins, edge arrows, the stick, the ghost hand, tutorials and callouts.
   const rec = REC_M.record;
   // tutorial timers (real time; only while playing)
-  if (playing && !rec) { tutorialTick(st, w); stuckTick(w); }
+  if (playing && !rec) { tutorialTick(st, w); stuckTick(w); guideTick(w, dt); }
   drawMeter(w, dt);
   if (H.strip && w.mode === 'feast') drawFeastStrip(w);
   // DECISION (Friday fix U6): when the pot walks under the ticket (the boss sits near the top of the board) the ticket
@@ -934,7 +940,7 @@ function drawHud(st, w, dt) {
     if (!rec && !finOn()) { drawArrows(w); if (playing) drawHotRing(w); }
     drawChain(w);
     drawUps(w);
-    if (!rec) { drawStick(st); drawGhost(w); drawFly(w); if (!finOn()) stuckHint(w, dt); }
+    if (!rec) { drawStick(st); drawGhost(w); drawFly(w); }
     if (!finOn()) drawOrderUp(w);
   }
 }
@@ -992,7 +998,9 @@ function drawTicket(w, t) {
   let ox = 0, oy = 0, sc = 1, alpha = 1;
   if (ou >= 0 && ou < 9) {
     const k = ease(ou / 0.5), fo = recOrderFade();
-    ox = (cssW / 2 - (r.x + r.w / 2)) * k; oy = (cssH * 0.4 - (r.y + r.h / 2)) * k - (1 - fo) * cssH * 0.06; sc = 1 + 0.6 * k; alpha = fo;
+    // U14: in a record the ticket stays on the rail and takes the stamp there; flying to the middle hid the pot at the payoff
+    if (REC_M.record) alpha = fo;
+    else { ox = (cssW / 2 - (r.x + r.w / 2)) * k; oy = (cssH * 0.4 - (r.y + r.h / 2)) * k - (1 - fo) * cssH * 0.06; sc = 1 + 0.6 * k; alpha = fo; }
   }
   if (crs >= 0 && crs < 0.5) { ox = -cssW * ease(crs / 0.5); }
   // DECISION (two-course): ticket 2 unfolds down from the rail (scaleY with a little overshoot) after ticket 1 left.
@@ -1027,7 +1035,7 @@ function drawTicket(w, t) {
   const name = (w.level && w.level.name) || '';
   // DECISION: a record run's ticket is headed with its town ("Picnic Park"), never the course's internal name.
   const head = REC_M.record ? [STR[(w.level && w.level.town) || 'picnic'] || STR.title, STR.title]
-    : w.mode === 'daily' ? [STR.dailyLabel + (name ? ' · ' + name : ''), STR.dailyLabel]
+    : w.mode === 'daily' ? [name || STR.dailyLabel, STR.dailyLabel]
     : w.mode === 'feast' ? [STR.feastLabel + ' · ' + ((w.ti || 0) + 1), STR.feastLabel]
     : [fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })];
   const flipT = T - hud.flip, flipping = flipT >= 0 && flipT < 0.3;
@@ -1036,7 +1044,7 @@ function drawTicket(w, t) {
   txtMin(head, r.x + r.w / 2, hy, fs.hdr, { col: C.ink, maxW: r.w - 2 * pad });
   const bodyY = hy + fs.hdr * 0.6 + Math.max(2, 3 * u), bodyH = by + r.h - railR.h * 0.5 - Math.max(8, 10 * u) - bodyY;
   g.save(); g.translate(0, bodyY + bodyH / 2); g.scale(1, Math.max(0.05, fsY)); g.translate(0, -(bodyY + bodyH / 2));
-  if (showServe) drawServe(w, t, r, bodyY, bodyH);
+  if (showServe) { if (!(REC_M.record && ou >= 0)) drawServe(w, t, r, bodyY, bodyH); }
   else if (L.aspect === 'landscape') drawLinesList(w, t, r, bodyY);
   else drawChips(w, t, r, bodyY);
   g.restore();
@@ -1125,6 +1133,51 @@ function drawLinesList(w, t, r, y) {
 }
 
 // ---- egg timer (D33): tomato kitchen timer clipped to the rail's right end ----
+// U11: the seconds left to keep 3 stars, live, in a small tag under the clock. It leaves once the third star is gone.
+function drawStarChip(w, r) {
+  if (REC_M.record || finOn() || w.result || T - hud.hotPop < 1) return;
+  const st = pauseStars(w);
+  const left = st ? Math.ceil(w.tLeft - st.t3) : 0;
+  if (left <= 0) return;
+  const u = L.u, fsz = Math.max(12.5, 13.5 * u), label = fmt(STR.starsLive, { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` });
+  const h = Math.max(19, fsz * 1.5), tw2 = measure(label, fsz, FB, '800'), w2 = tw2 + h * 0.9;
+  // landscape: the ticket runs beside the clock with its counts on the right edge, so the chip starts clear of it
+  const tk = L.aspect === 'landscape' ? L.hud.ticket : null;
+  const x = Math.min(Math.max(r.x + r.w / 2 - w2 / 2, tk ? tk.x + tk.w + 4 : -1e9), cssW - 6 - w2), y = r.y + r.w + Math.max(1, 2 * u);
+  g.save();
+  rr(x, y, w2, h, h / 2); g.fillStyle = left <= 5 ? '#FFE3B0' : C.paper; g.fill(); g.lineWidth = Math.max(1.5, 1.6 * u); g.strokeStyle = C.ink; g.stroke();
+  txt(label, x + w2 / 2, y + h / 2 + 0.5, fsz, { f: FB, col: left <= 5 ? C.stamp : C.ink });
+  g.restore();
+}
+// U12: on a long level a beat lands about every 25 s of play, always riding a real moment (a size-up, a chain, an order bite),
+//   so it is a cheer for something that just happened and never a timer going off. Under 25 s of play there is none at all.
+const BEAT_EVERY = 25;
+function drawBeat(w) {
+  const ask = hud.beatAsk; hud.beatAsk = null;
+  if (REC_M.record || w.mode === 'feast') return;
+  const band = L.hud.callout, cx = band.x + band.w / 2, cy = band.y + band.h / 2, u = L.u;
+  const rh = Math.max(30, 34 * u), fsz = Math.max(14, 17 * u);
+  if (ask && !w.result && w.tStart != null && (w.t || 0) - w.tStart >= (hud.beatDue || BEAT_EVERY) && w.tLeft > LOW_TIME && !callNow && !calloutQ.length && !unlockOn()) {
+    const pot = potBox(w), t = w.tickets && w.tickets[w.ti || 0];
+    const left = t ? t.lines.reduce((a, l) => a + Math.max(0, l.need - l.got), 0) : 0, chain = w.chain ? w.chain.n : 0;
+    const text = chain >= 10 ? fmt(STR.bestChain, { n: chain }) : ask === 'size' ? STR.beatBig : left > 0 && ask === 'order' ? fmt(STR.beatLeft, { n: left }) : null;
+    if (text && !(pot && pot.top < cy + rh && pot.bot > cy - rh)) {
+      hud.beatT = T; hud.beatTxt = text; hud.beatDue = (w.t || 0) - w.tStart + BEAT_EVERY; sfx('coin');
+      if (globalThis.__qa) globalThis.__uiBeat = { text, at: (w.t || 0) - w.tStart };   // QA readout only
+    }
+  }
+  const k = T - (hud.beatT ?? -9);
+  if (k < 0 || k > 1.3 || !hud.beatTxt) return;
+  const rw = Math.min(band.w - rh * 1.1, measure(hud.beatTxt, fsz) + rh * 2.4), sc = k < 0.18 ? 0.6 + 0.4 * back(k / 0.18) : 1;
+  g.save(); g.globalAlpha = k > 1 ? (1.3 - k) / 0.3 : 1;
+  for (let i = 0; i < 6 && k < 0.7; i++) {
+    const a = -0.4 + (i % 3) * 0.4 + (i < 3 ? 0 : Math.PI), d = (rw * 0.5 + 6) + ease(k / 0.7) * 26 * u;
+    g.save(); g.lineJoin = 'round'; g.globalAlpha = 1 - k / 0.7; star(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.5, Math.max(4, 6 * u)); g.fillStyle = C.gold; g.fill(); g.restore();
+  }
+  g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
+  ribbon(cx, cy, rw, rh, hud.beatTxt, fsz, C.gold, C.brass);
+  g.restore();
+}
 function drawEggTimer(w) {
   // DECISION (D33): cream ring on a tomato-dark track, ink ticks; low time = hot red + rattle. Never green or blue.
   const r = L.hud.timer, u = L.u, fs = L.fs;
@@ -1193,6 +1246,7 @@ function drawEggTimer(w) {
     txt(fmt(STR.hotPop, { n: HOT_SECS }), cx, cy + R + s * 0.7 + k * s * 0.5, s, { col: C.hot, stroke: C.paper, sk: Math.max(3, s * 0.18) });
     g.restore();
   }
+  drawStarChip(w, r);
 }
 
 // ---- size meter ----
@@ -1574,51 +1628,94 @@ function stuckTick(w) {
   if (tw[0] === 'pens' || tw[0] === 'simmer') tutSet(tw[0]);
   callout('twist-' + tw[0], tw[1], tw[2], 2600);
 }
-// DECISION (Friday fix U13): L3-L10 only. When the pot pushes at something for 3 s (stick held, barely moving) or wanders 5 s
-//   without a bite, a gold arrow beside the pot points the way the sim's own average bot would steer (it path-finds round
-//   hedges and walls), and the food it is heading for gets a ring. It leaves on the next bite or when the pot is free.
-function stuckHint(w, dt) {
-  const n = hud.n | 0;
-  if (n < 3 || n > 10 || w.mode !== 'level' || !w.pot || w.result || !BOTS) return;
+// DECISION (U4, U5): one hint, the guide trail, replaces the Friday arrow. Soft gold dots lie on the ground along guide.js's route
+//   (it bends round walls; no target or path logic lives here). The dots are anchored from the target end, so they stay put while
+//   the pot walks them up, and any dot that would sit on food is dropped. Timers run on sim time, so a pause never counts.
+const GUIDE_WAIT = 4, STUCK_WAIT = 6, STUCK_LINE_EVERY = 10, GUIDE_EVERY = 0.34;
+const WALL_WORD = { hedge: 'hedge', fence: 'fence', car: 'car', ropepost: 'post' };
+function orderCount(w) {
+  const t = w.tickets && w.tickets[w.ti || 0];
+  let n = (w.ti || 0) * 1000;
+  if (t) for (const l of t.lines) n += Math.min(l.got, l.need);
+  return n;
+}
+function guideDots(w, r) {
+  const out = [];
+  if (!r || !r.pts || r.pts.length < 2) return out;
+  const ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, sp = Math.max(0.3, Math.max(22, 27 * L.u) / ppu);
+  const seg = [];
+  let len = 0;
+  for (let i = 1; i < r.pts.length; i++) { const a = r.pts[i - 1], b = r.pts[i], l = Math.hypot(b.x - a.x, b.z - a.z); if (l > 1e-6) { seg.push({ a, b, l, s: len }); len += l; } }
+  const stop = (w.ia ? w.ia[r.i] || 0 : 0) + 0.2;
+  let k = seg.length - 1;
+  for (let d = len - stop; d > 0 && k >= 0; d -= sp) {
+    while (k > 0 && seg[k].s > d) k--;
+    const q = seg[k], f = (d - q.s) / q.l, x = q.a.x + (q.b.x - q.a.x) * f, z = q.a.z + (q.b.z - q.a.z) * f;
+    let onFood = false;
+    for (let i = 0; i < (w.n || 0) && !onFood; i++) {
+      if ((w.st && w.st[i] !== 0) || isHid(w, i)) continue;
+      const rr2 = (w.ia ? w.ia[i] : 0.3) + 0.06, dx = w.ix[i] - x, dz = w.iz[i] - z;
+      if (dx * dx + dz * dz < rr2 * rr2) onFood = true;
+    }
+    if (!onFood) out.push({ x, z, d });
+  }
+  return out.slice(-44);   // the stretch by the pot is the one that matters
+}
+function stuckLine(w, G) {
+  const r = G.g;
+  if (r.blocked) return WALL_WORD[r.by] ? fmt(STR.goAround, { w: WALL_WORD[r.by] }) : STR.goAroundIt;
+  if (r.kind === 'food') return STR.growFirst;
+  return (w.t || 0) - G.aT >= 2 ? STR.goAroundIt : null;   // shoving at something off the route; a pot that is on its way needs no words
+}
+function guideTick(w, dt) {
   const moved = hud.started != null || w.tStart != null;
-  if (!moved) return;
-  const px = w.pot.x, pz = w.pot.z, held = !!(IN && IN.held);
-  if (!hud.pushA) hud.pushA = [px, pz];
-  if (Math.hypot(px - hud.pushA[0], pz - hud.pushA[1]) > 0.45) { hud.pushA = [px, pz]; hud.pushT = 0; if (hud.hint && hud.hint.why === 'push') hud.hint = null; }
-  else if (held) hud.pushT = (hud.pushT || 0) + dt; else hud.pushT = 0;
-  if (hud.hint && hud.bites !== hud.hint.bites) hud.hint = null;
-  if (!hud.hint) {
-    const why = (hud.pushT || 0) >= 3 ? 'push' : T - hud.lastBite >= 5 ? 'wander' : null;
-    if (!why) return;
-    let bot = null; try { bot = BOTS.createBot('average', (n | 0) + 11, { P: { idle: 0, lag: 0, sigma: 0, every: 0.1 } }); } catch {}
-    if (!bot) return;
-    hud.hint = { why, bot, bites: hud.bites, nextT: 0, dir: null, tgt: -1, t0: T };
-    if (!hud.hintCall) { hud.hintCall = true; callout('hint-way', 'hand', STR.thisWay, 2200); }
+  if (!w.pot || !moved) return;
+  const now = w.t || 0;
+  const G = hud.gd || (hud.gd = { prog: orderCount(w), progT: now, bites: hud.bites | 0, biteT: now, r: w.pot.r, hold: 0, last: now, stuck: false, callT: -99, ax: w.pot.x, az: w.pot.z, aT: now, g: null, dots: [], next: 0, a: 0 });
+  const prog = orderCount(w), step = Math.min(0.25, Math.max(0, now - G.last));
+  G.last = now;
+  if (prog !== G.prog) { G.prog = prog; G.progT = now; G.stuck = false; }
+  if ((hud.bites | 0) !== G.bites) { G.bites = hud.bites | 0; G.biteT = now; G.hold = 0; G.stuck = false; }
+  if (w.pot.r > G.r + 1e-3) { G.r = w.pot.r; G.hold = 0; G.stuck = false; }
+  if (Math.hypot(w.pot.x - G.ax, w.pot.z - G.az) > 0.45) { G.ax = w.pot.x; G.az = w.pot.z; G.aT = now; }
+  if (IN && IN.held) G.hold += step;
+  const live = !w.result && w.mode !== 'feast' && !finOn();
+  if (live && G.hold >= STUCK_WAIT) G.stuck = true;
+  const early = w.mode === 'level' && hud.n <= 20, lost = failAt === hud.n || (w.level && w.level.mercy > 0);
+  const quiet = now - G.progT >= GUIDE_WAIT && !(G.g && G.g.kind === 'food' && now - G.biteT < GUIDE_WAIT);
+  const show = live && (G.stuck || ((early || lost) && quiet && hud.hintItem < 0));
+  if (show && T >= G.next) {
+    G.next = T + GUIDE_EVERY;
+    G.g = safe(() => guide(w), null);
+    G.dots = guideDots(w, G.g);
+    if (globalThis.__qa) globalThis.__uiGuide = { kind: G.g && G.g.kind, i: G.g ? G.g.i : -1, blocked: !!(G.g && G.g.blocked), by: G.g && G.g.by, dots: G.dots.length, stuck: G.stuck };   // QA readout only
   }
-  const h = hud.hint;
-  if (T >= h.nextT) {
-    h.nextT = T + 0.12;
-    try { BOTS.decide(h.bot, w, 0.12); const o = h.bot.out; h.tgt = h.bot.target;
-      if (o && o.m > 0 && Math.hypot(o.x, o.z) > 1e-6) {   // the bot's real command is a world vector: take it through the camera
-        const l = Math.hypot(o.x, o.z), a0 = worldToScreen(px, pz), a1 = worldToScreen(px + o.x / l * 2, pz + o.z / l * 2);
-        if (a0 && a1) { const sl = Math.hypot(a1.x - a0.x, a1.y - a0.y); if (sl > 1e-6) h.dir = { x: (a1.x - a0.x) / sl, y: (a1.y - a0.y) / sl }; }
-      } if (globalThis.__qa) globalThis.__uiHint = { dir: h.dir, out: h.bot.out, tgt: h.tgt, pot: [px, pz], tp: h.tgt >= 0 ? [w.ix[h.tgt], w.iz[h.tgt]] : null, r: w.pot.r, why: h.why }; } catch { hud.hint = null; return; }   // __uiHint: QA readout only
+  if (G.stuck && G.g && now - G.callT >= STUCK_LINE_EVERY) {
+    const line = stuckLine(w, G);
+    if (line) { G.callT = now; callout('hint-go', 'hand', line, 2600); }
   }
-  if (!h.dir) return;
-  if (h.tgt >= 0 && w.st && (w.st[h.tgt] === 0 || w.st[h.tgt] === 3)) {
-    const p = worldToScreen(w.ix[h.tgt], w.iz[h.tgt]);
-    if (onPlay(p)) {
-      const k = (T * 1.5) % 1;
-      g.save(); circle(p.x, p.y, Math.max(14 * L.u, 12 + 10 * k)); g.lineWidth = Math.max(2.5, 3 * L.u); g.strokeStyle = `rgba(255,211,110,${(1 - k * 0.6).toFixed(2)})`; g.stroke(); g.restore();
+  G.a += ((show && G.g ? 1 : 0) - G.a) * Math.min(1, dt / 0.25);
+  if (G.a < 0.02 || !G.dots.length) return;
+  const ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, pot = worldToScreen(w.pot.x, w.pot.z), pr = ppu * (w.pot.r || 0.3) * 1.12;
+  const R = Math.max(3.6, 4.8 * L.u);
+  g.save();
+  G.dots.forEach((d, i) => {
+    const p = worldToScreen(d.x, d.z);
+    if (!onPlay(p) || (pot && Math.hypot(p.x - pot.x, p.y - pot.y) < pr + R * 2)) return;
+    // a slow swell runs from the pot towards the target, so the line reads as "this way" without moving
+    const a = G.a * (0.62 + 0.38 * (0.5 + 0.5 * Math.cos(i * 0.7 + T * 4.5)));
+    circle(p.x, p.y, R * 2.2); g.fillStyle = `rgba(255,236,170,${(0.42 * a).toFixed(3)})`; g.fill();
+    circle(p.x, p.y, R); g.fillStyle = `rgba(255,196,48,${a.toFixed(3)})`; g.fill();
+    g.lineWidth = Math.max(1.2, 1.5 * L.u); g.strokeStyle = `rgba(122,74,16,${(0.75 * a).toFixed(3)})`; g.stroke();
+  });
+  const r = G.g;
+  if (r && w.st && w.st[r.i] === 0 && w.ix) {
+    const q = worldToScreen(w.ix[r.i], w.iz[r.i]);
+    if (onPlay(q)) {
+      const k = (T * 0.9) % 1, rad = ppu * (w.ia ? w.ia[r.i] : 0.3) + Math.max(6, 8 * L.u) + k * Math.max(6, 8 * L.u);
+      circle(q.x, q.y, rad); g.lineWidth = Math.max(2, 2.6 * L.u); g.strokeStyle = `rgba(255,224,140,${(G.a * 0.75 * (1 - k)).toFixed(3)})`; g.stroke();
     }
   }
-  const p0 = worldToScreen(px, pz) || { x: L.play.cx, y: L.play.cy };
-  const ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, R = Math.max(20 * L.u, ppu * (w.pot.r || 0.3) * 1.15);
-  const s = Math.max(30, 34 * L.u), bob = Math.abs(Math.sin(T * TAU * 1.5)) * 8 * L.u, dist = R + s * 0.6 + bob;
-  const ax = clamp(p0.x + h.dir.x * dist, L.play.x + s, L.play.x + L.play.w - s), ay = clamp(p0.y + h.dir.y * dist, L.play.y + s, L.play.y + L.play.h - s);
-  g.save(); g.translate(ax, ay); g.rotate(Math.atan2(h.dir.y, h.dir.x)); g.lineJoin = 'round';
-  g.beginPath(); g.moveTo(s * 0.6, 0); g.lineTo(-s * 0.1, -s * 0.5); g.lineTo(-s * 0.1, -s * 0.2); g.lineTo(-s * 0.6, -s * 0.2); g.lineTo(-s * 0.6, s * 0.2); g.lineTo(-s * 0.1, s * 0.2); g.lineTo(-s * 0.1, s * 0.5); g.closePath();
-  g.fillStyle = C.gold; g.fill(); g.lineWidth = Math.max(2, 2 * L.u); g.strokeStyle = C.ink; g.stroke();
   g.restore();
 }
 function startFly() {
@@ -1735,7 +1832,13 @@ function recOrderFade() {
 function drawOrderUp(w) {
   const fo = recOrderFade(), k = T - hud.orderUp + (REC_M.record ? 0.3 : 0);   // record: the stamp lands 0.3 s sooner
   if (k < 0.55 || k > 9 || fo <= 0.01) return;
-  const r = L.hud.ticket, s = Math.min(cssW * 0.6, 260 * L.u);
+  const r = L.hud.ticket;
+  if (REC_M.record && r) {   // U14: the stamp lands on the served ticket, up on the rail, clear of the pot
+    const e = clamp((k - 0.55) / 0.18, 0, 1), s = Math.min(r.w * 0.8, r.h * 2.3);
+    stampMark(r.x + r.w / 2, r.y + r.h * 0.55, s, hud.big ? STR.bossEaten : STR.orderUp, 1.5 - 0.5 * back(e), -0.1, e * fo);
+    return;
+  }
+  const s = Math.min(cssW * 0.6, 260 * L.u);
   const fin = finOn(), x = cssW / 2, y = (fin ? cssH * 0.24 : cssH * 0.4) - (1 - fo) * cssH * 0.06;   // finisher: top third, clear of the pot
   const e = clamp((k - 0.55) / 0.18, 0, 1), sc = 2.2 - 1.2 * back(e);
   // DECISION (Friday fix U6): the stamp never covers the HUD ticket or meter, even while it is scaled up at the start:
@@ -1982,7 +2085,10 @@ function drawBossBanner(w) {
   if (!hud.big) return;
   const since = T - hud.t0, moved = hud.started != null || w.tStart != null;
   if (hud.bannerOff == null && (moved || since >= 2)) hud.bannerOff = T;
-  const out = hud.bannerOff == null ? 0 : (T - hud.bannerOff) / 0.22;
+  // U9: the fade runs on the UI clock, and a slow frame or a stepped sim left it hanging faint over play: once the first bite
+  //   has landed or the sim is half a second in, it is gone whatever the clock says.
+  if ((hud.bites | 0) > 0 || (w.tStart != null && (w.t || 0) - w.tStart > 0.5)) return;
+  const out = hud.bannerOff == null ? 0 : (T - hud.bannerOff) / 0.14;
   if (out >= 1) return;
   const u = L.u, band = L.hud.callout, P0 = L.play, t = w.tickets && w.tickets[w.tickets.length - 1], kind = bossKind(w, t);
   const rh = Math.max(40, 50 * u), fsz = Math.max(20, 27 * u), rw = Math.min(P0.w - rh * 1.4, Math.max(210, 290 * u));
@@ -2077,9 +2183,20 @@ function drawTitle(st) {
       txtMin(lab, ic.lab.x + ic.lab.w / 2, ic.lab.y + ic.lab.h / 2, fs.label, { f: FB, col: C.ink, maxW: ic.lab.w, stroke: 'rgba(255,246,227,0.9)', sk: 4 });
       const bx = ic.r.x + ic.r.w * 0.86, by = ic.r.y + ic.r.h * 0.14, br = Math.max(10, 11 * u);
       if (locked) { badge(bx, by, br, fmt(STR.levelShort, { n: id === 'daily' ? DAILY_UNLOCK : FEAST_UNLOCK }), C.ink); }
-      else if (id === 'daily' && dly) badge(bx, by, br, dly.done ? String(dly.streak || 0) : '!', dly.done ? C.go : C.stamp);
+      else if (id === 'daily' && dly) { if (!dly.done || !dly.streak) badge(bx, by, br, dly.done ? '0' : '!', dly.done ? C.go : C.stamp); streakFlame(ic.r, dly.streak | 0, u); }
     }
   }
+}
+/** U15: the Daily streak as a little flame and its count on the Daily button's top-left corner. Nothing at 0. */
+function streakFlame(r, n, u) {
+  if (n <= 0) return;
+  const s = Math.max(22, 26 * u), x = r.x + r.w * 0.14, y = r.y + r.h * 0.14, fl = 1 + 0.05 * Math.sin(T * 7);
+  g.save(); g.translate(x, y + s * 0.1); g.scale(fl, 2 - fl); g.lineJoin = 'round';
+  const body = k => { g.beginPath(); g.moveTo(0, -s * 0.56 * k); g.bezierCurveTo(s * 0.1 * k, -s * 0.28 * k, s * 0.42 * k, -s * 0.12 * k, s * 0.4 * k, s * 0.14 * k); g.bezierCurveTo(s * 0.38 * k, s * 0.42 * k, s * 0.14 * k, s * 0.5 * k, 0, s * 0.5 * k);
+    g.bezierCurveTo(-s * 0.14 * k, s * 0.5 * k, -s * 0.38 * k, s * 0.42 * k, -s * 0.4 * k, s * 0.14 * k); g.bezierCurveTo(-s * 0.42 * k, -s * 0.06 * k, -s * 0.12 * k, -s * 0.2 * k, 0, -s * 0.56 * k); g.closePath(); };
+  body(1); g.fillStyle = '#F2612E'; g.fill(); g.lineWidth = Math.max(1.5, 1.8 * u); g.strokeStyle = C.ink; g.stroke();
+  g.restore();
+  txt(String(n), x, y + s * 0.2, Math.max(12.5, s * 0.56), { col: '#fff', stroke: C.ink, sk: 3 });
 }
 function badge(x, y, r, s, col) {
   const fs2 = Math.max(12.5, r * 1.1), w2 = Math.max(r * 2, measure(s, fs2) + r);
@@ -2119,7 +2236,8 @@ function drawWin(st, w) {
   // Friday fix 2 (U3): read the next pot live, so a card returned to from the Shop never offers the pot just bought.
   const ns = !d.nextSkin ? null : (safe(() => (M.nextSkin ? M.nextSkin(100) || false : d.nextSkin), d.nextSkin) || null);
   const canBuy = !!ns && typeof ns === 'object' && !(ns.need > 0);
-  const CL = cardLayout(L, 'win', { nextSkin: !!ns && !canBuy, buySkin: canBuy, goal: !!goal });
+  const strip = winStrip(d), next = canBuy ? null : nextUp(d, ns);
+  const CL = cardLayout(L, 'win', { nextSkin: !!next, buySkin: canBuy, goal: !!goal, strip: strip.length > 0 });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2189,6 +2307,17 @@ function drawWin(st, w) {
     const ps = Math.min(B.hero.w * 0.5, hh * 1.05), bob = Math.sin(T * 3) * ps * 0.02;
     potArt('pot-happy', B.hero.x + B.hero.w * 0.73, B.hero.y + hh / 2 + bob, ps);
   }
+  // 11-07 Sat (U13): a big run is a brag even on one star, so it gets the ribbon over the pot, the part of the card a screenshot keeps.
+  const brag = (d.chainBest | 0) >= BRAG_CHAIN && B.hero.h >= 70;
+  if (brag) {
+    const bk = back(clamp((cardT - 0.35) / 0.25, 0, 1)), bh = clamp(B.hero.h * 0.3, 32, 46 * cu), bw = Math.min(B.hero.w * 0.5, Math.max(150, 200 * cu));
+    if (bk > 0.02) {
+      const bx = B.hero.x + B.hero.w * 0.73, by = B.hero.y + B.hero.h - bh * 0.62;
+      g.save(); g.translate(bx, by); g.rotate(-0.05); g.scale(bk, bk);
+      ribbon(0, 0, bw, bh, fmt(STR.bestChain, { n: d.chainBest }), Math.max(14, bh * 0.5));
+      g.restore();
+    }
+  }
   // stars fill one by one, the first from the first frame (U11)
   const S = B.stars, n = clamp(d.stars | 0, 0, 3), sr = Math.min(S.h * 0.46, S.w / 8);
   for (let i = 0; i < 3; i++) {
@@ -2213,7 +2342,7 @@ function drawWin(st, w) {
     const tl = Math.max(0, Math.round(d.tLeft || 0)), tStr = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
     const cells = [];
     if (d.kind !== 'feast' && d.tLeft != null && (d.n | 0) !== 1) cells.push(['clock', fmt(STR.timeLeft, { t: tStr })]);
-    if (d.chainBest) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest })]);
+    if (d.chainBest && !brag) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest })]);
     const cw = st2.w / Math.max(1, cells.length);
     cells.forEach(([ic, s], i) => {
       const x0 = st2.x + i * cw, is = fs.stat * 1.2, tws = Math.min(measure(s, fs.stat, FB, '800'), cw - is - 10);
@@ -2236,17 +2365,14 @@ function drawWin(st, w) {
     txt(cs, cx0 + cr * 2 + 8, co.y + co.h / 2 + 1, cfs, { align: 'left', col: C.ink, stroke: C.paper, sk: 3 });
     if (rb) txt(STR.replayBonus, cx0 + cr * 2 + 8 + ctw + rf * 0.7, co.y + co.h / 2 + 1, rf, { f: FB, align: 'left', col: C.ink, maxW: co.x + co.w - (cx0 + cr * 2 + 8 + ctw + rf * 0.7) });
   }
+  // 11-07 Sat (U6): rewards as chips. They pop in once the coins have counted, and they are already in the save.
+  if (B.strip && strip.length) drawStrip(B.strip, strip, cu);
   // Friday fix 2 (U3): never "0 coins". A pot the player can pay for is a button to the Shop; Back from there comes home to this card.
-  if (B.hint && ns) {
+  if (B.hint && !canBuy && next) txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
+  if (B.hint && canBuy) {
     const skin = (typeof ns === 'object' && (STR['sk_' + ns.id] || ns.name || ns.id)) || '';
-    if (canBuy) {
-      paperBtn(reg('buySkin', B.hint, () => { shopWin = d; act('screen', { screen: 'shop' }); shopSel = ns.id; }), fmt(STR.canBuy, { skin }),
-        { u: cu, fs: Math.max(fs.small * 1.1, 15 * cu), f: FB, alts: [STR.canBuyShort], fill: '#FFE9A8', icon: (x, y, q) => coin(x, y, q * 0.42) });
-    } else {
-      const need = typeof ns === 'object' ? ns.need ?? ns.coins ?? '' : '', one = need === 1;
-      const lines = typeof ns === 'string' ? [ns] : [fmt(one ? STR.nextSkin1 : STR.nextSkin, { skin, n: need }), fmt(one ? STR.nextSkinShort1 : STR.nextSkinShort, { n: need })];
-      txtMin(lines, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
-    }
+    paperBtn(reg('buySkin', B.hint, () => { shopWin = d; act('screen', { screen: 'shop' }); shopSel = ns.id; }), fmt(STR.canBuy, { skin }),
+      { u: cu, fs: Math.max(fs.small * 1.1, 15 * cu), f: FB, alts: [STR.canBuyShort], fill: '#FFE9A8', icon: (x, y, q) => coin(x, y, q * 0.42) });
   }
   // NEXT (auto-highlight after 0.9 s) · Replay · Map
   const last = (d.n | 0) >= LEVELS && (d.kind || 'level') === 'level';
@@ -2258,6 +2384,70 @@ function drawWin(st, w) {
   g.restore();
 }
 
+const BRAG_CHAIN = 20;
+/** U6: what this win paid beyond its own coins, as chips. Only while game.js skips the reward cards (d.strip). */
+function winStrip(d) {
+  if (!d.strip) return [];
+  const boost = k => (x, y, s) => glyph(ICON_BOOST[k] ? k : 'gift', x, y, s), chest = (x, y, s) => glyph('chest', x, y, s);
+  const pay = [], rest = [];
+  const add = (k, n) => rest.push({ draw: boost(k), text: '+' + n, long: `${STR[BOOST_NAME[k]] || STR.gift} +${n}` });
+  for (const c of d.chests || []) {
+    pay.push({ draw: chest, n: c.coins | 0, text: '+' + (c.coins | 0), long: `${c.town ? STR.chestT : STR.chestSmall} +${c.coins | 0}` });
+    const each = c.boost ? Math.max(...Object.values(c.boost)) | 0 : 0;
+    if (each > 0) rest.push({ draw: boost('gift'), text: `+${each} each`, long: fmt(STR.eachBooster, { n: each }) });
+  }
+  for (const m of d.milestones || []) {
+    pay.push({ draw: (x, y, s) => glyph('gift', x, y, s), n: m.coins | 0, text: '+' + (m.coins | 0), long: `${STR.starBonus} +${m.coins | 0}` });
+    if (m.boost) add(m.boost, 1);
+  }
+  for (const q of d.gifts || []) add(q.k, q.n | 0);
+  if (pay.length + rest.length <= 3) return [...pay, ...rest];
+  // more than fits at 360 wide: the coins fold into one chip, so nothing that was paid goes unshown
+  const sum = pay.reduce((a, c) => a + c.n, 0);
+  return [...(sum ? [{ draw: chest, text: '+' + sum, long: '+' + sum }] : []), ...rest].slice(0, 3);
+}
+const ICON_BOOST = { magnet: 1, freeze: 1, mega: 1 };
+function drawStrip(r, items, cu) {
+  const n = items.length, h = Math.min(r.h, Math.max(36, 42 * cu)), is = h * 0.78, sf = Math.max(13, Math.min(h * 0.42, 17 * cu));
+  let gapX = Math.max(6, 8 * cu), endX = 10;
+  const wOf = s => is + 10 + measure(s, sf, FB, '800') + endX, sum = list => list.reduce((a, b) => a + b, 0) + gapX * (n - 1);
+  const long = items.every(it => wOf(it.long) <= (r.w - gapX * (n - 1)) / n);
+  let ws = items.map(it => wOf(long ? it.long : it.text));
+  // the narrow left column of a landscape phone: three chips close up rather than run into the right column
+  if (sum(ws) > r.w) { gapX = 4; endX = 6; ws = items.map(it => wOf(it.text)); }
+  const tot = sum(ws);
+  let x = r.x + (r.w - tot) / 2;
+  const y = r.y + (r.h - h) / 2;
+  if (cardT >= 0.6) sfx1('stripGift', 'gift');
+  items.forEach((it, i) => {
+    const k = back(clamp((cardT - 0.6 - i * 0.12) / 0.2, 0, 1)), w2 = ws[i], cx = x + w2 / 2, cy = y + h / 2;
+    if (k > 0.02) {
+      g.save(); g.translate(cx, cy); g.scale(k, k); g.translate(-cx, -cy);
+      rr(x, y + 2, w2, h, h / 2); g.fillStyle = 'rgba(58,36,24,0.25)'; g.fill();
+      rr(x, y, w2, h, h / 2); g.fillStyle = '#FFE9A8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+      it.draw(x + 6 + is / 2, cy, is);
+      txt(long ? it.long : it.text, x + is + 10, cy + 1, sf, { f: FB, align: 'left', col: C.ink, maxW: w2 - is - 10 - endX });
+      g.restore();
+    }
+    x += w2 + gapX;
+  });
+}
+/** U15: the one thing coming next, as [long, short] lines: a chest or a star gift when close, else the next pot, else whichever is left. */
+function nextUp(d, ns) {
+  if ((d.kind || 'level') !== 'level') return null;
+  const c = safe(() => (M.nextChest ? M.nextChest() : null), null), ms = safe(() => M.nextMilestone(), null);
+  const left = ms ? ms.need - ms.have : 0;
+  const chest = c ? [c.left === 1 ? STR.chestIn1 : fmt(STR.chestIn, { n: c.left })] : null;
+  const gift = left > 0 ? [left === 1 ? STR.giftIn1 : fmt(STR.giftIn, { n: left })] : null;
+  let skin = null;
+  if (ns) {
+    const name = (typeof ns === 'object' && (STR['sk_' + ns.id] || ns.name || ns.id)) || '', need = typeof ns === 'object' ? ns.need ?? ns.coins ?? '' : '', one = need === 1;
+    skin = typeof ns === 'string' ? [ns] : [fmt(one ? STR.nextSkin1 : STR.nextSkin, { skin: name, n: need }), fmt(one ? STR.nextSkinShort1 : STR.nextSkinShort, { n: need })];
+  }
+  if (chest && c.left <= 3) return chest;
+  if (gift && left <= 5) return gift;
+  return skin || chest || gift;
+}
 /** What the third star wants, or null on a card it does not apply to: L1 always pays 3, Daily stars come from its star lines, Feast has none. */
 function starGoal(d, w) {
   if ((d.stars | 0) >= 3 || (d.kind || 'level') !== 'level' || (d.n | 0) === 1) return null;
@@ -2310,6 +2500,15 @@ function spoiledReason(d, w) {
   } catch {}
   return [STR.spoilGrow, STR.spoilGrowShort];
 }
+/** The card's level line. A Daily and a Feast have no number (n = 0), so they say their own name. */
+function levelLine(w, n, kind) {
+  const mode = kind || (w && w.mode) || 'level';
+  if (mode === 'daily') return [STR.dailyOrder];
+  if (mode === 'feast') return [STR.feastLabel];
+  n = n || (w && w.level && w.level.n) || 0;
+  const name = (w && w.level && w.level.name) || '';
+  return n ? [fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })] : [name];
+}
 function drawFail(st, w) {
   // DECISION: the spoiled sub line falls back to the current ticket's open lines to name the missing ingredient.
   const d = cardData.fail || {};
@@ -2334,8 +2533,7 @@ function drawFail(st, w) {
     if (d.why === 'spoiled') {
       txtMin(spoiledReason(d, w), B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
     } else {
-      const n = d.n || (w && w.level && w.level.n) || 0, name = (w && w.level && w.level.name) || '';
-      txtMin([fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })], B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
+      txtMin(levelLine(w, d.n, d.kind), B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
     }
   }
   if (B.hero.h > 40) potArt('pot-sad', B.hero.x + B.hero.w / 2, B.hero.y + B.hero.h / 2, Math.min(B.hero.w * 0.6, B.hero.h * 1.05));
@@ -2384,17 +2582,20 @@ function drawFail(st, w) {
     rr(r.x, r.y, r.w, r.h, Math.min(r.h / 2, 12 * cu)); g.fillStyle = C.paperS; g.fill();
     txt2(tip, r.x + r.w / 2, r.y + r.h / 2 + 1, tf, { f: FB, col: C.ink, maxW: r.w - Math.max(12, 16 * cu) });
   }
-  // Friday fix 2 (U8): the kind words for RETRY +18s, right above the button they explain
+  // Friday fix 2 (U8): the kind words for RETRY +18 s, right above the button they explain.
+  // 11-07 Sat (U2): the number on the button is the whole extra for this try, not one more step on top of the last, so the line says so.
   if (B.help) {
-    const r = B.help, hf = Math.max(12.5, Math.min(fs.body, r.h * 0.74));
-    txtMin(d.grow ? [`${STR.mercyLine} ${STR.mercyGrow}`, STR.mercyBoth] : [STR.mercyLine], r.x + r.w / 2, r.y + r.h / 2 + 1, hf, { f: FB, col: C.ink, maxW: r.w });
+    const r = B.help, hf = Math.max(12.5, Math.min(fs.body, r.h * 0.74)), o = { n: d.mercy, p: d.growPct || 0 };
+    txtMin(d.growPct > 0 ? [fmt(STR.mercyBoth, o), fmt(STR.mercyBothShort, o)] : [fmt(STR.mercyLine, o)], r.x + r.w / 2, r.y + r.h / 2 + 1, hf, { f: FB, col: C.ink, maxW: r.w });
   }
   if (B.freeze) {
-    const cost = d.freezeCost ?? (((M && M.get && M.get().boost) || {}).freeze > 0 ? 0 : PRICES.freeze);
+    const own = ((M && M.get && M.get().boost) || {}).freeze | 0, cost = own > 0 ? 0 : d.freezeCost ?? PRICES.freeze;
     const fb = reg('freeze', B.freeze, () => act('freeze'));
-    // price tag (coin + cost) rides right after the label, so the whole row stays centred
-    const pfs = Math.max(13, 15 * cu), cr = Math.max(7, 8.5 * cu), pw = cr * 2 + 4 + measure(String(cost), pfs);
-    const tail = cost ? { w: pw, draw: (x, cy) => { coin(x + cr, cy, cr); txt(String(cost), x + cr * 2 + 4, cy + 1, pfs, { align: 'left', col: C.ink }); } } : null;
+    // price tag (coin + cost), or how many are left, rides right after the label, so the whole row stays centred. Never blank.
+    const pfs = Math.max(13, 15 * cu), cr = Math.max(7, 8.5 * cu), ownS = fmt(STR.freezeLeft, { n: own });
+    const tail = cost
+      ? { w: cr * 2 + 4 + measure(String(cost), pfs), draw: (x, cy) => { coin(x + cr, cy, cr); txt(String(cost), x + cr * 2 + 4, cy + 1, pfs, { align: 'left', col: C.ink }); } }
+      : { w: measure(ownS, pfs, FB, '800'), draw: (x, cy) => txt(ownS, x, cy + 1, pfs, { f: FB, align: 'left', col: C.ink }) };
     paperBtn(fb, STR.freeze, { u: cu, fs: fs.btn2, f: FB, alts: [STR.freezeShort], tail, icon: (x, y, s) => glyph('freeze', x, y, s * 1.15) });
   }
   const rb = reg('retry', B.retry, () => act('retry'), { primary: true });
@@ -2420,8 +2621,7 @@ function drawPause(st, w) {
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
   txt(STR.paused, B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
-  const n = (w && w.level && w.level.n) || (st.level | 0), name = (w && w.level && w.level.name) || '';
-  txtMin([fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })], B.level.x + B.level.w / 2, B.level.y + B.level.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.level.w });
+  txtMin(levelLine(w, st.level | 0, st.mode), B.level.x + B.level.w / 2, B.level.y + B.level.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.level.w });
   if (B.stars && goal) {
     // Friday fix 2 (U1): the three targets, as the clock reads them; the row you are on pace for is lit
     const r = B.stars, cw = r.w / 3, sf = Math.max(12.5, fs.small), sr = Math.max(8, Math.min(r.h * 0.2, 12 * cu));
@@ -2798,6 +2998,14 @@ function drawMap(st, dt) {
     drawStar(r.x + h * 0.55, y + h / 2, h * 0.36, true);
     glyph('gift', r.x + r.w - h * 0.55, y + h / 2, h * 0.86);
     txt(`${ms.have} / ${ms.need}`, r.x + r.w / 2, y + h / 2 + 1, fs.pill, { col: C.ink, maxW: r.w - h * 2.3 });
+    // U15: what the next win is working towards, hung under the star bar
+    const up = allDone ? null : nextUp({}, null);
+    if (up) {
+      const ts = Math.max(12.5, 13.5 * u), th = Math.max(22, ts * 1.65), tw2 = Math.min(measure(up[0], ts, FB, '800') + th, V.w - 16), tx = V.x + V.w / 2 - tw2 / 2, ty = V.y + 6;
+      rr(tx, ty + 2, tw2, th, th / 2); g.fillStyle = 'rgba(58,36,24,0.3)'; g.fill();
+      rr(tx, ty, tw2, th, th / 2); g.fillStyle = '#FFE9A8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+      txt(up[0], tx + tw2 / 2, ty + th / 2 + 0.5, ts, { f: FB, col: C.ink, maxW: tw2 - th * 0.7 });
+    }
   }
   pill(B.coins, 'coin', String(safe(() => M.coins(), sv.coins | 0)), fs.pill);
   // Daily / Feast / Cookbook / Shop
@@ -2807,13 +3015,16 @@ function drawMap(st, dt) {
     const locked = (id === 'daily' && cur <= DAILY_UNLOCK) || (id === 'feast' && cur <= FEAST_UNLOCK);
     const b = reg(id, ic.r, () => act('screen', { screen: id }));
     roundBtn(b, id, { dim: locked });
-    const lab = id === 'cookbook' ? [STR.cookbook, STR.cookbookShort] : [STR[id] || id];
+    // U15: a Daily already served says when the next one opens
+    const back = id === 'daily' && dly && dly.done ? msShort((dly.msToNext || 0) - (T - dsCache.t) * 1000) : null;
+    const lab = back ? [fmt(STR.backIn, { t: back }), back] : id === 'cookbook' ? [STR.cookbook, STR.cookbookShort] : [STR[id] || id];
     txtMin(lab, ic.lab.x + ic.lab.w / 2, ic.lab.y + ic.lab.h / 2, fs.label, { f: FB, col: C.ink, maxW: ic.lab.w, stroke: 'rgba(255,246,227,0.95)', sk: 4 });
     const bx = ic.r.x + ic.r.w * 0.86, by = ic.r.y + ic.r.h * 0.14, br = Math.max(10, 11 * u);
     if (locked) badge(bx, by, br, fmt(STR.levelShort, { n: id === 'daily' ? DAILY_UNLOCK : FEAST_UNLOCK }), C.ink);
-    else if (id === 'daily' && dly) badge(bx, by, br, dly.done ? String(dly.streak || 0) : '!', dly.done ? C.go : C.stamp);
+    else if (id === 'daily' && dly) { if (!dly.done || !dly.streak) badge(bx, by, br, dly.done ? '0' : '!', dly.done ? C.go : C.stamp); streakFlame(ic.r, dly.streak | 0, u); }
   }
 }
+function msShort(ms) { const m = Math.max(1, Math.ceil(ms / 60000)), h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; }
 
 // ---- shop ----
 let shopSel = null;
@@ -3372,12 +3583,20 @@ function drawInfo(st, name) {
   const pr = spec.primary ? spec.primary(d) : null;
   const sc = spec.second ? spec.second(d) : null;
   if (name === 'gift') sfx1('gift', d.chest ? 'chest' : d.milestone ? 'milestone' : 'gift');
-  const CL = cardLayout(L, 'info', { primary: !!pr, second: !!sc, noBack: name === 'gift', locked: d.locked && (name === 'daily' || name === 'feast') ? name : false });
+  const CL = cardLayout(L, 'info', { primary: !!pr, second: !!sc, noBack: name === 'gift', ending: name === 'alldone', locked: d.locked && (name === 'daily' || name === 'feast') ? name : false });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
   const hero = (name === 'feast' || name === 'alldone') && img('win-feast');
+  // U8: the finale is a payoff: the same warm rays as a chest behind the feast, and the title stamp lands on it
+  if (name === 'alldone') {
+    const pr0 = CL.panel;
+    sfx1('alldone', 'milestone');
+    g.save(); rr(pr0.x + 3, pr0.y + 3, pr0.w - 6, pr0.h - 6, 18 * cu); g.clip();
+    giftRays(B.icon.x + B.icon.w / 2, B.icon.y + B.icon.h / 2, Math.max(B.icon.h, B.icon.w * 0.6), clamp(cardT / 0.45, 0, 1));
+    g.restore();
+  }
   if (hero && B.icon.h > 30) { const bob = Math.sin(T * 2.4) * B.icon.h * 0.015; drawFit(g, hero, B.icon.x, B.icon.y + bob, B.icon.w, B.icon.h); }
   else if (B.icon.h > 30 && name === 'gift') {
     // DECISION: a reward card (gift, town chest, star milestone) pops its prize in over slowly turning warm rays, so
@@ -3395,6 +3614,12 @@ function drawInfo(st, name) {
   if (B.sub) txtMin([STR.dailyWhat, STR.dailyWhatShort], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.sub.w });
   txt2(d.locked && name === 'daily' ? STR.dailyOrder : spec.title(d), B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
   txt2(spec.body(d), B.body.x + B.body.w / 2, B.body.y + B.body.h / 2, fs.body, { f: FB, col: C.ink, maxW: B.body.w });
+  if (name === 'alldone') {
+    if (B.left) txt2(dailyOpenNow() ? STR.allDoneLeft : STR.allDoneLeft2, B.left.x + B.left.w / 2, B.left.y + B.left.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.left.w });
+    const e = clamp((cardT - 0.5) / 0.18, 0, 1), s = Math.min(B.icon.w * 0.62, 230 * cu, B.icon.h * 2.4);
+    // the stamp's foot stays on the hero's foot, so on a short landscape card it never lands on the headline
+    if (e > 0) { sfx1('alldoneStamp', 'gift'); stampMark(B.icon.x + B.icon.w / 2, B.icon.y + B.icon.h - s * 0.22, s, STR.allDoneStamp, 1.7 - 0.7 * back(e), -0.1, e); }
+  }
   if (pr && B.primary) goldBtn(reg('primary', B.primary, () => act(pr[1], pr[2] || {}), { primary: true }), pr[0], { u: cu, fs: fs.btn });
   if (sc && B.second) paperBtn(reg('second', B.second, () => act(sc[1], sc[2] || {})), sc[0], { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph(sc[1], x, y, s) });
   if (B.back) paperBtn(reg('back', B.back, () => act('back'), { primary: !pr }), STR.back, { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph('back', x, y, s) });
