@@ -1,0 +1,26 @@
+{
+  "cover-tall": {
+    "prompt": "Tall portrait frame. Same scene, same pot, same strawberry cake and same stew whirlpool as the first reference image (cover-gulp-3), recomposed. The pot has EXACTLY TWO eyes in total, both on the front of the rim facing the viewer, no mouth, no opening on its body, pink blush. Only the pot has a face; all food inanimate. Bright sunny saturated, blue sky, green park with toy trees, red and white gingham cloth. NO animals, NO people, NO text, NO letters. The giant pot fills the lower two thirds, cake and strawberries dropping in above it, and the top 18% of the frame is plain bright blue sky with a soft cloud (nothing important there).",
+    "aspect": "2:3",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1200,
+    "tasks": [
+      "6563ab28303f4f7e7395fcaff69057b5"
+    ],
+    "bytes": 63044,
+    "at": "2026-11-06T08:18:42.134Z"
+  },
+  "cover-square": {
+    "prompt": "Square frame. Same scene, same pot, same strawberry cake and same stew whirlpool as the first reference image (cover-gulp-3), recomposed. The pot has EXACTLY TWO eyes in total, both on the front of the rim facing the viewer, no mouth, no opening on its body, pink blush. Only the pot has a face; all food inanimate. Bright sunny saturated, blue sky, green park with toy trees, red and white gingham cloth. NO animals, NO people, NO text, NO letters. The giant pot sits in the upper two thirds centred, and the bottom 18% of the frame is plain red and white gingham cloth with nothing important on it.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1024,
+    "tasks": [
+      "e93679e161716e1111a14b804b84a57a"
+    ],
+    "bytes": 89524,
+    "at": "2026-11-06T08:18:46.144Z"
+  }
+}

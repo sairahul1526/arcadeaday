@@ -281,6 +281,14 @@ function blockGrid(w, blk, skip, slack = 0) {
       if (ex * ex + ez * ez < rr * rr) blk[k * nx + i] = 1;
     }
   }
+  // DECISION (Fri, wall corridor): the pot's centre is clamped 0.5 r inside the arena (logic.js step 6), so cells closer
+  // to the edge do not exist for it. Left open they made a phantom corridor between the wall and any big item standing
+  // 2.7 u off it: L57 casual and L44 average pressed into that gap at r 1.5 for the last 45 s of the run, with the fries
+  // or tacos 10-25 u behind them ("timeout at bar 0.5-0.8"). Exact geometry, so the routing slack above does not apply.
+  const edge = 0.5 * w.pot.r, eC = Math.ceil(edge / RC - 0.5 - 1e-9);
+  if (eC > 0) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    if (i < eC || k < eC || i >= nx - eC || k >= nz - eC) blk[k * nx + i] = 1;
+  }
   return nx;
 }
 function gridN(w) {
@@ -365,7 +373,9 @@ function route(w, tgt, tx, tz, tight = false) {
     if (k < 0) k = 0; else if (k >= nz) k = nz - 1;
     return k * nx + i;
   };
-  const s0 = cell(P.x, P.z), g = cell(tx, tz);
+  // the goal cell is read where the pot can stand: an item on the wall is swallowed from inside the clamp (see blockGrid)
+  const eh = 0.5 * P.r;
+  const s0 = cell(P.x, P.z), g = cell(Math.min(_.x1 - eh, Math.max(x0 + eh, tx)), Math.min(_.z1 - eh, Math.max(z0 + eh, tz)));
   // DECISION (Thu, gate stall): a closed grid is not always a closed gap. The pot collides at a + 0.5·r, but cells are
   // 0.5 u and sampled at their centres, so a grown pot's corridor back through an eaten gate can miss every cell centre.
   // L25 expert 1005 (r 1.39) got no path to the pineapples, banned them, and wandered until time out, while a
@@ -373,7 +383,7 @@ function route(w, tgt, tx, tz, tight = false) {
   // when the pot is big enough for the target's zone (tight, see routeTo), so a closed pen still reads as closed.
   // L25 at T 82: expert 70.6 -> 100 %, average 85 -> 99 %. L4: average 3-star 27 -> 54 % (no more stall), casual unchanged.
   let found = false;
-  for (const slack of tight ? [0, 0.7 * RC] : [0]) {
+  for (const slack of tight ? [0, 0.3 * RC, 0.7 * RC] : [0]) {
     blockGrid(w, rBlk, tgt, slack);
     rBlk[s0] = 0; rBlk[g] = 0;
     rPar.fill(-1, 0, N);
@@ -571,7 +581,7 @@ function planBeam(bot, w) {
   const lineKid = tk ? tk.lines.map(l => l.kid) : [];
   const bossI = L.curBoss(w), bossA = bossI >= 0 ? A[bossI] : 0;
   const v0 = L.speedOf(P.r);
-  const hurry = w.timed && w.tStart !== null && tk && tk.done && w.tLeft < 20;
+  const hurry = w.timed && w.tStart !== null && tk && tk.done && w.tLeft - (w.level && w.level.grace > 0 ? w.level.grace : 0) < 20;   // grace buys no stars, so the rush keeps the pace
   let beam = [{ x: P.x, z: P.z, mass: P.mass, r: P.r, time: 0, score: 0, eaten: [], need: lineNeed.slice() }];
   let best = null;
   const BD = bot.P.bd || 4, BW = bot.P.bw || 6, BC = bot.P.bc || 10, BX = bot.P.bp || 1.5, BH = bot.P.bh || 1.15, BG = bot.P.bg ?? 1;

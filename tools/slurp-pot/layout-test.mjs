@@ -78,11 +78,11 @@ function checkCards(L, ctx) {
     // ---- cards ----
     const cards = [
       ['title', { firstBoot: true }], ['title', { firstBoot: false, showMute: true }], ['title', { firstBoot: false, showMute: false }],
-      ['win', {}], ['win', { nextSkin: true }], ['fail', { canFreeze: true }], ['fail', { canFreeze: false }],
+      ['win', {}], ['win', { nextSkin: true }], ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
       ['pause', { showMute: true }], ['pause', {}], ['settings', {}], ['map', {}],
       ['shop', {}], ['cookbook', {}], ['daily', {}], ['daily', { primary: false }], ['ladder', {}],
       ['feast', { towns: 1 }], ['feast', { towns: 3 }], ['feastend', {}],
-      ['alldone', { primary: true, second: true }], ['gift', { primary: true, noBack: true }], ['lid', { primary: true, noBack: true }],
+      ['alldone', { primary: true, second: true }], ['info', { locked: 'daily' }], ['info', { locked: 'feast' }], ['gift', { primary: true, noBack: true }], ['lid', { primary: true, noBack: true }],
     ];
     for (const [name, o] of cards) {
       const C = cardLayout(L, name, o), cx = `${ctx}/${name}${JSON.stringify(o)}`;

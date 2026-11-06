@@ -1,0 +1,14 @@
+{
+  "cover-spiral-2": {
+    "prompt": "Three-quarter top view of a whole toy picnic spiralling into the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot sits in the middle of a big red and white gingham blanket on bright green grass, sandwiches, fruit, cupcakes, a wicker picnic basket and a small wooden bench all swirling in a spiral into the pot's open top rim, the classic swallow-everything look, sunny and saturated.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "661821e1736d63def3a1ed6e0b458fe9"
+    ],
+    "bytes": 113654,
+    "at": "2026-11-06T08:17:18.921Z"
+  }
+}

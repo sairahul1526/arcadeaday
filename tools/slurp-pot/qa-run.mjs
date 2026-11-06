@@ -98,7 +98,7 @@ const SHOT_SIZES = SIZE_SEL ? ALL_SIZES.filter(z => SIZE_SEL.includes(`${z.width
 const UNLOCKED = JSON.stringify({ v: 2, stars: Array.from({ length: 60 }, (_, i) => (i < 14 ? 3 - (i % 3 === 2 ? 1 : 0) : 0)), coins: 900,
   boost: { magnet: 2, freeze: 1, mega: 1 }, gifted: ['magnet', 'freeze', 'mega'] });
 const MODULES = ['index.html', 'game.js', 'consts.js', 'bus.js', 'input.js', 'meta.js', 'modes.js', 'layout.js', 'ui.js', 'logic.js', 'levels.js',
-  'levels-data.js', 'dailies-data.js', 'catalog.js', 'render3d.js', 'props.js', 'audio.js', 'bots.js', 'feast.js', 'vendor/three.bundle.js'];
+  'levels-data.js', 'dailies-data.js', 'catalog.js', 'render3d.js', 'render2d.js', 'camw.js', 'dress.js', 'props.js', 'audio.js', 'bots.js', 'feast.js', 'vendor/three.bundle.js'];
 
 // ------------------------------------------------------------------ static server (games/ is the web root so ../shared/ resolves)
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',

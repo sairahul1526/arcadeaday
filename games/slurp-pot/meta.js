@@ -18,7 +18,14 @@
 //   settings and daily.streak/last/ladder/lids/lidCard come together from the newer ts (a tie keeps `a`). So a merge can never
 //   duplicate coins; the cost is that coins earned in an older-ts tab are dropped (spendables are last-writer-wins by design).
 //   Known limit: a skin bought in tab A is kept by the union but its price is not deducted if tab B (newer ts, unaware) wins.
-// DECISION: levelResult pays only the win payout (first win 10+5*stars, replay 3+5*newStars, x2 on L20/40/60). In-level coin
+// DECISION (11-06 Fri, critics: the first session's reward loop was lean): stars pay 5 / 10 / 20, so the third star is worth
+//   twice the second. First win 10 + STAR_PAY[stars], replay 3 + the star pay gained, x2 on L20/40/60. A coin chest rides the
+//   first win of L1 (the first-win gift, 30), L5 (40), L10 (50), L15 (60), so a chest lands about every 5 levels up to the L20
+//   town chest. It rides `first`, so it needs no save field and cannot pay twice, and it goes out in `chests` as { coins } with
+//   no town or boost, which the chest card already draws. Start 50 + L1 30 + gift 30 = 110 coins on L2: the 60-coin continue
+//   is there from L2 on, and still after one early booster. Every other price stays, so the shop keeps its pull: this adds at
+//   most 480 coins over the whole game against 5,900 of skins.
+// DECISION: levelResult pays only the win payout (see above). In-level coin
 //   pops (bites, sizzle, gull miss) are credited by game.js through addCoins(n, why). `coins` returned is the win payout only;
 //   gifts/milestone/chest carry their own already-credited amounts.
 // DECISION: a booster unlock gift is granted when cur REACHES the unlock level (win L5 -> arrive L6 -> Magnet x2), so the
@@ -62,7 +69,8 @@ export const TOWN_LEVELS = 20;
 export const MILESTONE_EVERY = 15, MILESTONE_COINS = 60;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS * 10 + 99; // 18,699
 export const TUT = { drag: 1, recipe: 2, padlock: 4, stars: 8, pens: 16, rolling: 32, fragile: 64, belt: 128, twocourse: 256, simmer: 512, gulls: 1024, truck: 2048, layered: 4096, freeze: 8192 };
-const WIN_A = 10, WIN_B = 5, REPLAY_A = 3, DAILY_A = 40, DAILY_B = 10;
+const WIN_A = 10, STAR_PAY = [0, 5, 10, 20], REPLAY_A = 3, DAILY_A = 40, DAILY_B = 10;
+const SMALL_CHEST = { 1: 30, 5: 40, 10: 50, 15: 60 };
 const CHEST_COINS = [150, 150, 300], CHEST_BOOST = 2;
 const MAX_COINS = 9999999, MAX_BOOST = 99, DAILY_KEEP = 30, GHOST_MAX = 99, FEAST_MAX = 9999;
 const IST_MS = 5.5 * 3600e3, DAY_MS = 86400e3;
@@ -525,7 +533,7 @@ export function levelResult(n, r = {}) {
   const prev = d.stars[n - 1] | 0;
   const first = prev === 0;
   const newStars = Math.max(0, st - prev);
-  let pay = first ? WIN_A + WIN_B * st : REPLAY_A + WIN_B * newStars;
+  let pay = first ? WIN_A + STAR_PAY[st] : REPLAY_A + STAR_PAY[Math.max(st, prev)] - STAR_PAY[prev];
   if (isFinale(n)) pay *= 2;
   d.stars[n - 1] = Math.max(prev, st);
   d.cur = Math.max(d.cur, Math.min(LEVELS + 1, n + 1));
@@ -535,6 +543,7 @@ export function levelResult(n, r = {}) {
   const gifts = unlockGifts();
   const milestones = claimMilestones();
   const chests = claimChests();
+  if (first && SMALL_CHEST[n]) { d.coins = Math.min(MAX_COINS, d.coins + SMALL_CHEST[n]); chests.push({ coins: SMALL_CHEST[n] }); }
   d.cur = Math.min(LEVELS + 1, d.stars.reduce((hi, v, i) => (v > 0 ? i + 1 : hi), 0) + 1);
   save(true);
   reportScore();

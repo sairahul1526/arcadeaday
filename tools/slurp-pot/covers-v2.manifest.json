@@ -1,0 +1,62 @@
+{
+  "cover-melon-1": {
+    "prompt": "Tight close-up of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot and its big happy eyes fill the frame, a huge juicy watermelon half tipping into the open top rim, red juice droplets and seeds flying, bright gingham cloth and sunny blue-green background blurred softly behind.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "5775c35d8944c10093558e2b9eace423"
+    ],
+    "bytes": 90712,
+    "at": "2026-11-06T08:10:08.981Z"
+  },
+  "cover-gulp-1": {
+    "prompt": "Front-and-centre hero shot of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot is large in the middle, mid-gulp, eyes wide with joy, an oversized strawberry cake sliding down into its open top rim, strawberries and cupcakes swirling in a spiral into the pot, bright red and white gingham picnic cloth below, clear blue sky with soft clouds and a green park with toy trees behind.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "a6d4e05d1994147584351a3d71b16ac8"
+    ],
+    "bytes": 57406,
+    "at": "2026-11-06T08:10:11.342Z"
+  },
+  "cover-melon-2": {
+    "prompt": "Tight close-up of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot and its big happy eyes fill the frame, a huge juicy watermelon half tipping into the open top rim, red juice droplets and seeds flying, bright gingham cloth and sunny blue-green background blurred softly behind.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "d49d0eeedb9f42baee34132e41bbbaab"
+    ],
+    "bytes": 56132,
+    "at": "2026-11-06T08:10:12.924Z"
+  },
+  "cover-gulp-2": {
+    "prompt": "Front-and-centre hero shot of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot is large in the middle, mid-gulp, eyes wide with joy, an oversized strawberry cake sliding down into its open top rim, strawberries and cupcakes swirling in a spiral into the pot, bright red and white gingham picnic cloth below, clear blue sky with soft clouds and a green park with toy trees behind.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "ec81fba1e7c9fae3d2e0ff2c117bcce8"
+    ],
+    "bytes": 88662,
+    "at": "2026-11-06T08:10:18.462Z"
+  },
+  "cover-spiral-1": {
+    "prompt": "Three-quarter top view of a whole toy picnic spiralling into the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot sits in the middle of a big red and white gingham blanket on bright green grass, sandwiches, fruit, cupcakes, a wicker picnic basket and a small wooden bench all swirling in a spiral into the pot's open top rim, the classic swallow-everything look, sunny and saturated.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "bd76bff7be7f0d95bc1e0b4c147f8f34"
+    ],
+    "bytes": 204592,
+    "at": "2026-11-06T08:10:50.234Z"
+  }
+}

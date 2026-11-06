@@ -142,8 +142,10 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(hud.meter.x, below + Math.max(3, U(4)), hud.meter.w, sh); below = hud.strip.y + sh; }
     hud.callout = R(safe.x + U(10), below + Math.max(4, U(6)), SW - U(20), ch);
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
-    let y0 = sb - 0.4 * SH - colH / 2;
-    y0 = clamp(y0, hud.callout.y + ch + U(8), sb - U(12) - colH);
+    // DECISION (Friday fix U5): the booster column used to sit at 40 % of the screen height, on live play space; it now
+    //   rides the lowest right corner just above the safe area (thumb reach, off the pot's usual line), like landscape.
+    let y0 = sb - U(12) - colH;
+    y0 = Math.max(y0, hud.callout.y + ch + U(8));
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
     const py = hud.callout.y + ch;
     play = R(safe.x, py, SW, sb - py);
@@ -196,8 +198,11 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   const cmg = Math.max(10, U(16)), MH = menu.h;
   let card;
   if (aspect === 'landscape') {
-    const ch = MH - 2 * Math.max(8, U(12));
-    const cw = Math.min(SW - 2 * cmg, Math.max(U(660), Math.min(ch * 1.75, U(780))));
+    // DECISION (U11): on a big desktop the card stops growing at 1.35x (a 1.6x card is a stretched sheet with its
+    //   content scattered), and it hugs its content height instead of filling the screen.
+    const uc = Math.min(u, 1.35), Uc = v => v * uc;
+    const ch = Math.min(MH - 2 * Math.max(8, U(12)), Math.max(Uc(560), 350));
+    const cw = Math.min(SW - 2 * cmg, Math.max(Uc(660), Math.min(ch * 1.75, Uc(780))));
     card = R(safe.x + (SW - cw) / 2, menu.y + (MH - ch) / 2, cw, ch);
     card.wide = true;
     card.cu = clamp(Math.min(cw / 640, ch / 350), 0.5, record ? 3 : 2.2);
@@ -264,19 +269,25 @@ export function cardLayout(L, name, opts = {}) {
     const iconB = Math.max(48, u * 58), lab = Math.max(12.5, u * 13), cellW = Math.max(iconB + 8, lab * 5.2);
     const n = 6;
     const ids = ['map', 'daily', 'feast', 'cookbook', 'shop', 'settings'];
-    if (L.aspect === 'landscape') {
-      const half = S.w / 2;
-      const left = R(S.x + P2, S.y + topH + P2, half - 2 * P2, S.h - topH - 2 * P2);
-      const right = R(S.x + half + P2 * 0.5, S.y + topH + P2, half - 1.5 * P2, S.h - topH - 2 * P2);
-      B.logo = R(left.x, left.y, left.w, Math.min(left.h * 0.34, u * 120));
-      B.pot = R(left.x, B.logo.y + B.logo.h, left.w, left.y + left.h - (B.logo.y + B.logo.h));
+    // DECISION (Friday fix): a landscape screen with room (>= 600 px tall, a desktop) uses the phone's centred column (wordmark,
+    //   pot, PLAY) scaled up; only short landscape phones keep the two-column group, with the wordmark centred over it.
+    if (L.aspect === 'landscape' && S.h < 600) {
+      // DECISION (U11): on a wide desktop the logo/pot and PLAY form one centred group (max ~ 780u wide), not two ends of the screen.
+      const gw = Math.min(S.w, Math.max(900, u * 780)), gx = S.x + (S.w - gw) / 2, half = gw / 2;
+      const left = R(gx + P2, S.y + topH + P2, half - 2 * P2, S.h - topH - 2 * P2);
+      const logoH2 = Math.min(left.h * 0.34, u * 120);
+      const right = R(gx + half + P2 * 0.5, left.y, half - 1.5 * P2, left.h);
+      B.pot = R(left.x, left.y + logoH2, left.w, left.h - logoH2);
       const pw = Math.min(right.w, Math.max(220, u * 320)), ph = Math.max(60, u * 74);
       // DECISION: balanced rows: 6 icons that need two rows go 3 + 3, never 5 + 1 or 4 + 2
       const fit = Math.max(1, Math.min(n, Math.floor((right.w + 6) / (cellW + 6))));
       const perRow = Math.ceil(n / Math.ceil(n / fit));
       const rowsN = fb ? 0 : Math.ceil(n / perRow), rowH = iconB + lab * 1.5 + 6;
       const total = ph + (rowsN ? gap * 2 + rowsN * rowH : 0);
-      let y = right.y + Math.max(0, (right.h - total) / 2);
+      // wordmark centred over the whole group when the right stack fits under it, else over the left column only
+      const wideLogo = total + logoH2 <= left.h;
+      B.logo = wideLogo ? R(gx + P2, left.y, gw - 2 * P2, logoH2) : R(left.x, left.y, left.w, logoH2);
+      let y = right.y + Math.max(wideLogo ? logoH2 : 0, (right.h - total) / 2);
       B.play = R(right.x + (right.w - pw) / 2, y, pw, ph); btn('play', B.play, true);
       y += ph + gap * 2;
       if (!fb) iconGrid(ids, right.x, y, right.w, perRow, cellW, iconB, rowH, lab);
@@ -322,8 +333,9 @@ export function cardLayout(L, name, opts = {}) {
       { id: 'hero', h: U(150), min: 0, gap },
     ];
     const rowsR = fail ? [
-      { id: 'bar', h: Math.max(40, U(56)), min: 38, gap },
-      { id: 'lines', h: Math.max(42, U(52)), min: 40, gap },
+      // DECISION (Friday fix U2): with an ingredient line missing the size bar is hidden and its room goes to the order row.
+      ...(opts.noBar ? [] : [{ id: 'bar', h: Math.max(40, U(56)), min: 38, gap }]),
+      { id: 'lines', h: opts.noBar ? Math.max(70, U(96)) : Math.max(42, U(52)), min: opts.noBar ? 56 : 40, gap },
       ...(opts.canFreeze ? [{ id: 'freeze', h: Math.max(48, U(54)), min: 48, gap: gap * 1.4 }] : []),
       { id: 'retry', h: retryH, min: retryH, gap: gap * 1.4 },
       { id: 'sec', h: secH, min: secH, gap },
@@ -632,7 +644,14 @@ export function cardLayout(L, name, opts = {}) {
 
   // Generic placeholder / info card (shop, cookbook, daily, feast, alldone, gift, ...): icon, title, body, primary?, back
   {
-    const rows = [
+    // DECISION (Friday fix): a locked Daily/Feast card reads top-down as one column: title, (what it is), art, line, Back.
+    const rows = opts.locked ? [
+      { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2 },
+      ...(opts.locked === 'daily' ? [{ id: 'sub', h: fs.body * 2.6, min: fs.body * 1.5, gap: gap * 0.4 }] : []),
+      { id: 'icon', h: U(opts.locked === 'daily' ? 110 : 150), min: 48, gap },
+      { id: 'body', h: fs.body * 2.4, min: fs.body * 1.5, gap },
+      { id: 'back', h: secH, min: secH, gap: gap * 1.4 },
+    ] : [
       { id: 'icon', h: U(120), min: 48 },
       { id: 'title', h: fs.title * 1.4, min: fs.title * 1.2, gap },
       { id: 'body', h: fs.body * 3.4, min: fs.body * 2.8, gap },
@@ -640,11 +659,12 @@ export function cardLayout(L, name, opts = {}) {
       ...(opts.second && !wide ? [{ id: 'second', h: secH + 4, min: secH, gap: gap * 1.1 }] : []),
       ...(opts.noBack ? [] : [{ id: 'back', h: secH, min: secH, gap: gap * 1.2 }]),
     ];
+    const ri = rows.findIndex(r => r.id === 'icon');
     // DECISION: a card whose primary already closes it (gift: Collect) has no Back button (opts.noBack).
     // DECISION: spare card height goes to the icon/art block first (as the win/fail hero), then the rest is centred.
     let s = stack(inner.x, inner.y, inner.w, inner.h, rows);
     const spare = inner.h - (s._end - inner.y);
-    if (spare > 8) { rows[0].h += Math.min(spare * 0.6, U(130)); s = stack(inner.x, inner.y, inner.w, inner.h, rows); }
+    if (spare > 8) { rows[ri].h += Math.min(spare * 0.6, U(opts.locked ? 70 : 130)); s = stack(inner.x, inner.y, inner.w, inner.h, rows); }
     const used = s._end - inner.y, d = Math.max(0, (inner.h - used) / 2);
     for (const k in s) if (k !== '_end') { s[k].y += d; B[k] = s[k]; }
     const bw = Math.min(inner.w, Math.max(200, U(260)));
@@ -701,7 +721,9 @@ function mapLayout(L, out, opts) {
     sideW = cw + 2 * P2;
     const colH = 2 * rowH + P2, y0 = view.y + Math.max(0, (view.h - colH) / 2);
     ids.forEach((id, i) => {
-      const left = i < 2, cx = left ? S.x + P2 + cw / 2 : S.x + S.w - P2 - cw / 2;
+      // DECISION (U11): the side buttons sit just outside the map column, not out at the far screen edges.
+      const cw0 = Math.min(view.w - 2 * sideW, Math.max(340, u * 470)), colL = view.x + (view.w - cw0) / 2, colR = colL + cw0;
+      const left = i < 2, cx = left ? Math.max(S.x + P2 + cw / 2, colL - P2 * 1.5 - cw / 2) : Math.min(S.x + S.w - P2 - cw / 2, colR + P2 * 1.5 + cw / 2);
       const r = R(cx - iconB / 2, y0 + (i % 2) * (rowH + P2), iconB, iconB);
       B.icons.push({ id, r, lab: R(cx - cw / 2, r.y + iconB + 2, cw, lab * 1.3) }); btn(id, r);
     });

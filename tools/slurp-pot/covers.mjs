@@ -3,13 +3,14 @@
 // become the in-game wide cover plus a review sheet for the pick.
 //   node tools/slurp-pot/covers.mjs [pick=a] [--sheet <png>]
 // Writes:
+//   games/slurp-pot/og.jpg   1200x630 jpeg, same art + wordmark
 //   games/slurp-pot/art/cover-wide.webp   1280x720 q72, "Slurp Pot" wordmark top-left in the empty sky
 //   studio/art-raw/slurp-pot/media/cover-{wide,tall,square}.png   the picked raws, for tools/portal-media.mjs
 //   <sheet> (default studio/<today>/art/covers-sheet.png)   every concept clean + titled at 256 and 128 px wide,
 //      with thumbnail contrast numbers (luminance spread, title-area darkness, subject/sky separation)
 // The title look follows tools/portal-media.mjs (Lilita One, gold gradient) with the Slurp Pot ink #3A2418.
 import { chromium } from 'playwright';
-import { readFile, writeFile, mkdir, copyFile, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, access, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
 const ROOT = join(dirname(new URL(import.meta.url).pathname), '..', '..');
@@ -21,8 +22,8 @@ const si = args.indexOf('--sheet');
 const SHEET = si >= 0 ? args[si + 1] : join(ROOT, 'studio', today, 'art', 'covers-sheet.png');
 const exists = p => access(p).then(() => true, () => false);
 
-const IDS = [];
-for (const id of ['a', 'b', 'c', 'd', 'e']) if (await exists(join(RAW, `cover-${id}.png`))) IDS.push(id);
+// ids: a..e (first round) and <concept>-<take> such as gulp-3 (Friday round)
+const IDS = (await readdir(RAW)).map(f => f.match(/^cover-([a-e]|(?:gulp|melon|spiral)-\d+)\.png$/)?.[1]).filter(Boolean).sort();
 if (!IDS.includes(pick)) { console.error(`no ${join(RAW, `cover-${pick}.png`)} (have: ${IDS.join(', ') || 'none'})`); process.exit(1); }
 
 const data = async f => `data:image/png;base64,${(await readFile(f)).toString('base64')}`;
@@ -74,6 +75,11 @@ const pickSrc = await data(join(RAW, `cover-${pick}.png`));
 const wide = await render(pickSrc, 1280, 720, true, 'image/webp', 0.72);
 await writeFile(join(ROOT, 'games/slurp-pot/art/cover-wide.webp'), Buffer.from(wide.b64, 'base64'));
 console.log(`✓ games/slurp-pot/art/cover-wide.webp from cover-${pick} (${(Buffer.from(wide.b64, 'base64').length / 1024).toFixed(1)} KB)`);
+
+// 1b) og image: 1200x630 jpeg of the same art with the wordmark (no bands)
+const og = await render(pickSrc, 1200, 630, true, 'image/jpeg', 0.82);
+await writeFile(join(ROOT, 'games/slurp-pot/og.jpg'), Buffer.from(og.b64, 'base64'));
+console.log(`✓ games/slurp-pot/og.jpg 1200x630 (${(Buffer.from(og.b64, 'base64').length / 1024).toFixed(1)} KB)`);
 
 // 2) raws for tools/portal-media.mjs (Sunday ship)
 await mkdir(MEDIA, { recursive: true });

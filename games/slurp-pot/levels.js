@@ -1887,6 +1887,125 @@ function addDecor(c) {
     c.decor.push({ kind: dk, x: r3(x), z: r3(z), rot: r3((ri(c, 64) * TAU) / 64 - PI), s: r3(rr(c, 0.8, 1.25)) });
   }
 }
+// DECISION (11-06 Fri, L2 starter patch): L2–L10 (spec.starter) open with a dense bite-sized patch in the first portrait
+// screen, and one item of the leading order line in that screen (critics: L2 stood still for 12 s with nothing to eat, the
+// first order item sat 7–19 u off). Existing zone-0 T0/T1 junk moves into the patch from the far board and one ingredient
+// moves next to it, so supply, margin, counts and every kind stay as they were. Items move in place: bossPos and other
+// indices hold, and nothing here touches c.rng, so decor and the rest of the level keep their draws. A pen line cannot
+// lead (pulling a pen's apple out would undo the pen): the first line with an open item leads the order on the card.
+const SCREEN_HX = 2.3, SCREEN_HZ = 5, PATCH_R = 1.6, PATCH_N = 14, SLOT = 0.5;
+/** Hex grid of slots inside radius rad of (x, z), centre first. */
+function hexSlots(x, z, rad, step) {
+  const out = [];
+  const nz = Math.ceil(rad / (step * 0.866));
+  for (let j = -nz; j <= nz; j++) for (let i = -nz - 1; i <= nz + 1; i++) {
+    const px = (i + (j & 1 ? 0.5 : 0)) * step, pz = j * step * 0.866, d = hyp(px, pz);
+    if (d <= rad) out.push({ x: x + px, z: z + pz, d });
+  }
+  return out.sort((a, b) => a.d - b.d || a.x - b.x || a.z - b.z);
+}
+/** canPlace for an item already on the board: it must not block itself, so it parks off-board while asked. */
+function canMove(c, o, x, z) {
+  const ox = o.x, oz = o.z;
+  o.x = 1e6; o.z = 1e6;
+  const ok = canPlace(c, x, z, o.a, o.tier, { zone: 0 }) && contrastOK(c, KIND[o.kind], x, z);
+  o.x = ox; o.z = oz;
+  return ok;
+}
+function starterPatch(c) {
+  const sp = c.spawn, biteA = FIT * c.r0;
+  const free = (x, z) => canPlace(c, x, z, 0.24, 1, { zone: 0 });
+  let best = null, bs = -1;
+  for (const d of [3.4, 3, 3.8, 2.6]) for (const dx of [0, 0.7, -0.7]) {
+    const x = sp.x + dx, z = sp.z - d;
+    const n = hexSlots(x, z, PATCH_R, SLOT).filter(q => free(q.x, q.z)).length;
+    if (n > bs) { bs = n; best = { x, z }; }
+  }
+  const bite = o => o.role !== 'wall' && o.role !== 'gate' && o.role !== 'boss' && o.lane < 0 && o.belt < 0 && canFit(c.r0, o.a);
+  const inPatch = o => bite(o) && hyp(o.x - best.x, o.z - best.z) <= PATCH_R;
+  // the leading line's item goes first, so it takes the patch's best slot
+  const lines = c.spec.tickets[0].lines;
+  const openOf = l => c.items.filter(o => o.kind === l.kind && o.role === 'ing' && o.zone === 0 && o.lane < 0 && o.belt < 0 && !o.stack);
+  const inView = (o) => Math.abs(o.x - sp.x) <= SCREEN_HX && Math.abs(o.z - sp.z) <= SCREEN_HZ;
+  let li = lines.findIndex(l => l.place === 'roll' || openOf(l).length);
+  if (li < 0) li = 0;
+  c.leadLine = li;
+  const L = lines[li];
+  if (L.place !== 'roll' && !c.items.some(o => o.kind === L.kind && inView(o))) {
+    const os = openOf(L).sort((a, b) => hyp(a.x - sp.x, a.z - sp.z) - hyp(b.x - sp.x, b.z - sp.z));
+    const slots = hexSlots(best.x, best.z, 4, 0.25).filter(q => Math.abs(q.x - sp.x) <= SCREEN_HX - 0.3 && Math.abs(q.z - sp.z) <= SCREEN_HZ - 0.3);
+    if (os.length) for (const q of slots) if (canMove(c, os[0], q.x, q.z)) { os[0].x = r3(q.x); os[0].z = r3(q.z); break; }
+  }
+  // far junk moves in, biggest bites first (T1 feeds a real step of growth), spread over the far board
+  const pool = c.items.filter(o => o.role === 'junk' && o.tier <= 1 && o.zone === 0 && bite(o) && !o.stack && hyp(o.x - sp.x, o.z - sp.z) > SCREEN_HZ + 1.5)
+    .sort((a, b) => b.a - a.a || hyp(b.x - sp.x, b.z - sp.z) - hyp(a.x - sp.x, a.z - sp.z));
+  let have = c.items.filter(inPatch).length;
+  for (const q of hexSlots(best.x, best.z, PATCH_R, SLOT)) {
+    if (have >= PATCH_N) break;
+    const i = pool.findIndex(o => canMove(c, o, q.x, q.z));
+    if (i < 0) continue;
+    const o = pool.splice(i, 1)[0];
+    o.x = r3(q.x); o.z = r3(q.z);
+    have++;
+  }
+  c.piles.push({ x: r3(best.x), z: r3(best.z), r: PATCH_R });
+}
+// DECISION (11-06 Fri, L3 snack piles): L21–L60 get 5 to 12 tight piles of T0/T1 food on top of the tuned layout (critics:
+// wide boards with sparse food from L30 on), one of them in view of spawn. A post-pass with its own rng: it appends items
+// after everything else, so a level keeps every item and draw it had, and Daily and Feast (n 0) never get here. A pile uses
+// only T0/T1 food kinds the level already has, so the kind cap holds and the ingredient counts do not move.
+const PILE_FROM = 21, PILE_R = 0.95, PILE_STEP = 0.4, PILE_MIN = 6;
+function snackPiles(c, spec, seed) {
+  const pc = Object.create(c);
+  pc.rng = mulberry32((seed ^ 0x51ac4b1e) >>> 0);
+  const ids = [...new Set(c.items.filter(o => o.role === 'junk' && o.tier <= 1 && KIND[o.kind].food).map(o => o.kind))].sort();
+  if (!ids.length) return;
+  const want = Math.round(5 + (7 * (spec.n - PILE_FROM)) / (LEVELS - PILE_FROM));
+  const sp = c.spawn, slotsAt = (x, z) => hexSlots(x, z, PILE_R, PILE_STEP);
+  const open = (x, z, zone) => slotsAt(x, z).filter(q => canPlace(c, q.x, q.z, 0.2, 1, { zone })).length;
+  const fill = (x, z, zone, n) => {
+    const kinds = [ids[ri(pc, ids.length)], ids[ri(pc, ids.length)], ids[ri(pc, ids.length)]];
+    let done = 0;
+    for (const q of slotsAt(x, z)) {
+      if (done >= n || c.items.length >= ITEM_MAX) break;
+      for (let j = 0; j < 3; j++) {
+        const k = KIND[kinds[(done + j) % 3]];
+        if (!canPlace(c, q.x, q.z, k.a, k.tier, { zone }) || !contrastOK(c, k, q.x, q.z)) continue;
+        addItem(pc, k.id, q.x, q.z, { zone }); done++;
+        break;
+      }
+    }
+    if (done < PILE_MIN) { c.items.length -= done; return false; }
+    c.piles.push({ x: r3(x), z: r3(z), r: r3(PILE_R + 0.15) });
+    return true;
+  };
+  // the pile in view of spawn: the first screen is ±2.3 by ±5 u
+  let best = null, bs = 0;
+  for (const d of [3.2, 2.8, 3.6, 2.4]) for (const dx of [0, 0.8, -0.8, 1.2, -1.2]) {
+    const x = sp.x + dx, z = sp.z - d, zone = zoneAt(c, x, z), n = open(x, z, zone);
+    if (n > bs) { bs = n; best = { x, z, zone }; }
+  }
+  if (best) fill(best.x, best.z, best.zone, 10);
+  // DECISION (11-06 Fri, L3 snack piles): busy starts (L26, L32, L36, L45, L53, L55, L59, L60 on the first run) have no room
+  // straight ahead, so the first pile takes the roomiest spot anywhere on the first screen. A level that placed one above skips this.
+  if (!c.piles.length) {
+    const spots = [];
+    for (let dz = -4; dz <= 4; dz += 0.5) for (let dx = -1.25; dx <= 1.25; dx += 0.25) {
+      if (hyp(dx, dz) < 1.8) continue;
+      const x = sp.x + dx, z = sp.z + dz, zone = zoneAt(c, x, z);
+      spots.push({ x, z, zone, n: open(x, z, zone), d: hyp(dx, dz) });
+    }
+    spots.sort((a, b) => b.n - a.n || a.d - b.d);
+    for (const q of spots) if (q.n < PILE_MIN || fill(q.x, q.z, q.zone, 10)) break;
+  }
+  for (let tr = 0; tr < want * 60 && c.piles.length < want && c.items.length < ITEM_MAX - PILE_MIN; tr++) {
+    const g = pickRegion(pc, 1), [x, z] = sampleIn(pc, g), zone = g.zone;
+    if (zone > 0 && tr < want * 30) continue;
+    if (hyp(x - sp.x, z - sp.z) < 6 || c.piles.some(p => hyp(x - p.x, z - p.z) < 5)) continue;
+    if (open(x, z, zone) < 12) continue;
+    fill(x, z, zone, 8 + ri(pc, 3));
+  }
+}
 function largestRemainder(mix, M) {
   const raw = mix.map(p => (p * M) / 100);
   const out = raw.map(Math.floor);
@@ -1939,7 +2058,10 @@ export function genLevel(spec, seed) {
   fixFood(c);
   fixGates(c);
   fixMargin(c);   // DECISION: a second pass, since fixFood / fixGates swaps can move the margin
+  c.piles = [];
+  if (spec.starter) starterPatch(c);
   addDecor(c);
+  if (spec.n >= PILE_FROM) snackPiles(c, spec, seed);
   // DECISION (Sim 11-03): the expanded level carries its zone graph (level.zoneGraph) so bots need not import levels.js.
   const lv = finish(c, spec, seed);
   lv.zoneGraph = zoneGraph(lv);
@@ -1963,6 +2085,7 @@ function finish(c, spec, seed) {
     lines: t.lines.map(l => ({ kind: l.kind, need: l.need, place: l.place || 'open' })),
     boss: c.bossPos[ti] != null ? c.bossPos[ti] : -1,
   }));
+  if (c.leadLine > 0) tickets[0].lines.unshift(tickets[0].lines.splice(c.leadLine, 1)[0]);
   const tw = spec.twist || {};
   return {
     n: spec.n, name: spec.name, town: spec.town, arch: spec.arch, W: c.W, D: c.D, x0: c.x0, x1: c.x1, z0: c.z0, z1: c.z1,
@@ -1976,5 +2099,8 @@ function finish(c, spec, seed) {
     roost: c.roost ? { x: mx(c.roost.x), z: c.roost.z } : null, gullEvery: c.gullEvery, gulls: c.gulls,
     truckPath: c.truckPath.map(p => ({ x: mx(p.x), z: p.z, stop: p.stop })), cake: c.cake,
     tickets, zones, seed: seed >>> 0,
+    // Only levels that have them carry these two, so a Daily or Feast level's expansion stays byte for byte the same.
+    ...(spec.grace > 0 ? { grace: spec.grace } : null),
+    ...(c.piles.length ? { piles: c.piles.map(p => ({ x: mx(p.x), z: p.z, r: p.r })) } : null),
   };
 }

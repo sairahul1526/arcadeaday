@@ -30,6 +30,9 @@ const JOBS = [
   ['fb-banner-1200x400', 'cover-wide', 1200, 400, 0.5, { ...L, s: 0.2 }],
 ];
 
+// Vertical crop focus per game (0 top .. 1 bottom), for a size where the centre crop loses the face.
+const FY = { 'slurp-pot': { 'fb-banner-1200x400': 0.62 } }[slug] || {};
+
 const data = async f => `data:image/png;base64,${(await readFile(join(RAW, f + '.png'))).toString('base64')}`;
 const font = `data:font/woff2;base64,${(await readFile(join(ROOT, 'games/shared/fonts/lilita-one-latin.woff2'))).toString('base64')}`;
 await mkdir(OUT, { recursive: true });
@@ -37,13 +40,13 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.evaluate(async font => { const f = new FontFace('Lilita One', `url(${font})`); await f.load(); document.fonts.add(f); }, font);
 
-async function render(src, w, h, fx, t, type) {
-  return page.evaluate(async ({ src, w, h, fx, t, type }) => {
+async function render(src, w, h, fx, t, type, fy = 0.5) {
+  return page.evaluate(async ({ src, w, h, fx, fy, t, type }) => {
     const im = new Image(); im.src = src; await im.decode();
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
     const k = Math.max(w / im.width, h / im.height), dw = im.width * k, dh = im.height * k;
-    g.drawImage(im, (w - dw) * fx, (h - dh) / 2, dw, dh);
+    g.drawImage(im, (w - dw) * fx, (h - dh) * fy, dw, dh);
     if (t) {
       const s = t.s * h, n = t.lines.length, top = t.y * h - (n * s) / 2;
       if (t.band) { const gr = g.createLinearGradient(0, top - s * 0.6, 0, h); gr.addColorStop(0, 'rgba(43,36,64,0)'); gr.addColorStop(1, 'rgba(43,36,64,0.55)'); g.fillStyle = gr; g.fillRect(0, top - s * 0.6, w, h); }
@@ -58,14 +61,14 @@ async function render(src, w, h, fx, t, type) {
       });
     }
     return c.toDataURL(type, 0.9).split(',')[1];
-  }, { src, w, h, fx, t, type });
+  }, { src, w, h, fx, fy, t, type });
 }
 
 const save = async (name, b64) => { await writeFile(join(OUT, name), Buffer.from(b64, 'base64')); console.log(`✓ ${name}`); };
 for (const [name, src, w, h, fx, t] of JOBS) {
   const s = await data(src);
-  await save(`${name}-title.jpg`, await render(s, w, h, fx, t, 'image/jpeg'));
-  if (w >= 800) await save(`${name}.jpg`, await render(s, w, h, fx, null, 'image/jpeg'));
+  await save(`${name}-title.jpg`, await render(s, w, h, fx, t, 'image/jpeg', FY[name]));
+  if (w >= 800) await save(`${name}.jpg`, await render(s, w, h, fx, null, 'image/jpeg', FY[name]));
 }
 const icon = await data('icon');
 for (const n of [1024, 800, 512, 256]) await save(`icon-${n}.png`, await render(icon, n, n, 0.5, null, 'image/png'));

@@ -273,7 +273,7 @@ export function createWorld(level, { mode = 'level', boosters = {}, recordPath =
       grid, mark: new Uint32Array(ITEM_MAX), stamp: 0, cand: new Int16Array(ITEM_MAX),
       kcnt: new Int16Array(256), kneed: new Int16Array(256),
       bumpCd: 0, doomNext: DOOM_EVERY, doomAt: -1, finalBite: false, biteT: -1, biteTLeft: 0, cardFreeze: false,
-      lowSent: false, lastTick: 99, sizzleCap: SIZZLE_CAP * T, onBelt: -1,
+      lowSent: false, lastTick: 99, sizzleCap: SIZZLE_CAP * (T - (L.grace > 0 && L.grace < T ? +L.grace : 0)), onBelt: -1,
       beltDir: belts.map(b => [cosp(b.rot), -sinp(b.rot)]),
     },
   };
@@ -992,11 +992,23 @@ export function doomed(w) {
   return false;
 }
 
+// DECISION (11-06 Fri, grandparent blocker): level.grace (s, default 0) is clock time that buys no stars. A level's T
+// holds its grace, and stars keep the old pace: left = (tLeft − freezeAdded − grace) / (T − grace). A slow hand gets
+// `grace` more seconds to win with 1★; a fast kid needs the same time as before for 3★. With grace 0 this is the old
+// formula bit for bit, so Daily and Feast (which never carry grace) do not move.
+/** A level's grace in seconds: 0 unless 0 < grace < T. */
+const graceOf = w => { const g = w.level ? +w.level.grace : 0; return g > 0 && g < w.T ? g : 0; };
+/** Seconds of tLeft (Freeze excluded) that still earn 3★ and 2★. UI's clock notch reads t3. */
+export function starTimes(w) {
+  const g = graceOf(w), pace = w.T - g;
+  return { t3: g + STAR3 * pace, t2: g + STAR2 * pace };
+}
 export function starsFor(w) {
   if (!w.timed || (w.level && w.level.n === 1)) return 3;
   if (w._.cardFreeze) return 1;
   const tl = w._.finalBite ? w._.biteTLeft : w.tLeft;
-  const left = (tl - w.freezeAdded) / w.T;
+  const g = graceOf(w);
+  const left = (tl - w.freezeAdded - g) / (w.T - g);
   return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
 }
 

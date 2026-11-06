@@ -12,7 +12,8 @@
 //   instead of a blank page. meta.js is awaited first (P.init needs DEFAULT_SAVE/migrate); the rest load in parallel.
 // DECISION: UI asks game for actions through the bus ('cmd' {cmd, ...}) or by calling the api object, which is
 //   passed to ui.initUI as an extra field (initUI(canvas, { meta, audio, layout, render, bus, input, api })).
-// DECISION: the win card shows WIN_CARD_S (1.6 s + the 1.2 s slow-mo) after the logic `win` event and the fail card
+// DECISION: the win card shows WIN_CARD_S (1.6 s + the 1.2 s slow-mo) after the logic `win` event, or FIN_CARD_S after
+//   it when a final boss bite ran the finisher (the stamp already landed on the boom), and the fail card
 //   FAIL_CARD_S after `fail`, counted in real frame time (paused time does not count); qa forceResult shows at once.
 // DECISION: a host pause opens the Pause card only on the web when the tab is actually hidden (P.env === 'web' and
 //   document.hidden), never on yt or a portal's own pause (§11.1).
@@ -24,6 +25,14 @@ import { createInput } from './input.js';
 
 const PAPER = '#FFF6E3', PAPER_SHADE = '#EBD9B8', INK = '#3A2418', GOLD = '#F5B323', GOLD_SHADE = '#B9770E', STAMP = '#E5483B';
 const WIN_CARD_S = 1.2 + 1.6;   // slow-mo (real s) + the ORDER UP stamp hold
+const FIN_CARD_S = 0.8;          // after a final boss bite: `win` lands ~1.3 s in, the finisher ends at 1.9, so the card comes at ~2.1 s
+// DECISION (11-06 Fri, mercy clock): a level gives no fixed long clock past the first session, because that took the sweat away from
+//   everyone (casual 100 % on L4 to L15). Each straight time-out on a campaign level adds MERCY_STEP of the pace to the next try
+//   as extra grace, up to MERCY_MAX steps: a fast hand still feels the first clock, a slow hand always gets through, and the stars
+//   keep the old pace. Spoiled orders get none because more time cannot help. A win or another level resets it. Daily and Feast
+//   never get it. Tuning and verify read the base level, so no stored stat moves.
+const MERCY_STEP = 0.4, MERCY_MAX = 3;
+const mercySecs = (lvl, fails) => Math.min(fails, MERCY_MAX) * Math.round(MERCY_STEP * (lvl.T - (lvl.grace > 0 ? +lvl.grace : 0)));
 const FAIL_CARD_S = 0.8;
 const PERF_AFTER_S = 20;
 const SCREENS = ['title', 'map', 'play', 'win', 'fail', 'pause', 'daily', 'feast', 'shop', 'cookbook', 'settings', 'alldone', 'gift',
@@ -483,6 +492,12 @@ function startLevel(n, opt = {}) {
     } else lvl = levels.getLevel(n);
   } catch (e) { report(e); return false; }
   if (!lvl) return false;
+  if (kind === 'level') {
+    if (S.mercyN !== n) { S.mercyN = n; S.mercy = 0; }
+    S.mercyBase = lvl;
+    const m = mercySecs(lvl, S.mercy | 0);
+    if (m > 0) lvl = { ...lvl, T: lvl.T + m, grace: (lvl.grace > 0 ? +lvl.grace : 0) + m, mercy: m };
+  }
   const town = lvl.town;
   let w = null;
   const wopt = kind === 'record' ? { mode: 'record', boosters: {}, recordPath: lvl.path || null } : { mode: kind, boosters: boostersFor(n, kind) };
@@ -493,7 +508,7 @@ function startLevel(n, opt = {}) {
   S.started = false; S.resultDone = false; S.cardFreezeUsed = false; S.queue = null;
   S.run = { eaten: {}, big: 0, boosts: 0 };
   S.retry = !!opt.retry && sameLevel;
-  acc = 0; slowT = 0;
+  acc = 0; slowT = 0; S.finBite = false;
   if (render3d) safe(render3d.loadLevel, lvl, save().wear || 'sunny');
   if (audio) { safe(audio.setTown, town); if (has(audio, 'setFeast')) safe(audio.setFeast, kind === 'feast'); }
   S.bot = (S.botOn && bots && safe(bots.createBot, S.botKind, (lvl.seed | 0) + 1)) || null;
@@ -542,7 +557,7 @@ bus.on('start', () => {
 //   (feastStep owns the course roll-over); a non-final cake tier (cakeTier {tier, i}) gets the boss bite's slow-mo
 //   for CAKE_SLOWMO_REAL s. P.happyTime stays on the winning bite only (one host signal per level).
 bus.on('bossBite', ev => {
-  if (ev && ev.final && !ev.feast && S.kind !== 'feast') { slowT = C.SLOWMO_REAL; safe(P.happyTime); }
+  if (ev && ev.final && !ev.feast && S.kind !== 'feast') { slowT = C.SLOWMO_REAL; S.finBite = true; safe(P.happyTime); }
 });
 bus.on('cakeTier', () => { if (S.screen === 'play') slowT = Math.max(slowT, num(C.CAKE_SLOWMO_REAL, 0.6)); });
 // §3.9 in-level coins (meta.levelResult pays only the win): +1 on every 10th bite, +2 per sizzle. Not in record/og.
@@ -583,7 +598,7 @@ function onWin(ev, now) {
   //   event carries 3 stars (drain sets them) for the ORDER UP stamp beat (§12.2 19.5-21.5).
   if (S.resultDone) return;
   if (S.kind === 'feast') return; // Sim 12:32: the Feast never wins; feastStep rolls courses and the clock ends it
-  S.resultDone = true; S.live = false;
+  S.resultDone = true; S.live = false; S.mercy = 0;
   const w = S.w;
   if (input) input.enable(false);
   safe(P.gameplayStop);
@@ -608,7 +623,7 @@ function onWin(ev, now) {
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
   if (S.kind === 'record') return;
   if (now) go('win', data);
-  else S.pend = { t: WIN_CARD_S, screen: 'win', data };
+  else S.pend = { t: S.finBite ? FIN_CARD_S : WIN_CARD_S, screen: 'win', data };
 }
 /** The Daily level's own IST key (a run started before midnight still pays that day), else today's. */
 function dailyKeyOf() {
@@ -663,6 +678,7 @@ function onFail(ev, now) {
     safe(P.flush);
   }
   const data = { n: S.n, kind: S.kind, why, progress: w ? (safe(logic.sizeBar, w) || 0) : 0, missing: ev.missing || [], canFreeze: canFreeze(why), ...(ev.data || {}) };
+  if (S.kind === 'level' && why === 'timeout' && S.mercyBase) { S.mercy = (S.mercy | 0) + 1; data.mercy = mercySecs(S.mercyBase, S.mercy); }
   if (now) go('fail', data);
   else S.pend = { t: FAIL_CARD_S, screen: 'fail', data };
 }

@@ -20,11 +20,13 @@
 
 import P from '../shared/platform.js';
 import { computeLayout, cardLayout, insets as safeInsets, setTicketLines } from './layout.js';
-import { LOW_TIME, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, LID_MAX, TOWNS } from './consts.js';
+import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, LID_MAX, TOWNS } from './consts.js';
 
 // Optional sibling modules: the UI keeps drawing with local fallbacks until they load.
 let LG = null, CAT = null, LV = null;
 import('./logic.js').then(m => { LG = m; }, () => {});
+let BOTS = null;
+import('./bots.js').then(m => { BOTS = m; }, () => {});
 import('./levels.js').then(m => { LV = m; specCache.clear(); }, () => {});
 const specCache = new Map();
 function specOf(n) {
@@ -61,25 +63,25 @@ const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const back = t => { t = clamp(t, 0, 1); const s = 1.7; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); };
 
 export const STR = {
-  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', allDoneBtn: 'All done!', retry: 'RETRY',
+  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', allDoneBtn: 'All done!', retry: 'RETRY', retryMore: 'RETRY +{n}s', extraTime: 'Extra time! +{n}s',
   replay: 'Replay', map: 'Map', resume: 'Resume', restart: 'Restart', settings: 'Settings', paused: 'Paused',
   orderUp: 'ORDER UP!', serveIt: 'Serve it!', soClose: 'SO CLOSE!', almost: 'Almost!', outOfTime: 'Out of time!',
-  spoiled: 'Spoiled!', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', timeLeft: '{t} left',
-  bestChain: 'Best chain ×{n}', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: '{skin} in {n} coins',
+  spoiled: 'Spoiled!', spoilLeft: 'Not enough {name} left', spoilLeftShort: 'Ran out of food', spoilGrow: 'Not enough food left to grow', spoilGrowShort: 'Ran out of food', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', timeLeft: '{t} left',
+  bestChain: 'Best chain ×{n}', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} coins', nextSkinShort: 'Next pot: {n} coins',
   dragToMove: 'Drag to move', growToOpen: 'Grow to open', lidOn: 'Lid on! Go around', fasterStars: 'Faster = more',
   daily: 'Daily', feast: 'Feast', cookbook: 'Cookbook', cookbookShort: 'Book', shop: 'Shop', back: 'Back', done: 'Done',
-  music: 'Music', sound: 'Sound', showStick: 'Show stick', reset: 'Reset progress', resetSure: 'Tap again to reset',
-  credits: 'Slurp Pot · Arcade a Day', on: 'On', off: 'Off', unlocksAt: 'Unlocks at Level {n}',
+  music: 'Music', sound: 'Sound', showStick: 'Show joystick', reset: 'Reset progress', resetSure: 'Tap again to reset',
+  credits: 'Slurp Pot · Arcade a Day', on: 'On', off: 'Off', unlocksAt: 'Unlocks at Level {n}', dailyOrder: 'Daily Order', dailyWhat: 'A new order every day. Cook 7 days in a row for the top prize!', dailyWhatShort: 'A new order every day', winMore1: 'Win 1 more level to unlock', winMoreN: 'Win {n} more levels to unlock', winMoreShort: 'Win {n} more',
   cookToday: "Cook today's order", startFeast: 'Start Feast', allDone: 'All 60 orders served!',
   dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', dailyDone: 'Order served! Come back tomorrow.',
   feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
   cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Head chef! Try the Daily Order and the Feast.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
   giftBody: 'Tap them during a level.', giftMagnet: 'Tap it during a level to pull food in.', giftFreeze: 'Tap it during a level for more time.',
-  giftMega: 'Tap it during a level to eat bigger food.', tooBig: 'Too big! Eat smaller food', chestT: 'Town chest!', starBonus: 'Star bonus!',
+  giftMega: 'Tap it during a level to eat bigger food.', tooBig: 'Too big! Eat smaller food', chestT: 'Town chest!', chestSmall: 'Bonus chest!', starBonus: 'Star bonus!',
   giftCoins: '+{n} coins', eachBooster: '{n} of each booster', levelLabel: 'L{n} · {name}', levelShort: 'L{n}', dailyLabel: 'Daily',
   feastLabel: 'Feast', mute: 'Sound', newBest: 'NEW BEST!', stars: '{n}', loading: 'Cooking…',
-  magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
+  thisWay: 'Try this way!', tip_magnet: 'Magnet pulls food in', tip_freeze: 'Freeze adds 10 seconds', tip_mega: 'Mega eats bigger food', magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
   nice: 'Nice!', phew: 'Phew!', savedLid: 'Saved by a lid!', lidBody: 'Your streak is safe. {n} lid left.',
   lidBody0: 'Your streak is safe!', again: 'Again', titleBtn: 'Title', feastOver: 'Feast over!', opensAt: 'Opens at L{n}',
   later: 'Later', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
@@ -212,6 +214,7 @@ function itemKind(w, i) {
 let cv = null, g = null, dpr = 1, M = null, AU = null, RD = null, BUS = null, IN = null, onAct = null;
 let L = null, Lkey = '', cssW = 0, cssH = 0;
 let T = 0;                                  // ui clock (real s)
+let lastWallMs = 0;
 let screen = 'title', prevScreen = '', cardT = 0, cardData = {}, cardStack = [];
 let btns = [], lastBtns = [], press = null, press2 = null, primary = null, kbHi = false;
 const DBG = { on: false, texts: [], over: [] };
@@ -426,7 +429,7 @@ function bindBus(bus) {
   const on = (ev, fn) => bus.on(ev, d => { try { if (hud) fn(d || {}); } catch (e) { try { P.error(e); } catch {} } });
   on('start', () => { hud.started = T; hud.lastBite = T; if (hud.n === 1 || hud.n === 2) tutSet('drag'); });
   on('bite', d => {
-    hud.lastBite = T;
+    hud.lastBite = T; hud.bites = (hud.bites || 0) + 1;
     if (d.ing) {
       const li = typeof d.ing === 'number' ? d.ing : lineIndexOf(d.kind);
       if (li >= 0) { if (hud.chipXY[li] && hud.ups.length < 8) hud.ups.push({ t0: T, li }); else hud.chipPop[li] = T; }
@@ -440,7 +443,12 @@ function bindBus(bus) {
   on('ticketDone', d => { hud.flip = T; hud.bossPulse = T; });
   on('padlock', d => { hud.padPop = T; hud.padIdx = d.i; hud.bossPoint = T; tutSet('padlock'); });
   on('bossNudge', () => { hud.padRattle = T; hud.chipNudge = T; });
-  on('bossBite', d => { if (d.final !== false) hud.orderUp = T; else { hud.course = T; } });
+  on('bossBite', d => {
+    if (d.final === false) { hud.course = T; return; }
+    // DECISION (Friday fix, finisher): render runs a boss finisher on a final bite (not in record, not Feast). The HUD ticket
+    //   and band hide for it and ORDER UP stamps at the boom (FIN_BOOM s after the bite) instead of at the bite.
+    if (d.final && !d.feast && !REC_M.record) { hud.fin = T; hud.orderUp = T + FIN_BOOM - 0.55; } else hud.orderUp = T;
+  });
   // DECISION: two-course: 'course' {k} (logic, after courseDone) starts the second-ticket unfold unless the
   //   bossBite {final:false} just did; 'tier' {k} pops the cake tier mark on the meter.
   on('course', d => { if (T - hud.course > 1) hud.course = T; hud.courseK = d.k != null ? d.k : (hud.courseK || 0) + 1; });
@@ -470,7 +478,7 @@ function newHud(w) {
   const n = (w.level && w.level.n) || 0;
   return {
     n, ti: w.ti || 0, t0: T, started: null, lastBite: T, sizeUps: 0, chipPop: [], chipXY: [], ups: [], lineDone: [], flip: -9, bossPulse: -9,
-    padPop: -9, padIdx: -1, padRattle: -9, chipNudge: -9, orderUp: -9, course: -9, chainPop: -9, chainDrop: -9, chainLast: 0,
+    padPop: -9, padIdx: -1, padRattle: -9, chipNudge: -9, orderUp: -9, course: -9, chainPop: -9, chainDrop: -9, chainLast: 0, fin: null,
     chainShown: 0, sizzle: -9, low: -9, tick: -9, boostFx: {}, frost: -9, result: null, bossPoint: -9,
     reveal: skipReveal ? -9 : T, rDisp: w.pot ? w.pot.r : 0.3, fly: null, flown: false, hintItem: -1, idleCall: false,
     twistCall: false, starHint: false, firstAttempt: !skipReveal, courseK: 0, tierPop: -9, tierK: -1, refuse: -9,
@@ -801,7 +809,12 @@ const recState = () => (typeof window !== 'undefined' && window.__recState) || n
 export function draw(state, w, dt) {
   if (!g) return;
   dt = clamp(+dt || 0, 0, 0.1);
-  T += dt; cardT += dt;
+  // DECISION (Friday fix U12): card animations run on wall time (dt above is clamped to 0.1 s, so at 5 fps a 1.2 s card
+  //   took 2.4 s and critics saw empty stars and +0). The wall step is capped at 0.5 s so a tab switch does not skip it.
+  const nowMs = typeof performance !== 'undefined' ? performance.now() : 0;
+  const wallDt = lastWallMs ? clamp((nowMs - lastWallMs) / 1000, 0, 0.5) : dt;
+  lastWallMs = nowMs;
+  T += dt; cardT += Math.max(dt, wallDt);
   const st = state || {};
   const scr = st.screen || screen;
   if (scr !== screen) { if (scr === 'map') MAP.init = ''; screen = scr; cardT = 0; press = null; kbHi = false; resetArm = -9; sfxOnce.clear(); armBuy = null; resetScreenState(); }
@@ -810,6 +823,7 @@ export function draw(state, w, dt) {
   if (w && w !== lastW) {
     lastW = w;
     hud = newHud(w);
+    calloutQ = calloutQ.filter(c => c.id !== 'tut-drag'); if (callNow && callNow.id === 'tut-drag') callNow = null;
     skipReveal = false;
     const t = w.tickets && w.tickets[w.ti || 0];
     curLines = t ? t.lines.length : 3; setTicketLines(curLines);
@@ -829,7 +843,21 @@ export function draw(state, w, dt) {
     else if (REC_M.og) drawOg(st, w);
     else if (REC_M.record) { if (w) drawHud(st, w, dt); drawRecord(st, w); }
     else {
-      if (playing && w) drawHud(st, w, dt);
+      if (playing && w) {
+        const fa = finHudA();
+        if (fa >= 0.999) drawHud(st, w, dt);
+        else if (fa > 0.01) {   // fade: draw the HUD aside, then composite it at fa
+          const main = g;
+          try {
+            if (!hudOff) hudOff = document.createElement('canvas');
+            if (hudOff.width !== cv.width || hudOff.height !== cv.height) { hudOff.width = cv.width; hudOff.height = cv.height; }
+            g = hudOff.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, hudOff.width, hudOff.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawHud(st, w, dt);
+          } finally { g = main; }
+          g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = fa; g.drawImage(hudOff, 0, 0); g.restore();
+        }
+        if (finOn()) drawOrderUp(w);
+      }
       if (screen === 'pause') drawPause(st, w);
       else if (screen === 'win') drawWin(st, w);
       else if (screen === 'fail') drawFail(st, w);
@@ -844,7 +872,7 @@ export function draw(state, w, dt) {
       else if (screen === 'feast') drawFeast(st);
       else if (screen === 'feastend') drawFeastEnd(st);
       else if (screen !== 'play') drawInfo(st, screen);
-      if (screen === 'play') drawCallout(dt);
+      if (screen === 'play' && !finOn()) drawCallout(dt);
     }
   } catch (e) { try { P.error(e); } catch {} }
   lastBtns = btns;
@@ -864,7 +892,16 @@ function drawHud(st, w, dt) {
   if (playing && !rec) { tutorialTick(st, w); stuckTick(w); }
   drawMeter(w, dt);
   if (H.strip && w.mode === 'feast') drawFeastStrip(w);
-  drawTicket(w, t);
+  // DECISION (Friday fix U6): when the pot walks under the ticket (the boss sits near the top of the board) the ticket
+  //   goes see-through so the pot is never hidden behind "Serve it!".
+  let tka = 1;
+  if (playing && !rec && w.pot && H.ticket) {
+    const pp = worldToScreen(w.pot.x, w.pot.z), ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * u, pr = ppu * (w.pot.r || 0.3);
+    const q = H.ticket;
+    if (pp && pp.x + pr > q.x && pp.x - pr < q.x + q.w && pp.y + pr > q.y && pp.y - pr < q.y + q.h + 10) tka = 0.35;
+  }
+  hud.tka = (hud.tka == null ? 1 : hud.tka) + (tka - (hud.tka == null ? 1 : hud.tka)) * Math.min(1, dt / 0.12);
+  if (!finOn()) { g.save(); g.globalAlpha = clamp(hud.tka, 0.35, 1); drawTicket(w, t); g.restore(); }
   if (w.timed !== false && w.T) drawEggTimer(w);
   if (!rec) {
     // pause tag (D33: pause glyph on a paper tag)
@@ -874,11 +911,11 @@ function drawHud(st, w, dt) {
     if (H.bump && w.mode === 'daily') drawBumpChip(w);
   }
   if (playing || rec) {
-    if (!rec) drawArrows(w);
+    if (!rec && !finOn()) drawArrows(w);
     drawChain(w);
     drawUps(w);
-    if (!rec) { drawStick(st); drawGhost(w); drawFly(w); }
-    drawOrderUp(w);
+    if (!rec) { drawStick(st); drawGhost(w); drawFly(w); if (!finOn()) stuckHint(w, dt); }
+    if (!finOn()) drawOrderUp(w);
   }
 }
 
@@ -1068,7 +1105,7 @@ function drawEggTimer(w) {
   const R = r.w / 2, cx = r.x + R, cy = r.y + R;
   const frac = clamp(w.tLeft / w.T, 0, 1);
   const started = w.tStart != null || hud.started != null;
-  const low = started && w.tLeft <= LOW_TIME && w.tLeft > 0;
+  const low = started && w.tLeft <= LOW_TIME && w.tLeft > 0 && !finOn();
   let sc = 1, rot = 0;
   if (!started) sc = 1 + 0.04 * (0.5 - 0.5 * Math.cos(T * TAU));          // breathe 1 Hz
   if (low) { sc = 1 + 0.06 * Math.max(0, Math.sin(T * TAU * 2)); rot = Math.sin(T * 120) * 0.12 * Math.max(0, 1 - (T - hud.tick) * 3); }
@@ -1095,13 +1132,21 @@ function drawEggTimer(w) {
   circle(0, by, faceR); g.fillStyle = C.paper; g.fill(); g.lineWidth = Math.max(1.2, 1.5 * u); g.strokeStyle = C.ink; g.stroke();
   const sh = T - hud.sizzle;
   if (sh >= 0 && sh < 0.4) { circle(0, by, faceR); g.fillStyle = `rgba(255,211,110,${(0.8 * (1 - sh / 0.4)).toFixed(2)})`; g.fill(); }
-  if (low) {
-    txt(String(Math.ceil(w.tLeft)), 0, by + fs.secs * 0.06, Math.min(fs.secs, faceR * 1.25), { col: C.stamp, maxW: faceR * 1.7 });
-  } else {
-    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; g.beginPath(); g.moveTo(Math.sin(a) * faceR * 0.72, by - Math.cos(a) * faceR * 0.72); g.lineTo(Math.sin(a) * faceR * 0.86, by - Math.cos(a) * faceR * 0.86); g.lineWidth = Math.max(1, 1.2 * u); g.strokeStyle = C.ink; g.stroke(); }
-    const a = TAU * frac;
-    g.beginPath(); g.moveTo(0, by); g.lineTo(Math.sin(a) * faceR * 0.62, by - Math.cos(a) * faceR * 0.62); g.lineWidth = Math.max(2, 2.4 * u); g.lineCap = 'round'; g.strokeStyle = C.ink; g.stroke(); g.lineCap = 'butt';
-    circle(0, by, Math.max(2, 2.5 * u)); g.fillStyle = C.ink; g.fill();
+  // DECISION (Friday fix U1): whole seconds always show in the dial (the hands hid how much time was left).
+  {
+    const secs = Math.max(0, Math.ceil(w.tLeft));
+    const dig = String(secs).length;
+    const fsz = Math.min(Math.max(fs.secs, faceR * 1.05), faceR * (dig >= 3 ? 0.95 : 1.3));
+    txt(String(secs), 0, by + fsz * 0.04, fsz, { col: low ? C.stamp : C.ink, maxW: faceR * 1.75 });
+  }
+  // 3-star notch: small gold star on the ring at the 3-star time (logic.starTimes, fallback STAR3 * T); gone once passed.
+  {
+    let t3 = STAR3 * w.T;
+    try { if (LG && LG.starTimes) { const st3 = LG.starTimes(w); if (st3 && st3.t3 > 0) t3 = st3.t3; } } catch {}
+    if (started && w.tLeft > t3 && t3 > 0 && w.T > 0) {
+      const a = -Math.PI / 2 + TAU * clamp(t3 / w.T, 0, 1), sx = Math.cos(a) * ringR, sy = by + Math.sin(a) * ringR;
+      g.save(); g.lineJoin = 'round'; star(sx, sy, Math.max(5.5, lw * 0.95)); g.fillStyle = C.gold; g.fill(); g.lineWidth = Math.max(1.2, 1.4 * u); g.strokeStyle = C.ink; g.stroke(); g.restore();
+    }
   }
   // sizzle: steam puffs rise from the knob (no "+1" text, D33)
   if (sh >= 0 && sh < 0.6) for (let i = 0; i < 3; i++) {
@@ -1252,6 +1297,13 @@ function drawBoosters(st, w) {
     const r = L.hud.boosters[slot++];
     const used = !!(w.boost && w.boost[kind]);
     const cnt = stock[kind] | 0;
+    // DECISION (Friday fix U5/U7): a booster nobody can buy right now (none in stock, too few coins) fades back so the
+    //   column stops competing with the board; the first time a slot shows, a one-line tooltip says what it does (once per save).
+    const canBuy = cnt > 0 || (sv.coins | 0) >= PRICES[kind];
+    if (screen === 'play' && T - hud.t0 > 1.5 && !seenFlag('tip:boost:' + kind)) {
+      seenFlag('tip:boost:' + kind, true);
+      callout('tut-boost-' + kind, { magnet: 'icon-magnet', freeze: 'icon-freeze', mega: 'icon-megarim' }[kind], STR['tip_' + kind], 3200);
+    }
     // DECISION: an empty slot shows its coin price; tapping it buys one (meta.buyBooster) and uses it at once.
     //   Too few coins: the price tag shakes and a short callout says how many coins it needs.
     const b = reg('b-' + kind, r, () => {
@@ -1265,7 +1317,7 @@ function drawBoosters(st, w) {
     }, { soft: true, disabled: used || screen !== 'play' });
     const down = isDown(b.id), R = r.w / 2, cx = r.x + R, cy = r.y + R + (down ? 2 : 0);
     g.save(); g.lineJoin = 'round';
-    if (used) g.globalAlpha = 0.4;
+    if (used) g.globalAlpha = 0.4; else if (!canBuy) g.globalAlpha = 0.5;
     // tin: shadow, gold rim band, cream lid, icon
     circle(cx, cy + Math.max(2, 3.5 * u), R); g.fillStyle = 'rgba(58,36,24,0.3)'; g.fill();
     circle(cx, cy, R);
@@ -1307,19 +1359,26 @@ function drawArrows(w) {
     else if (p && T - hud.bossPoint < 3) bouncePointer(p.x, p.y - L.hud.arrow * 0.9);
   }
   if (!t.done && w.n) {
-    const open = new Set(t.lines.filter(l => l.got < l.need).map(l => kindId(l.kind)));
-    let anyOn = false, best = -1, bd = 1e9;
+    // DECISION (Friday fix U3): one arrow per open order line that has nothing of its kind on screen (before: one arrow, and only
+    //   when no open kind at all was on screen). L1-L10 show every open line, later levels at most 2 lines (plus the boss).
+    const best = new Map(), seen = new Set();
+    const openIds = new Set(t.lines.filter(l => l.got < l.need).map(l => kindId(l.kind)));
     for (let i = 0; i < w.n; i++) {
       const s = w.st ? w.st[i] : 0; if (!(s === 0 || s === 3) || isHid(w, i)) continue;
-      if (!open.has(itemKind(w, i))) continue;
-      const d = (w.ix[i] - w.pot.x) ** 2 + (w.iz[i] - w.pot.z) ** 2;
-      if (d < bd) { bd = d; best = i; }
-      if (!anyOn) { const p = worldToScreen(w.ix[i], w.iz[i]); if (onPlay(p)) anyOn = true; }
+      const k = itemKind(w, i); if (!openIds.has(k) || seen.has(k)) continue;
+      if (onPlay(worldToScreen(w.ix[i], w.iz[i]))) { seen.add(k); best.delete(k); continue; }
+      const d = (w.ix[i] - w.pot.x) ** 2 + (w.iz[i] - w.pot.z) ** 2, b = best.get(k);
+      if (!b || d < b.d) best.set(k, { d, i });
     }
-    if (!anyOn && best >= 0) { const p = worldToScreen(w.ix[best], w.iz[best]); if (p) arrows.push({ p, ic: iconFor(itemKind(w, best)) }); }
+    const cap = (hud.n || 0) <= 10 ? 3 : 2;
+    [...best.values()].sort((x, y) => x.d - y.d).slice(0, cap).forEach(b => {
+      const p = worldToScreen(w.ix[b.i], w.iz[b.i]); if (p) arrows.push({ p, ic: iconFor(itemKind(w, b.i)) });
+    });
   }
-  for (const a of arrows.slice(0, 2)) edgeArrow(a.p.x, a.p.y, a.ic);
+  arrowPlaced.length = 0;
+  for (const a of arrows.slice(0, 4)) edgeArrow(a.p.x, a.p.y, a.ic);
 }
+const arrowPlaced = [];
 const isHid = (w, i) => !!(w.hid && w.hid[i] === 1);
 function edgeArrow(tx, ty, ic) {
   // DECISION: an arrow that would overlap the callout bubble moves below it.
@@ -1335,6 +1394,13 @@ function edgeArrow(tx, ty, ic) {
   for (const b of lastBtns) if (b.id.startsWith('b-')) {
     if (ax + s / 2 > b.x - 4 && ax - s / 2 < b.x + b.w + 4 && ay + s / 2 > b.y - 4 && ay - s / 2 < b.y + b.h + 4) ax = b.x - 6 - s / 2;
   }
+  // two arrows that land on the same spot slide apart along the edge
+  for (let pass = 0; pass < 3; pass++) for (const q of arrowPlaced) if (Math.hypot(ax - q.x, ay - q.y) < s * 1.05) {
+    const sx = -dy, sy = dx, sg = (ax - zx) * sx + (ay - zy) * sy >= 0 ? 1 : -1;
+    ax += sx * sg * s * 1.1; ay += sy * sg * s * 1.1;
+    ax = clamp(ax, Z.x + s / 2, Z.x + Z.w - s / 2); ay = clamp(ay, Z.y + s / 2, Z.y + Z.h - s / 2);
+  }
+  arrowPlaced.push({ x: ax, y: ay });
   const bob = Math.sin(T * TAU * 2) * 3 * L.u;
   ax += dx * bob; ay += dy * bob;
   const ang = Math.atan2(dy, dx);
@@ -1401,8 +1467,13 @@ function tutorialTick(st, w) {
   const n = hud.n, since = T - hud.t0;
   const moved = hud.started != null || w.tStart != null;
   // L1–L2: ghost hand after 1.2 s of no input; "Drag to move" only after 4 s (tut bit 1)
-  hud.ghost = !moved && n <= 2 && !tutHas('drag') && since > 1.2;
-  if (!moved && n <= 2 && !tutHas('drag') && since > 4 && !hud.idleCall) { hud.idleCall = true; callout('tut-drag', 'hand', STR.dragToMove, 2500); }
+  // DECISION (Friday fix U4): the hint appears at 1 s and stays until the first move (one 2-minute callout, cleared on move),
+  //   so it no longer pops in and out; the hand stands beside the pot, never on it.
+  const wantDrag = !moved && n <= 2 && !tutHas('drag') && since > 1.0;
+  hud.ghost = wantDrag;
+  if (wantDrag && !hud.idleCall) { hud.idleCall = true; callout('tut-drag', 'hand', STR.dragToMove, 120000); }
+  if (w.level && w.level.mercy > 0 && !hud.mercyCall) { hud.mercyCall = true; callout('gift-mercy', 'icon-clock', fmt(STR.extraTime, { n: w.level.mercy }), 2800); }
+  if (moved) { calloutQ = calloutQ.filter(c => c.id !== 'tut-drag'); if (callNow && callNow.id === 'tut-drag' && callNow.ms > 1000) callNow.ms = 0; }
   tooBigTick(w, n, moved);
   // twist intros: stuckTick (below) owns the ≤ 4-word "stuck 4 s" callouts for every twist
   // L1: the bouncing gold pointer stays on the flown-to sandwich until it is eaten
@@ -1455,6 +1526,53 @@ function stuckTick(w) {
   if (tw[0] === 'pens' || tw[0] === 'simmer') tutSet(tw[0]);
   callout('twist-' + tw[0], tw[1], tw[2], 2600);
 }
+// DECISION (Friday fix U13): L3-L10 only. When the pot pushes at something for 3 s (stick held, barely moving) or wanders 5 s
+//   without a bite, a gold arrow beside the pot points the way the sim's own average bot would steer (it path-finds round
+//   hedges and walls), and the food it is heading for gets a ring. It leaves on the next bite or when the pot is free.
+function stuckHint(w, dt) {
+  const n = hud.n | 0;
+  if (n < 3 || n > 10 || w.mode !== 'level' || !w.pot || w.result || !BOTS) return;
+  const moved = hud.started != null || w.tStart != null;
+  if (!moved) return;
+  const px = w.pot.x, pz = w.pot.z, held = !!(IN && IN.held);
+  if (!hud.pushA) hud.pushA = [px, pz];
+  if (Math.hypot(px - hud.pushA[0], pz - hud.pushA[1]) > 0.45) { hud.pushA = [px, pz]; hud.pushT = 0; if (hud.hint && hud.hint.why === 'push') hud.hint = null; }
+  else if (held) hud.pushT = (hud.pushT || 0) + dt; else hud.pushT = 0;
+  if (hud.hint && hud.bites !== hud.hint.bites) hud.hint = null;
+  if (!hud.hint) {
+    const why = (hud.pushT || 0) >= 3 ? 'push' : T - hud.lastBite >= 5 ? 'wander' : null;
+    if (!why) return;
+    let bot = null; try { bot = BOTS.createBot('average', (n | 0) + 11, { P: { idle: 0, lag: 0, sigma: 0, every: 0.1 } }); } catch {}
+    if (!bot) return;
+    hud.hint = { why, bot, bites: hud.bites, nextT: 0, dir: null, tgt: -1, t0: T };
+    if (!hud.hintCall) { hud.hintCall = true; callout('hint-way', 'hand', STR.thisWay, 2200); }
+  }
+  const h = hud.hint;
+  if (T >= h.nextT) {
+    h.nextT = T + 0.12;
+    try { BOTS.decide(h.bot, w, 0.12); const o = h.bot.out; h.tgt = h.bot.target;
+      if (o && o.m > 0 && Math.hypot(o.x, o.z) > 1e-6) {   // the bot's real command is a world vector: take it through the camera
+        const l = Math.hypot(o.x, o.z), a0 = worldToScreen(px, pz), a1 = worldToScreen(px + o.x / l * 2, pz + o.z / l * 2);
+        if (a0 && a1) { const sl = Math.hypot(a1.x - a0.x, a1.y - a0.y); if (sl > 1e-6) h.dir = { x: (a1.x - a0.x) / sl, y: (a1.y - a0.y) / sl }; }
+      } if (globalThis.__qa) globalThis.__uiHint = { dir: h.dir, out: h.bot.out, tgt: h.tgt, pot: [px, pz], tp: h.tgt >= 0 ? [w.ix[h.tgt], w.iz[h.tgt]] : null, r: w.pot.r, why: h.why }; } catch { hud.hint = null; return; }   // __uiHint: QA readout only
+  }
+  if (!h.dir) return;
+  if (h.tgt >= 0 && w.st && (w.st[h.tgt] === 0 || w.st[h.tgt] === 3)) {
+    const p = worldToScreen(w.ix[h.tgt], w.iz[h.tgt]);
+    if (onPlay(p)) {
+      const k = (T * 1.5) % 1;
+      g.save(); circle(p.x, p.y, Math.max(14 * L.u, 12 + 10 * k)); g.lineWidth = Math.max(2.5, 3 * L.u); g.strokeStyle = `rgba(255,211,110,${(1 - k * 0.6).toFixed(2)})`; g.stroke(); g.restore();
+    }
+  }
+  const p0 = worldToScreen(px, pz) || { x: L.play.cx, y: L.play.cy };
+  const ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, R = Math.max(20 * L.u, ppu * (w.pot.r || 0.3) * 1.15);
+  const s = Math.max(30, 34 * L.u), bob = Math.abs(Math.sin(T * TAU * 1.5)) * 8 * L.u, dist = R + s * 0.6 + bob;
+  const ax = clamp(p0.x + h.dir.x * dist, L.play.x + s, L.play.x + L.play.w - s), ay = clamp(p0.y + h.dir.y * dist, L.play.y + s, L.play.y + L.play.h - s);
+  g.save(); g.translate(ax, ay); g.rotate(Math.atan2(h.dir.y, h.dir.x)); g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(s * 0.6, 0); g.lineTo(-s * 0.1, -s * 0.5); g.lineTo(-s * 0.1, -s * 0.2); g.lineTo(-s * 0.6, -s * 0.2); g.lineTo(-s * 0.6, s * 0.2); g.lineTo(-s * 0.1, s * 0.2); g.lineTo(-s * 0.1, s * 0.5); g.closePath();
+  g.fillStyle = C.gold; g.fill(); g.lineWidth = Math.max(2, 2 * L.u); g.strokeStyle = C.ink; g.stroke();
+  g.restore();
+}
 function startFly() {
   // DECISION: the L1 fly-in skips hidden items (w.hid[i] === 1), as the edge arrows do.
   const w = lastW; if (!w || !w.tickets) return;
@@ -1506,16 +1624,30 @@ function drawUps(w) {
   });
 }
 function drawGhost(w) {
+  // pulsing ring round the pot on L1: first 5 s or until the first bite
+  if (hud.n === 1 && !hud.bites && T - hud.t0 < 5 && T - hud.t0 > 0.2 && w.pot) {
+    const p0 = worldToScreen(w.pot.x, w.pot.z) || { x: L.play.cx, y: L.play.cy };
+    const ppu0 = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, R0 = Math.max(22 * L.u, ppu0 * w.pot.r * 1.35);
+    const k0 = (T * 1.4) % 1, fade = clamp((5 - (T - hud.t0)) / 0.6, 0, 1);
+    g.save();
+    for (const [ph, wd] of [[0, 3.5], [0.5, 2.5]]) {
+      const kk = (k0 + ph) % 1;
+      circle(p0.x, p0.y, R0 * (0.9 + 0.5 * kk)); g.lineWidth = Math.max(2, wd * L.u); g.strokeStyle = `rgba(255,211,110,${((1 - kk) * 0.95 * fade).toFixed(2)})`; g.stroke();
+    }
+    g.restore();
+  }
   if (!hud.ghost) return;
   const p = worldToScreen(w.pot.x, w.pot.z) || { x: L.play.cx, y: L.play.cy };
-  const u = L.u, cyc = ((T - hud.t0 - 1.2) % 1.8 + 1.8) % 1.8;
+  const u = L.u, cyc = ((T - hud.t0 - 1.0) % 1.8 + 1.8) % 1.8;
+  const ppu = RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u, R = Math.max(22 * u, ppu * (w.pot.r || 0.3) * 1.2);
   let dy = 0, sc = 1, a = 1;
   if (cyc < 0.25) { sc = 1 - 0.12 * (cyc / 0.25); a = cyc / 0.25; }
   else if (cyc < 1.25) { sc = 0.88; dy = -ease((cyc - 0.25) / 1.0) * 90 * u; }
   else { sc = 0.88 + 0.12 * ((cyc - 1.25) / 0.55); dy = -90 * u; a = 1 - (cyc - 1.25) / 0.55; }
-  const x = p.x + 6 * u, y = p.y + 30 * u + dy;
-  if (cyc >= 0.25 && cyc < 1.25) { g.save(); g.globalAlpha = 0.35 * a; circle(p.x, p.y + 6 * u, 18 * u); g.fillStyle = C.paper; g.fill(); g.restore(); }
-  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(x, y); g.scale(sc * u * 1.1, sc * u * 1.1);
+  const x = clamp(p.x + R + 26 * u, L.play.x + 30 * u, L.play.x + L.play.w - 30 * u), y = p.y + 34 * u + dy;
+  const hs = sc * u * 1.1;
+  if (cyc >= 0.25 && cyc < 1.25) { g.save(); g.globalAlpha = 0.35 * a; circle(x, y - 32 * hs, 16 * u); g.fillStyle = C.paper; g.fill(); g.restore(); }
+  g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(x, y); g.scale(hs, hs);
   hand();
   g.restore();
 }
@@ -1532,6 +1664,17 @@ function hand() {
   g.beginPath(); g.arc(0.5, -27, 3, Math.PI * 1.1, Math.PI * 1.9); g.lineWidth = 1.6; g.stroke();
 }
 
+// render3d / render2d finisher clock (real s from the final bite); neither renderer exports it, so these mirror their FIN_* constants.
+const FIN_BOOM = 1.25, FIN_BACK = 1.4;
+const finOn = () => !!(hud && hud.fin != null && !REC_M.record);
+/** HUD opacity during the finisher: fades out in 0.2 s, stays off through the punch-in, returns after FIN_BACK. */
+function finHudA() {
+  if (!finOn()) return 1;
+  const tf = T - hud.fin;
+  return tf < 0 ? 1 : tf < 0.2 ? 1 - tf / 0.2 : tf < FIN_BACK ? 0 : Math.min(1, (tf - FIN_BACK) / 0.35);
+}
+let hudOff = null;
+
 // ---- order up (boss bite): stamp lands on the ticket in screen centre ----
 // DECISION: in a record run the centred ORDER UP ticket and its stamp drift up and fade out over 21.5-21.9 s of
 //   record time (__recState.t), so the camera pull-up reads before the end card (Render request, 11-04).
@@ -1543,9 +1686,15 @@ function drawOrderUp(w) {
   const fo = recOrderFade(), k = T - hud.orderUp + (REC_M.record ? 0.3 : 0);   // record: the stamp lands 0.3 s sooner
   if (k < 0.55 || k > 9 || fo <= 0.01) return;
   const r = L.hud.ticket, s = Math.min(cssW * 0.6, 260 * L.u);
-  const x = cssW / 2, y = cssH * 0.4 - (1 - fo) * cssH * 0.06;
+  const fin = finOn(), x = cssW / 2, y = (fin ? cssH * 0.24 : cssH * 0.4) - (1 - fo) * cssH * 0.06;   // finisher: top third, clear of the pot
   const e = clamp((k - 0.55) / 0.18, 0, 1), sc = 2.2 - 1.2 * back(e);
-  stampMark(x, y, s, STR.orderUp, sc, -0.18, e * fo);
+  // DECISION (Friday fix U6): the stamp never covers the HUD ticket or meter, even while it is scaled up at the start:
+  //   its centre is pushed below any HUD rect it overlaps horizontally.
+  const fsz = s * 0.2, rw = Math.min(s, measure(STR.orderUp, fsz) + s * 0.2), rh = s * 0.36;
+  const hw = (rw * Math.cos(0.18) + rh * Math.sin(0.18)) * sc / 2, hh = (rh * Math.cos(0.18) + rw * Math.sin(0.18)) * sc / 2;
+  let yy = y;
+  for (const q of fin ? [L.hud.meter, L.hud.timer] : [L.hud.ticket, L.hud.meter, L.hud.timer]) if (q && x + hw > q.x && x - hw < q.x + q.w) yy = Math.max(yy, q.y + q.h + hh + 6);
+  stampMark(x, Math.min(yy, cssH - hh - 4), s, STR.orderUp, sc, -0.18, e * fo);
 }
 function stampMark(x, y, s, label, sc = 1, rot = -0.15, a = 1) {
   // DECISION: word stamps are a drawn rectangular rubber stamp (double red border, cream wash), not the round
@@ -1825,8 +1974,8 @@ function drawWin(st, w) {
   panel(CL.panel, { u: cu });
   // heading: red ORDER UP! stamp lands at +0.35 s
   const hs = Math.min(B.head.w * 0.78, B.head.h * 2.1);
-  const sk = clamp((cardT - 0.35) / 0.16, 0, 1);
-  if (cardT >= 0.35) stampMark(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2, hs, STR.orderUp, 1.8 - 0.8 * back(sk), -0.08, sk * 1.2);
+  const sk = clamp((cardT - 0.1) / 0.16, 0, 1);
+  if (cardT >= 0.1) stampMark(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2, hs, STR.orderUp, 1.8 - 0.8 * back(sk), -0.08, sk * 1.2);
   // hero: ticket + happy pot
   if (B.hero.h > 40) {
     const hh = B.hero.h;
@@ -1871,7 +2020,7 @@ function drawWin(st, w) {
         tick(tkx, y, ts);
       });
     }
-    if (cardT >= 0.45) { const k = clamp((cardT - 0.45) / 0.15, 0, 1); g.globalAlpha = k; tick(P.x + P.w - pad - rt / 2, P.y + hH / 2, rt, C.stamp); }
+    if (cardT >= 0.2) { const k = clamp((cardT - 0.2) / 0.15, 0, 1); g.globalAlpha = k; tick(P.x + P.w - pad - rt / 2, P.y + hH / 2, rt, C.stamp); }
     g.restore();
     const ps = Math.min(B.hero.w * 0.5, hh * 1.05), bob = Math.sin(T * 3) * ps * 0.02;
     potArt('pot-happy', B.hero.x + B.hero.w * 0.73, B.hero.y + hh / 2 + bob, ps);
@@ -1879,7 +2028,7 @@ function drawWin(st, w) {
   // stars fill one by one (0.25 s each) from +0.6 s
   const S = B.stars, n = clamp(d.stars | 0, 0, 3), sr = Math.min(S.h * 0.46, S.w / 8);
   for (let i = 0; i < 3; i++) {
-    const t0 = 0.6 + i * 0.25, k = clamp((cardT - t0) / 0.2, 0, 1), on = i < n && cardT >= t0;
+    const t0 = 0.15 + i * 0.13, k = clamp((cardT - t0) / 0.2, 0, 1), on = i < n && cardT >= t0;
     const x = S.x + S.w / 2 + (i - 1) * sr * 2.6, y = S.y + S.h / 2 + (i === 1 ? -sr * 0.18 : sr * 0.1);
     let sc = on ? 1 + 0.35 * Math.sin(k * Math.PI) : 1;
     if (!on && hud && hud.starHint && cardT > 1.4 && cardT < 4) sc = 1 + 0.06 * Math.sin(cardT * 30);
@@ -1906,7 +2055,7 @@ function drawWin(st, w) {
     });
   }
   // coins count up
-  const co = B.coins, total = d.coins | 0, ck = clamp((cardT - 1.0) / 0.8, 0, 1), shown = Math.round(total * ease(ck));
+  const co = B.coins, total = d.coins | 0, ck = clamp((cardT - 0.3) / 0.8, 0, 1), shown = Math.round(total * ease(ck));
   // a replay that earns nothing shows no "+0" row (and no coin tick)
   if (total > 0) {
     if (ck > 0 && ck < 1 && Math.floor(shown / Math.max(1, total / 12)) !== hud?._coinTick) { if (hud) hud._coinTick = Math.floor(shown / Math.max(1, total / 12)); sfx('coin'); }
@@ -1917,38 +2066,60 @@ function drawWin(st, w) {
   }
   if (B.hint && d.nextSkin) {
     const ns = typeof d.nextSkin === 'string' ? d.nextSkin : fmt(STR.nextSkin, { skin: d.nextSkin.name || d.nextSkin.id || '', n: d.nextSkin.need ?? d.nextSkin.coins ?? '' });
-    txt(ns, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
+    const nsS = typeof d.nextSkin === 'string' ? d.nextSkin : fmt(STR.nextSkinShort, { n: d.nextSkin.need ?? d.nextSkin.coins ?? '' });
+    txtMin([ns, nsS], B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
   }
   // NEXT (auto-highlight after 0.9 s) · Replay · Map
   const last = (d.n | 0) >= LEVELS && (d.kind || 'level') === 'level';
   const nb = reg('next', B.next, () => act('next'), { primary: true });
-  const hi = cardT > 0.9 ? 0.5 + 0.5 * Math.sin((cardT - 0.9) * 5) : 0;
+  const hi = cardT > 1.2 ? 0.5 + 0.5 * Math.sin((cardT - 1.2) * 5) : 0;
   goldBtn(nb, last ? STR.allDoneBtn : STR.next, { u: cu, fs: fs.btn, glow: hi });
   paperBtn(reg('replay', B.replay, () => act('retry')), STR.replay, { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph('restart', x, y, s) });
   paperBtn(reg('map', B.map, () => act('map')), STR.map, { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph('map', x, y, s) });
   g.restore();
 }
 
-function failHeading(d) {
-  if (d.why === 'spoiled') return STR.spoiled;
-  const size = +d.progress || 0;
+// DECISION (Friday fix U2/U7): the heading is driven by what is missing from the order, not by pot size. A size bar
+//   that looked full next to "0/3" contradicted the order, so it only shows when every ingredient line is done.
+function failMissing(d) {
   // logic.missing() lines are {kind, n}; forced qa fails pass {kind, need, got}
-  const miss = (d.missing || []).reduce((s, l) => s + (l.n != null ? l.n | 0 : Math.max(0, (l.need | 0) - (l.got | 0))), 0);
-  if (size >= 0.9 && miss <= 1) return STR.soClose;
-  if (size >= 0.7 || miss <= 2) return STR.almost;
+  return (d.missing || []).reduce((s, l) => s + (l.n != null ? l.n | 0 : Math.max(0, (l.need | 0) - (l.got | 0))), 0);
+}
+function failHeading(d, w) {
+  if (d.why === 'spoiled') return STR.spoiled;
+  const size = +d.progress || 0, miss = failMissing(d);
+  let need = 0, got = 0;
+  const tks = (w && w.tickets) || [];
+  for (const t of tks) for (const l of t.lines) { need += l.need | 0; got += Math.min(l.got | 0, l.need | 0); }
+  const frac = need ? got / need : size;
+  if (miss === 0) return size >= 0.9 ? STR.soClose : STR.almost;       // order done, pot not big enough for the boss
+  if (miss <= 1 && frac >= 0.7) return STR.soClose;
+  if (miss <= 2 && frac >= 0.5) return STR.almost;
   return STR.outOfTime;
+}
+// one-line reason for a Spoiled card, from logic.doomed()'s two causes: a line with too few items left, or no food left to grow
+function spoiledReason(d, w) {
+  try {
+    const tks = (w && w.tickets) || [], cnt = {};
+    if (w && w.n) for (let i = 0; i < w.n; i++) { const s = w.st ? w.st[i] : 0; if (s === 0 || s === 1 || s === 3 || s === 5) { const k = itemKind(w, i); cnt[k] = (cnt[k] || 0) + 1; } }
+    for (let k = w.ti || 0; k < tks.length; k++) for (const l of tks[k].lines) {
+      if (l.got < l.need && (cnt[kindId(l.kind)] || 0) < l.need - l.got) return [fmt(STR.spoilLeft, { name: nameFor(l.kind) }), STR.spoilLeftShort];
+    }
+  } catch {}
+  return [STR.spoilGrow, STR.spoilGrowShort];
 }
 function drawFail(st, w) {
   // DECISION: the spoiled sub line falls back to the current ticket's open lines to name the missing ingredient.
   const d = cardData.fail || {};
   const canFreeze = d.why !== 'spoiled' && !!d.canFreeze;
-  const CL = cardLayout(L, 'fail', { canFreeze });
+  const noBar = failMissing(d) > 0 || (w && w.tickets && w.tickets.some(t => t.lines.some(l => l.got < l.need)));
+  const CL = cardLayout(L, 'fail', { canFreeze, noBar });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
   // heading (§5.4 rule) stamped in
-  const head = failHeading(d), hk = clamp((cardT - 0.2) / 0.16, 0, 1);
+  const head = failHeading(d, w), hk = clamp((cardT - 0.2) / 0.16, 0, 1);
   g.save(); g.translate(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2); g.rotate(-0.04); const hsc = 1.5 - 0.5 * back(hk); g.scale(hsc, hsc); g.globalAlpha = clamp(hk * 1.5, 0, 1);
   txt(head, 0, 0, fs.head, { col: head === STR.soClose ? C.stamp : C.ink, stroke: C.paper, sk: 4, maxW: B.head.w * 0.95, min: 18 });
   g.restore();
@@ -1956,13 +2127,7 @@ function drawFail(st, w) {
   if (B.sub) {
     const cy = B.sub.y + B.sub.h / 2;
     if (d.why === 'spoiled') {
-      const tl = w && w.tickets && w.tickets[w.ti || 0] ? w.tickets[w.ti || 0].lines : [];
-      const miss = [...(d.missing || []), ...tl].find(l => (l.need | 0) > (l.got | 0));
-      const nMore = miss ? Math.max(1, (miss.need | 0) - (miss.got | 0)) : 1;
-      const s = fmt(STR.nMore, { n: nMore }), is = fs.body * 1.6, tws = measure(s, fs.body, FB, '800');
-      const x0 = B.sub.x + (B.sub.w - is - 6 - tws) / 2;
-      if (miss) ingIcon(miss.kind, x0 + is / 2, cy, is); else glyph('clock', x0 + is / 2, cy, is);
-      txt(s, x0 + is + 6, cy + 1, fs.body, { f: FB, align: 'left', col: C.ink });
+      txtMin(spoiledReason(d, w), B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
     } else {
       const n = d.n || (w && w.level && w.level.n) || 0, name = (w && w.level && w.level.name) || '';
       txtMin([fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })], B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
@@ -1970,7 +2135,7 @@ function drawFail(st, w) {
   }
   if (B.hero.h > 40) potArt('pot-sad', B.hero.x + B.hero.w / 2, B.hero.y + B.hero.h / 2, Math.min(B.hero.w * 0.6, B.hero.h * 1.05));
   // size bar: start rim -> boss silhouette, flag at progress (size only)
-  {
+  if (B.bar) {
     const r = B.bar, p = clamp(+d.progress || 0, 0, 1), th = Math.max(14, Math.min(r.h * 0.34, 18 * cu));
     const bS = Math.min(r.h * 0.95, Math.max(30, 40 * cu)), x0 = r.x + th, x1 = r.x + r.w - bS * 0.6, y = r.y + r.h * 0.58;
     rr(x0 - th / 2, y - th / 2, x1 - x0 + th / 2, th, th / 2); g.fillStyle = C.paperS; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
@@ -1993,8 +2158,10 @@ function drawFail(st, w) {
   // ticket lines with rings (missing ones pulse)
   {
     const r = B.lines, lines = (w && w.tickets && w.tickets[w.ti || 0] ? w.tickets[w.ti || 0].lines : null) || d.missing || [];
-    const n = lines.length || 1, d0 = Math.min(r.h * 0.9, Math.max(34, 44 * cu)), cnt = Math.max(12.5, fs.count);
-    const cellW = Math.min(r.w / n, d0 * 1.04 + cnt * 2.4 + 18);
+    const n = lines.length || 1, cnt = Math.max(12.5, fs.count);
+    // DECISION: with 4 lines the ring shrinks so every "got/need" count fits its cell (it was clipped at the card edge).
+    const d0 = Math.max(26, Math.min(r.h * 0.9, Math.max(34, 44 * cu), (r.w / n - cnt * 3.4 - 22) / 1.04));
+    const cellW = Math.min(r.w / n, d0 * 1.04 + cnt * 3.4 + 22);
     const x0 = r.x + (r.w - cellW * n) / 2;
     lines.forEach((l, i) => {
       const cx = x0 + i * cellW + d0 / 2 + 4, cy = r.y + r.h / 2, done = l.got >= l.need;
@@ -2015,7 +2182,7 @@ function drawFail(st, w) {
     paperBtn(fb, STR.freeze, { u: cu, fs: fs.btn2, f: FB, alts: [STR.freezeShort], tail, icon: (x, y, s) => glyph('freeze', x, y, s * 1.15) });
   }
   const rb = reg('retry', B.retry, () => act('retry'), { primary: true });
-  goldBtn(rb, STR.retry, { u: cu, fs: Math.max(fs.btn, 26 * cu), glow: cardT > 0.6 ? 0.5 + 0.5 * Math.sin(cardT * 5) : 0, icon: (x, y, s) => glyph('restart', x, y, s) });
+  goldBtn(rb, d.mercy > 0 ? fmt(STR.retryMore, { n: d.mercy }) : STR.retry, { u: cu, fs: Math.max(fs.btn, 26 * cu), glow: cardT > 0.6 ? 0.5 + 0.5 * Math.sin(cardT * 5) : 0, icon: (x, y, s) => glyph('restart', x, y, s) });
   paperBtn(reg('map', B.map, () => act('map')), STR.map, { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph('map', x, y, s) });
   g.restore();
 }
@@ -2074,7 +2241,7 @@ function toggle(b, on) {
   rr(r.x, y, r.w, h, h / 2); g.fillStyle = on ? C.go : C.paperS; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
   const kx = on ? r.x + r.w - h / 2 : r.x + h / 2;
   circle(kx, y + h / 2, h * 0.4); g.fillStyle = '#fff'; g.fill(); g.stroke();
-  txt(on ? STR.on : STR.off, on ? r.x + (r.w - h) / 2 : r.x + h + (r.w - h) / 2, y + h / 2 + 0.5, Math.max(12.5, h * 0.42), { f: FB, col: on ? '#fff' : C.ink, maxW: r.w - h - 4 });
+  txt(on ? STR.on : STR.off, on ? r.x + (r.w - h) / 2 : r.x + h + (r.w - h) / 2, y + h / 2 + 0.5, Math.max(12.5, h * 0.42), { f: FB, col: on ? '#fff' : C.ink, maxW: r.w - h - 4, min: 12.5 });
 }
 
 // =====================================================================================
@@ -2305,7 +2472,11 @@ function drawMap(st, dt) {
     const dn = b && isDown(b.id) ? 2 : 0;
     circle(x, y + Math.max(3, 4 * u), R); g.fillStyle = 'rgba(58,36,24,0.35)'; g.fill();
     circle(x, y + dn, R); g.fillStyle = locked ? C.paperS : C.paper; g.fill(); g.lineWidth = Math.max(2.5, 3 * u); g.strokeStyle = C.ink; g.stroke();
-    if (locked) { g.save(); g.globalAlpha = 0.7; padlock(x, y + dn, R * 0.9); g.restore(); }
+    if (locked) {
+      // DECISION (U10): a locked node keeps its level number (small lock above, number below) so the path still counts.
+      g.save(); g.globalAlpha = 0.6; padlock(x, y + dn - R * 0.38, R * 0.6); g.restore();
+      g.save(); g.globalAlpha = 0.9; txt(String(n), x, y + dn + R * 0.4, Math.max(14, fs.node * 0.85), { col: C.ink, maxW: R * 1.5 }); g.restore();
+    }
     else {
       circle(x, y + dn, R * 0.78); g.lineWidth = Math.max(1.5, 2 * u); g.strokeStyle = C.gold; g.stroke();
       txt(String(n), x, y + dn + 1, fs.node, { col: C.ink, maxW: R * 1.5 });
@@ -2530,7 +2701,9 @@ function drawCookbook(st) {
     g.lineWidth = on ? Math.max(2.5, 3 * cu) : 2; g.strokeStyle = C.ink; g.stroke();
     const lab = id === 'stamps' ? [STR.stamps] : [STR[id], TOWN_SHORT[id]];
     g.save(); if (far && !on) g.globalAlpha = 0.65;
-    txtMin(lab, r.x + r.w / 2, r.y + dn + r.h / 2 + 1, fs.body, { f: FB, col: C.ink, maxW: r.w - 10 });
+    // DECISION (U11): every tab uses the same size; a label that would need shrinking falls back to its short word instead.
+    const fit = lab.find(t => measure(t, fs.body, FB, '800') <= r.w - 10) || lab[lab.length - 1];
+    txtMin([fit], r.x + r.w / 2, r.y + dn + r.h / 2 + 1, fs.body, { f: FB, col: C.ink, maxW: r.w - 10 });
     g.restore();
   }
   const rb = B.ribbon, rh = Math.min(rb.h, Math.max(36, 42 * cu));
@@ -2729,23 +2902,23 @@ function drawLadder(st) {
   const oy = cardIn();
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
-  const day = d.day || ds.day || 1, hk = clamp((cardT - 0.15) / 0.16, 0, 1);
+  const day = d.day || ds.day || 1, hk = clamp((cardT - 0.1) / 0.16, 0, 1);
   const head = d.paid ? fmt(STR.dayN, { n: day }) + '!' : STR.nice;
   g.save(); g.translate(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2); g.rotate(-0.04); const hsc = 1.5 - 0.5 * back(hk); g.scale(hsc, hsc); g.globalAlpha = clamp(hk * 1.5, 0, 1);
   txt(head, 0, 0, fs.head, { col: C.gold, stroke: C.ink, sk: Math.max(4, fs.head * 0.14), shadow: C.ink, maxW: B.head.w * 0.9, min: 18 });
   g.restore();
   if (B.sub) txt(d.replay ? STR.comeBack : STR.dayServed, B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.sub.w });
   const key = d.key || ds.key, lines = dailyLines(key, curLv()), mask = d.mask != null ? d.mask : ds.mask;
-  drawReceipt(B, fs, cu, lines, mask, `${STR.daily} · ${String(key || '').slice(5).replace('-', '/')}`, clamp((cardT - 0.3) / 0.16, 0, 1));
+  drawReceipt(B, fs, cu, lines, mask, `${STR.daily} · ${String(key || '').slice(5).replace('-', '/')}`, clamp((cardT - 0.1) / 0.16, 0, 1));
   ladderTitle(B.ladderT, fs, ds);
-  const landIdx = d.paid ? (day - 1) % 7 : -1, landK = clamp((cardT - 0.8) / 0.16, -1, 1);
-  if (d.paid && cardT >= 0.8) sfx1('streak', 'streak', { day });
+  const landIdx = d.paid ? (day - 1) % 7 : -1, landK = clamp((cardT - 0.15) / 0.16, -1, 1);   // Friday fix: step stamps within 0.2 s
+  if (d.paid && cardT >= 0.15) sfx1('streak', 'streak', { day });
   const bob = ds.tomorrow ? ds.tomorrow.day - 1 : -1;
-  drawSteps(B, fs, cu, ds.ladder, cardT > 1.1 ? bob : -1, landIdx, landIdx >= 0 && cardT < 0.8 ? -1 : landK);
+  drawSteps(B, fs, cu, ds.ladder, cardT > 1.2 ? bob : -1, landIdx, landIdx >= 0 && cardT < 0.15 ? -1 : landK);
   // coins (+ the day's reward)
   const co = B.coins, total = d.total | 0 || d.coins | 0;
   if (co && total > 0) {
-    const ck = clamp((cardT - 1.1) / 0.7, 0, 1), shown = Math.round(total * ease(ck));
+    const ck = clamp((cardT - 0.3) / 0.8, 0, 1), shown = Math.round(total * ease(ck));   // coins 0.3 s to 1.1 s
     const tickN = Math.floor(shown / Math.max(1, total / 10));
     if (ck > 0 && ck < 1 && tickN !== ladTick) { ladTick = tickN; sfx('coin'); }
     const cs = fmt(STR.coinsPlus, { n: shown }), cfs = fs.big, ctw = measure(cs, cfs), cr = cfs * 0.55;
@@ -2755,7 +2928,7 @@ function drawLadder(st) {
     txt(cs, cx0 + cr * 2 + 8, co.y + co.h / 2 + 1, cfs, { align: 'left', col: C.ink, stroke: C.paper, sk: 3 });
     if (rw) rewardIcon(d.reward, cx0 + cr * 2 + 8 + ctw + rw * 0.6, co.y + co.h / 2, cfs * 1.5);
   }
-  goldBtn(reg('primary', B.primary, () => act('nice'), { primary: true }), STR.nice, { u: cu, fs: fs.btn, glow: cardT > 1.6 ? 0.5 + 0.5 * Math.sin(cardT * 5) : 0 });
+  goldBtn(reg('primary', B.primary, () => act('nice'), { primary: true }), STR.nice, { u: cu, fs: fs.btn, glow: cardT > 1.2 ? 0.5 + 0.5 * Math.sin(cardT * 5) : 0 });
   g.restore();
 }
 let ladTick = -1;
@@ -2830,8 +3003,8 @@ function drawFeastEnd(st) {
   const oy = cardIn();
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
-  const hk = clamp((cardT - 0.2) / 0.16, 0, 1);
-  if (d.pb) { if (cardT >= 0.9) stampMark(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2, Math.min(B.head.w * 0.8, B.head.h * 2.1), STR.newBest, 1.8 - 0.8 * back(clamp((cardT - 0.9) / 0.16, 0, 1)), -0.08, clamp((cardT - 0.9) / 0.16, 0, 1) * 1.2); }
+  const hk = clamp((cardT - 0.1) / 0.16, 0, 1);
+  if (d.pb) { if (cardT >= 0.65) stampMark(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2, Math.min(B.head.w * 0.8, B.head.h * 2.1), STR.newBest, 1.8 - 0.8 * back(clamp((cardT - 0.65) / 0.16, 0, 1)), -0.08, clamp((cardT - 0.65) / 0.16, 0, 1) * 1.2); }
   else {
     g.save(); g.translate(B.head.x + B.head.w / 2, B.head.y + B.head.h / 2); g.rotate(-0.03); const sc = 1.4 - 0.4 * back(hk); g.scale(sc, sc); g.globalAlpha = clamp(hk * 1.5, 0, 1);
     txt(STR.feastOver, 0, 0, fs.head, { col: C.ink, stroke: C.paper, sk: 4, maxW: B.head.w * 0.95, min: 18 }); g.restore();
@@ -2839,7 +3012,7 @@ function drawFeastEnd(st) {
   if (B.hero.h > 30) {
     const hero = img('win-feast');
     g.save(); g.globalAlpha = 0.9; if (hero) drawFit(g, hero, B.hero.x, B.hero.y, B.hero.w, B.hero.h); g.restore();
-    const n = d.tickets | 0, k = clamp((cardT - 0.3) / 0.6, 0, 1), shown = Math.round(n * ease(k));
+    const n = d.tickets | 0, k = clamp((cardT - 0.15) / 0.5, 0, 1), shown = Math.round(n * ease(k));
     const big = Math.min(B.hero.h * 0.42, 96 * cu), cx = B.hero.x + B.hero.w / 2, cy = B.hero.y + B.hero.h * 0.44;
     txt(String(shown), cx, cy, big, { col: C.gold, stroke: C.ink, sk: Math.max(5, big * 0.12), shadow: C.ink, maxW: B.hero.w * 0.8 });
     const lab = n === 1 ? STR.served1 : STR.served;
@@ -2858,7 +3031,7 @@ function drawFeastEnd(st) {
   });
   const co = B.coins, total = d.coins | 0;
   if (total > 0) {
-    const ck = clamp((cardT - 1.0) / 0.8, 0, 1), shown = Math.round(total * ease(ck)), tn = Math.floor(shown / Math.max(1, total / 12));
+    const ck = clamp((cardT - 0.3) / 0.8, 0, 1), shown = Math.round(total * ease(ck)), tn = Math.floor(shown / Math.max(1, total / 12));
     if (ck > 0 && ck < 1 && tn !== feTick) { feTick = tn; sfx('coin'); }
     const cs = fmt(STR.coinsPlus, { n: shown }), cfs = fs.big, ctw = measure(cs, cfs), cr = cfs * 0.55, cx0 = co.x + co.w / 2 - (ctw + cr * 2 + 8) / 2;
     coin(cx0 + cr, co.y + co.h / 2, cr);
@@ -2883,17 +3056,22 @@ function giftBody(d) {
   const use = { magnet: STR.giftMagnet, freeze: STR.giftFreeze, mega: STR.giftMega }[d.kind] || STR.giftBody;
   return parts.join(' · ') + (parts.length ? '. ' : '') + (boosts ? use : '');
 }
+// DECISION (U9): a locked card says how many more wins open it ("Win 3 more levels to unlock"), not just the level number.
+function lockedLine(unlockAt) {
+  const sv = (M && M.get && M.get()) || {}, n = Math.max(1, unlockAt - (sv.cur || 1) + 1);
+  return n === 1 ? STR.winMore1 : fmt(STR.winMoreN, { n });
+}
 const INFO = {
   shop: { icon: 'shop', title: () => STR.shop, body: () => STR.shopBody },
   cookbook: { icon: 'cookbook', title: () => STR.cookbook, body: () => STR.cookbookBody },
-  daily: { icon: 'daily', title: () => STR.daily, body: d => d.locked ? fmt(STR.unlocksAt, { n: DAILY_UNLOCK }) : d.done ? STR.dailyDone : STR.dailyBody, primary: d => (!d.locked && !d.done ? [STR.cookToday, 'startDaily'] : null) },
-  feast: { icon: 'feast', title: () => STR.feast, body: d => d.locked ? fmt(STR.unlocksAt, { n: FEAST_UNLOCK }) : STR.feastBody, primary: d => (!d.locked ? [STR.startFeast, 'startFeast'] : null) },
+  daily: { icon: 'daily', title: () => STR.daily, body: d => d.locked ? lockedLine(DAILY_UNLOCK) : d.done ? STR.dailyDone : STR.dailyBody, primary: d => (!d.locked && !d.done ? [STR.cookToday, 'startDaily'] : null) },
+  feast: { icon: 'feast', title: () => STR.feast, body: d => d.locked ? lockedLine(FEAST_UNLOCK) : STR.feastBody, primary: d => (!d.locked ? [STR.startFeast, 'startFeast'] : null) },
   // DECISION: All-done: the primary is today's Daily while it is open and not done, else the Feast; the second button
   //   is the Feast (or the Cookbook when the Feast is already the primary).
   alldone: { icon: 'star', title: () => STR.allDone, body: () => STR.allDoneBody,
     primary: () => (dailyOpenNow() ? [STR.cookToday, 'daily'] : [STR.feast, 'feast']),
     second: () => (dailyOpenNow() ? [STR.feast, 'feast'] : [STR.cookbook, 'cookbook']) },
-  gift: { icon: d => (d.chest ? 'chest' : d.milestone ? 'star' : BOOST_NAME[d.kind] ? d.kind : 'gift'), title: d => (d.chest ? STR.chestT : d.milestone ? STR.starBonus : STR.gift),
+  gift: { icon: d => (d.chest ? 'chest' : d.milestone ? 'star' : BOOST_NAME[d.kind] ? d.kind : 'gift'), title: d => (d.chest ? (d.town ? STR.chestT : STR.chestSmall) : d.milestone ? STR.starBonus : STR.gift),
     body: d => (d.chest && d.town && STR[d.town] ? STR[d.town] + ': ' : '') + giftBody(d), primary: () => [STR.collect, 'collect'] },
 };
 function giftRays(cx, cy, R, a) {
@@ -2903,6 +3081,24 @@ function giftRays(cx, cy, R, a) {
   g.rotate(T * 0.35); g.fillStyle = 'rgba(245,179,35,0.35)';
   for (let i = 0; i < 12; i++) { g.rotate(TAU / 12); g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, R, -0.11, 0.11); g.closePath(); g.fill(); }
   g.restore();
+}
+// DECISION (U9): the locked Daily card previews the 7-day reward ladder (dimmed) so there is something to want.
+function ladderPreview(r, cu) {
+  let lad = null; try { const s = M && M.dailyStatus && M.dailyStatus(); if (s && s.ladder && s.ladder.length === 7) lad = s.ladder; } catch {}
+  if (!lad) return false;
+  // day 7 (the pot) is drawn 1.3x with a gold ring so the top prize stands out; day numbers sit at the 12.5 px floor
+  const gap = Math.max(4, 6 * cu), k7 = 1.3, rw = (r.w - 6 * gap) / (12 + 2 * k7), rr_ = Math.max(10, Math.min(rw, (r.h - 18) / 2 / k7, 34 * cu + 6));
+  const totW = rr_ * (12 + 2 * k7) + 6 * gap, cy = r.y + r.h / 2 - 7;
+  let cx = r.x + (r.w - totW) / 2;
+  lad.forEach((e, i) => {
+    const Rr = i === 6 ? rr_ * k7 : rr_; cx += Rr;
+    if (i === 6) { circle(cx, cy, Rr * 1.12); g.fillStyle = 'rgba(255,211,77,0.55)'; g.fill(); }
+    circle(cx, cy, Rr); g.fillStyle = i === 6 ? C.goldL : C.paperS; g.fill(); g.lineWidth = i === 6 ? 3 : 2; g.strokeStyle = C.ink; g.stroke();
+    g.save(); g.globalAlpha = i === 6 ? 1 : 0.85; rewardIcon(e.reward, cx, cy, Rr * 1.45); g.restore();
+    txt(String(e.day), cx, cy + Rr + 11, 12.5, { f: FB, col: i === 6 ? C.ink : C.goldS, maxW: Rr * 2 + gap });
+    cx += Rr + gap;
+  });
+  return true;
 }
 function dailyOpenNow() { const ds = dailyStat(); return !!(ds && ds.unlocked && !ds.done); }
 function drawInfo(st, name) {
@@ -2915,7 +3111,7 @@ function drawInfo(st, name) {
   const pr = spec.primary ? spec.primary(d) : null;
   const sc = spec.second ? spec.second(d) : null;
   if (name === 'gift') sfx1('gift', d.chest ? 'chest' : d.milestone ? 'milestone' : 'gift');
-  const CL = cardLayout(L, 'info', { primary: !!pr, second: !!sc, noBack: name === 'gift' });
+  const CL = cardLayout(L, 'info', { primary: !!pr, second: !!sc, noBack: name === 'gift', locked: d.locked && (name === 'daily' || name === 'feast') ? name : false });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2930,8 +3126,10 @@ function drawInfo(st, name) {
     giftRays(cx, cy, Math.min(B.icon.h * 0.62, s * 0.95) * (0.6 + 0.4 * k), k);
     g.save(); g.translate(cx, cy + bob); g.scale(sc, sc); glyph(spec.icon(d), 0, 0, s * 1.3); g.restore();   // the art has a transparent margin
   }
+  else if (name === 'daily' && d.locked && B.icon.h > 30 && ladderPreview(B.icon, cu)) { /* reward ladder preview drawn */ }
   else if (B.icon.h > 30) { const s = Math.min(B.icon.h, B.icon.w * 0.5, 140 * cu); const bob = Math.sin(T * 2.4) * s * 0.03; glyph(typeof spec.icon === 'function' ? spec.icon(d) : spec.icon, B.icon.x + B.icon.w / 2, B.icon.y + B.icon.h / 2 + bob, s); }
-  txt2(spec.title(d), B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
+  if (B.sub) txtMin([STR.dailyWhat, STR.dailyWhatShort], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.sub.w });
+  txt2(d.locked && name === 'daily' ? STR.dailyOrder : spec.title(d), B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
   txt2(spec.body(d), B.body.x + B.body.w / 2, B.body.y + B.body.h / 2, fs.body, { f: FB, col: C.ink, maxW: B.body.w });
   if (pr && B.primary) goldBtn(reg('primary', B.primary, () => act(pr[1], pr[2] || {}), { primary: true }), pr[0], { u: cu, fs: fs.btn });
   if (sc && B.second) paperBtn(reg('second', B.second, () => act(sc[1], sc[2] || {})), sc[0], { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph(sc[1], x, y, s) });

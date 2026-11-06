@@ -74,23 +74,24 @@ export function sample(lv, goalT, { runs = 30, noise = 10, xruns = 8 } = {}) {
   for (const k of ['casual', 'average', 'expert']) for (let s = 1; s <= (k === 'expert' ? xruns : runs); s++) S[k].push(k === 'casual' ? runTrace(lv, k, s, maxT) : run(lv, k, s, {}, maxT));
   return S;
 }
-const winAt = (r, T, timed) => r.win && (!timed || r.t <= T + Math.min(r.sz, SIZZLE_CAP * T) + 1e-9);
-const starsAt = (r, T, timed) => {
-  if (!winAt(r, T, timed)) return 0;
+// T is the full clock; g the level's grace (11-06: time that buys no stars, and no Sizzle cap, see logic.starsFor).
+const winAt = (r, T, timed, g = 0) => r.win && (!timed || r.t <= T + Math.min(r.sz, SIZZLE_CAP * (T - g)) + 1e-9);
+const starsAt = (r, T, timed, g = 0) => {
+  if (!winAt(r, T, timed, g)) return 0;
   if (!timed) return 3;
-  const left = (T + Math.min(r.sz, SIZZLE_CAP * T) - r.t) / T;
+  const left = (T + Math.min(r.sz, SIZZLE_CAP * (T - g)) - r.t - g) / (T - g);
   return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
 };
 const pctOf = (arr, f) => (arr.length ? (100 * arr.filter(f).length) / arr.length : null);
 /** Predicted gate numbers at T. */
 export function predict(spec, S, T) {
-  const timed = spec.timed !== false;
+  const timed = spec.timed !== false, g = spec.grace > 0 ? spec.grace : 0;
   const p = {
-    T, gWin: winAt(S.greedy, T, timed), gPct: timed ? (100 * S.greedy.t) / T : null, noise: pctOf(S.noise, r => winAt(r, T, timed)),
+    T, gWin: winAt(S.greedy, T, timed, g), gPct: timed ? (100 * S.greedy.t) / (T - g) : null, noise: pctOf(S.noise, r => winAt(r, T, timed, g)),
     ratio: S.greedy.win && S.planner.win ? S.planner.t / S.greedy.t : null,
   };
-  for (const k of ['casual', 'average', 'expert']) { p[k] = pctOf(S[k], r => winAt(r, T, timed)); p[k + '3'] = pctOf(S[k], r => starsAt(r, T, timed) === 3); }
-  const lost = S.casual.filter(r => !winAt(r, T, timed));
+  for (const k of ['casual', 'average', 'expert']) { p[k] = pctOf(S[k], r => winAt(r, T, timed, g)); p[k + '3'] = pctOf(S[k], r => starsAt(r, T, timed, g) === 3); }
+  const lost = S.casual.filter(r => !winAt(r, T, timed, g));
   p.near = lost.length ? lost.filter(r => closeAt(r, T)).length / lost.length : null;
   return p;
 }
@@ -114,10 +115,10 @@ export function score(spec, p) {
 }
 /** T range: goal.T ± 15 %, integer seconds. */
 function tRange(spec) {
-  const g = (spec.goal && spec.goal.T) || spec.T;
+  const g = (spec.goal && spec.goal.T) || spec.T, gr = spec.grace > 0 ? spec.grace : 0;
   if (spec.timed === false) return [spec.T];
   const out = [];
-  for (let T = Math.ceil(g * 0.85); T <= Math.floor(g * 1.15); T++) out.push(T);
+  for (let T = Math.ceil(g * 0.85); T <= Math.floor(g * 1.15); T++) out.push(T + gr);   // goal.T is the pace; the clock adds grace
   return out;
 }
 /** Candidate knob sets: as-is, the upper half of the margin range (more food, a faster greedy) and the lower half. */

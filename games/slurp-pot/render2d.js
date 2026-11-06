@@ -14,6 +14,8 @@
 import { KINDS, KIND_ID } from './catalog.js';
 import { edible, createWorld } from './logic.js';
 import { DPR_MIN, DPR_STEP, ITEM_MAX } from './consts.js';
+import { dressLayout, RUGS } from './dress.js';
+import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR } from './camw.js';
 
 const PI = Math.PI, TAU = 2 * PI;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -30,7 +32,7 @@ const rnd = mulberry32(0x2D0F2D);          // render-only RNG (blinks, fx): neve
 // ------------------------------------------------------------------ colours (copies of props.js / render3d.js)
 const LID = { sunny: '#F5B323', cauldron: '#C8743A', wok: '#D9412F', teapot: '#2FB5A5', ricecooker: '#E6D6BA',
   dutch: '#8FE3C8', steamer: '#D9B36B', royal: '#FFD23F', ufo: '#C9D3E0', starladle: '#2B3A8C' };
-const GROUND = { picnic: '#FFF1DC', market: '#D9C6A5', harbour: '#C99A63' };
+const GROUND = { picnic: '#F7E9D4', market: '#D9C6A5', harbour: '#C99A63' };
 const BACK = { picnic: '#A99272', market: '#B39D7B', harbour: '#2AA7C9' };   // table / street / sea = clear colour
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
@@ -84,7 +86,7 @@ let time = 0, ppu = 50, ops = 0, fpsEma = 0, lastNow = 0, winStart = 0, alphaNow
 const win = [];
 let LV = null, BB = null, town = 'picnic', skin = 'sunny', titleOn = false;
 let ground = null;                         // { cv, x0, z0, w, h, upx }: the loaded level's baked bitmap
-let potCv = null, shadowCv = null, haloCv = null, padArt = null;
+let potCv = null, shadowCv = null, haloCv = null, rimCv = null, padArt = null;
 let lostFn = null, ctxH = null;
 let W = null, itemCat = null, itemRot = null, prevSt = null, prevHid = null, prevKind = null;
 const popT = new Float32Array(ITEM_MAX), wobT = new Float32Array(ITEM_MAX), rattleT = new Float32Array(ITEM_MAX);
@@ -100,6 +102,11 @@ const mood = {};
 const lid = { on: false, pop: 0, jig: 0 };
 let punchT = 0, bossCamT = -1, shakeX = 0, shakeZ = 0, reveal = null, glance = null, bossRing = null;
 let truckSq = 0, truckFlip = false, wipeT = -1, look = null, snapCam = false, freshW = false;
+// R7: the last bite's finisher (render3d's timing: boom at 1.25 s, camera back by 1.9 s) and the warm screen flash
+const FIN_BOOM = 1.25, FIN_BACK = 1.4, FIN_END = 1.9;
+let fin = null, finHold = false, flashA = 0;
+const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const flash = a => { flashA = Math.max(flashA, calm ? a * 0.35 : a); };
 const splats = [];
 const TOY = [];                            // flat sprite per kind index, built on first use
 const ART = new Map();                     // art name → { ok, img, sx, sy, sw, sh, p }
@@ -166,7 +173,7 @@ export function loadLevel(L, skinId) {
   cam.x = view.x = pot.x; cam.z = view.z = pot.z; cam.vx = cam.vz = 0; cam.ax = play.cx; cam.ay = play.cy;
   W = null; look = null; splats.length = 0; snapCam = freshW = true;
   lid.on = false; lid.pop = lid.jig = 0;
-  reveal = glance = bossRing = null; punchT = 0; bossCamT = -1; shakeX = shakeZ = 0; wipeT = -1; truckSq = 0;
+  reveal = glance = bossRing = null; punchT = 0; bossCamT = -1; shakeX = shakeZ = 0; wipeT = -1; truckSq = 0; fin = null; finHold = false; flashA = 0;
   try { buildGround(L); } catch { ground = null; }   // a bad surface never takes the level down: the clear colour shows
   for (const it of L.items || []) preloadKind(KIND_ID[it.kind]);
 }
@@ -201,7 +208,7 @@ export function dispose() {
     canvas.removeEventListener('contextlost', ctxH.lost, false);
     canvas.removeEventListener('contextrestored', ctxH.restored, false);
   }
-  canvas = ctx = null; ctxH = null; ground = null; potCv = shadowCv = haloCv = null; TOY.length = 0;
+  canvas = ctx = null; ctxH = null; ground = null; potCv = shadowCv = haloCv = rimCv = null; TOY.length = 0;
   W = null; LV = null; BB = null; look = null; splats.length = 0; wipeT = -1; lid.on = false; fLife.fill(0);
 }
 
@@ -253,11 +260,19 @@ function makeSprites() {
   TOY.length = 0;
   shadowCv = mk(64, 64);
   let g = shadowCv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(40,22,10,0.34)'); gr.addColorStop(0.6, 'rgba(40,22,10,0.2)'); gr.addColorStop(1, 'rgba(40,22,10,0)');
+  gr.addColorStop(0, 'rgba(40,22,10,0.56)'); gr.addColorStop(0.66, 'rgba(40,22,10,0.48)'); gr.addColorStop(0.86, 'rgba(40,22,10,0.16)'); gr.addColorStop(1, 'rgba(40,22,10,0)');   // R4: a tight core under the foot
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   haloCv = mk(64, 64);
   g = haloCv.getContext('2d'); gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(255,226,110,0.85)'); gr.addColorStop(0.55, 'rgba(255,205,60,0.45)'); gr.addColorStop(1, 'rgba(255,205,60,0)');
+  gr.addColorStop(0, 'rgba(255,226,110,0.7)'); gr.addColorStop(0.55, 'rgba(255,205,60,0.3)'); gr.addColorStop(1, 'rgba(255,205,60,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  // R5: the same gold ring with an ink edge as render3d, so it reads on tan cobbles and planks
+  g.lineWidth = 7; g.strokeStyle = 'rgba(58,36,24,0.5)'; g.beginPath(); g.arc(32, 32, 24, 0, TAU); g.stroke();
+  g.lineWidth = 4.5; g.strokeStyle = '#FFD34D'; g.beginPath(); g.arc(32, 32, 24, 0, TAU); g.stroke();
+  // R9: the warm glow round the rim (the sprite is drawn at 1.7 r, the rim's outer edge is 1.15 r)
+  rimCv = mk(64, 64);
+  g = rimCv.getContext('2d'); gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,204,97,0.7)'); gr.addColorStop(0.66, 'rgba(255,204,97,0.62)'); gr.addColorStop(1, 'rgba(255,204,97,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   potCv = makePot(LID[skin]);
 }
@@ -435,6 +450,7 @@ function buildGround(L) {
     surface(g, s.type, Math.max(0.1, +s.w || 1), Math.max(0.1, +s.d || 1), s.color);
     g.restore();
   }
+  for (const d of dressLayout(L, town, false)) dressPiece(g, d);
   truckPath(g, L.truckPath);
   for (const b of L.belts || []) beltFrame(g, b);
   if (L.roost) roost(g, +L.roost.x || 0, +L.roost.z || 0);
@@ -511,11 +527,11 @@ function board(g) {
   g.save(); g.beginPath(); g.rect(x0, z0, bw, bd); g.clip();
   if (town === 'picnic') {   // gingham: period 0.5 u, stripes 0.25 u (cream / stripe / cross = 1/4 · 1/2 · 1/4)
     const P = 0.5, s = 0.25;
-    g.fillStyle = '#F4A493'; g.beginPath();
+    g.fillStyle = '#E4AC9D'; g.beginPath();
     for (let x = x0; x < x1; x += P) g.rect(x, z0, s, bd);
     for (let z = z0; z < z1; z += P) g.rect(x0, z, bw, s);
     g.fill();
-    g.fillStyle = '#E8574A'; g.beginPath();
+    g.fillStyle = '#C9685A'; g.beginPath();
     for (let x = x0; x < x1; x += P) for (let z = z0; z < z1; z += P) g.rect(x, z, s, s);
     g.fill();
   } else if (town === 'market') {   // square tiles with joints and a few lighter stones
@@ -549,18 +565,21 @@ function surface(g, type, w, d, color) {
   // blanket tassels on the short ends.
   const col = color || (SURF_DEFAULT[town] || SURF_DEFAULT.picnic)[type] || '#FFF1DC';
   if (type === 'path') {
-    rr(g, -w / 2, -d / 2, w, d, Math.min(w, d) / 2); g.fillStyle = col; g.fill();
+    // R6: a square path is a disc (stepping stone or boss pad): a pale stone with a kerb, like props.js, never a stain
+    const stone = Math.abs(w - d) < 0.01, rad = Math.min(w, d) / 2;
+    rr(g, -w / 2, -d / 2, w, d, rad); g.fillStyle = stone ? mix(col, '#FFF1DC', 0.3) : col; g.fill();
+    if (stone) { rr(g, -w / 2 + 0.1, -d / 2 + 0.1, w - 0.2, d - 0.2, rad - 0.1); g.fillStyle = mix(col, '#FFF1DC', 0.74); g.fill(); }
     const n = Math.max(2, Math.round((w * d) / 0.9));
     for (let i = 0; i < n; i++) {
-      g.fillStyle = shade(col, i % 2 ? 0.18 : -0.1);
+      g.fillStyle = stone ? mix(col, '#FFF1DC', i % 2 ? 0.86 : 0.5) : shade(col, i % 2 ? 0.18 : -0.1);
       g.beginPath(); g.ellipse((hsh(i * 3 + 1) - 0.5) * (w - 0.3), (hsh(i * 3 + 2) - 0.5) * (d - 0.3), 0.065 + 0.065 * hsh(i * 3 + 3), 0.05 + 0.05 * hsh(i * 3 + 3), 0, 0, TAU); g.fill();
     }
   } else if (type === 'water') {
     rr(g, -w / 2, -d / 2, w, d, Math.min(0.4, Math.min(w, d) / 3)); g.fillStyle = col; g.fill();
     g.strokeStyle = '#E8FBFF'; g.lineWidth = 0.07; rr(g, -w / 2 + 0.095, -d / 2 + 0.095, w - 0.19, d - 0.19, 0.3); g.stroke();
   } else if (type === 'deck') {
-    const n = Math.max(1, Math.round(d / 0.28));
-    for (let i = 0; i < n; i++) { g.fillStyle = shade(col, i % 2 ? -0.08 : 0); rr(g, -w / 2, -d / 2 + i * d / n + 0.01, w, d / n - 0.02, 0.012); g.fill(); }
+    const n = Math.max(1, Math.round(d / 0.28)), base = lum(col) > 0.75 ? shade(col, -0.15) : col;   // R4, as props.js
+    for (let i = 0; i < n; i++) { g.fillStyle = shade(base, i % 2 ? -0.08 : 0); rr(g, -w / 2, -d / 2 + i * d / n + 0.01, w, d / n - 0.02, 0.012); g.fill(); }
   } else {
     const hem = lum(col) > 0.6 ? HEM[town] || HEM.picnic : '#FFF1DC';
     rr(g, -w / 2, -d / 2, w, d, 0.1); g.fillStyle = col; g.fill();
@@ -606,6 +625,53 @@ function roost(g, x, z) {   // the gulls' post (up to the perch height, drawn as
   g.strokeStyle = '#C8A15A'; g.lineWidth = 0.05; g.beginPath();
   for (let k = 0; k < 7; k++) { const a = k * 0.9; g.moveTo(x + Math.cos(a) * 0.62, z + Math.sin(a) * 0.46); g.lineTo(x + Math.cos(a + 0.7) * 0.4, z + Math.sin(a + 0.7) * 0.28); }
   g.stroke();
+}
+/** R8 in the baked ground: dress.js pieces as flat shapes (props.dressGeometry is the 3D twin). Baked, so no tier thinning. */
+function dressPiece(g, d) {
+  const c = d.c | 0, k = d.k, bar = (x, z, w, h, col) => { g.fillStyle = col; g.fillRect(x - w / 2, z - h / 2, w, h); };
+  g.save(); g.translate(d.x, d.z); g.rotate(-(d.rot || 0));
+  if (k === 'mat') {
+    g.fillStyle = '#C9A869'; disc(g, 0, 0, d.r); g.fill();
+    g.fillStyle = '#E2C88F'; disc(g, 0, 0, d.r * 0.86); g.fill();
+    g.fillStyle = '#D3B478'; disc(g, 0, 0, d.r * 0.56); g.fill();
+  } else if (k === 'rug') {
+    const col = RUGS[c % 4];
+    bar(0, 0, 3, 2, col); bar(0, 0.5, 2.5, 0.16, '#F4E6CC'); bar(0, -0.5, 2.5, 0.16, '#F4E6CC'); bar(0, 0, 2.5, 0.42, shade(col, -0.16));
+  } else if (k === 'awning') {
+    const col = RUGS[(c + 1) % 4], sw = 2.6 / 6;
+    for (let i = 0; i < 6; i++) {
+      const x = -1.3 + (i + 0.5) * sw, hex = i % 2 ? '#F4E6CC' : col;
+      bar(x, -0.08, sw, 1.2, hex); g.fillStyle = hex; disc(g, x, 0.52, sw / 2); g.fill();
+    }
+  } else if (k === 'hop') {
+    g.strokeStyle = '#F4E6CC'; g.lineWidth = 0.05;
+    for (const [x, z] of [[0, 1.25], [0, 0.7], [-0.3, 0.14], [0.3, 0.14], [0, -0.42], [-0.3, -0.98], [0.3, -0.98]]) g.strokeRect(x - 0.28, z - 0.28, 0.56, 0.56);
+  } else if (k === 'bars') {
+    const hb = d.town === 'harbour', n = hb ? 5 : 6;
+    for (let i = 0; i < n; i++) bar(-1.2 + (i + 0.5) * 2.4 / n, 0, 0.24, hb ? 0.9 : 1.5, hb ? '#E8B83A' : '#F4E6CC');
+  } else if (k === 'rope') {
+    g.lineWidth = 0.13;
+    for (let i = 0; i < 4; i++) { g.strokeStyle = i % 2 ? '#C9A869' : '#B6935A'; disc(g, 0, 0, 0.18 + i * 0.15); g.stroke(); }
+  } else if (k === 'net') {
+    g.strokeStyle = '#3E7F87'; g.lineWidth = 0.04; g.beginPath();
+    for (let i = -4; i <= 4; i++) { g.moveTo(-1.2 + i * 0.3, -0.9); g.lineTo(-0.2 + i * 0.3, 0.9); g.moveTo(1.2 + i * 0.3, -0.9); g.lineTo(0.2 + i * 0.3, 0.9); }
+    g.stroke();
+  } else if (k === 'hatch') {
+    bar(0, 0, 1.7, 1.7, '#7A5230');
+    for (let i = 0; i < 5; i++) bar(0, -0.58 + i * 0.29, 1.42, 0.23, i % 2 ? '#B08552' : '#C09560');
+  } else if (k === 'ring') {
+    g.lineWidth = 0.28; g.strokeStyle = '#F4E6CC'; disc(g, 0, 0, 0.42); g.stroke();
+    g.strokeStyle = '#D6523F';
+    for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; g.beginPath(); g.arc(0, 0, 0.42, a - 0.36, a + 0.36); g.stroke(); }
+  } else if (k === 'crate') {
+    g.fillStyle = 'rgba(40,22,10,0.2)'; g.fillRect(-0.34, -0.3, 0.84, 0.84);
+    bar(0, 0, 0.84, 0.84, '#8E5C2C'); bar(0, 0, 0.66, 0.66, '#D9A066');
+  } else if (k === 'basket') {
+    g.fillStyle = 'rgba(40,22,10,0.2)'; disc(g, 0.08, 0.1, 0.46); g.fill();
+    g.fillStyle = '#8E6A36'; disc(g, 0, 0, 0.44); g.fill();
+    g.fillStyle = '#3E7F87'; disc(g, 0, 0, 0.38); g.fill();
+  }
+  g.restore();
 }
 function decor(g, d) {
   const s = +d.s || 1, x = +d.x || 0, z = +d.z || 0;
@@ -673,8 +739,13 @@ function updateCamera(dt) {
   // two-course glance are render3d's; the title centres the board with a slow drift (no orbit in 2D).
   const land = cssW > cssH;
   cam.rCam += (pot.r - cam.rCam) * ek(dt, 0.45);
-  let wv = (3.6 + 7.2 * cam.rCam) * (land ? 1.35 : 1), ax = play.cx, ay = play.cy;
-  if (titleOn) { wv = land ? 15 : 7.5; ay = cssH * 0.5; }
+  let wv = (REC ? camWRec : camW)(cam.rCam) * (land ? 1.35 : 1), ax = play.cx, ay = play.cy;
+  if (!REC && BB) {   // R2, render3d's boardCapWv in top-down terms: the board keeps filling the view, the pot grows in frame
+    const ph = play.h > 1 ? play.h : cssH, minPpu = Math.max(ph / ((BB.z1 - BB.z0 + CAM_EDGE) * CAM_SLACK), cssW / (BB.x1 - BB.x0 + 4));
+    wv = Math.min(wv, Math.max(Math.min(cssW, ph / 0.8) / minPpu, cam.rCam * CAM_POT_FLOOR));
+  }
+  if (titleOn) { wv = camTitle(cssW, cssH); ay = cssH * 0.5; }
+  if (fin || finHold) ay = cssH * 0.72;   // R7: the pot sits under the centred ORDER UP band, as in render3d
   cam.ax += (ax - cam.ax) * ek(dt, 0.25); cam.ay += (ay - cam.ay) * ek(dt, 0.25);
   if (Math.abs(cam.ax - ax) > cssW || !(cam.ax > -1e8) || REC) { cam.ax = ax; cam.ay = ay; }
   if (punchT > 0) { punchT = Math.max(0, punchT - dt); const p = punchT / 0.5; wv *= 1 + 0.08 * p * (2 - p); }
@@ -686,6 +757,20 @@ function updateCamera(dt) {
     const amp = t < 0.25 ? 0.12 * pot.r * (1 - t / 0.25) : 0;
     shakeX = (rnd() * 2 - 1) * amp; shakeZ = (rnd() * 2 - 1) * amp;
     if (t > 0.9) bossCamT = -1;
+  }
+  // R7: the last bite punches in on the pot (framing and timing as render3d: pot ≈ 72 % of the width, shake on bite and boom)
+  let finK = 0, holdK = finHold ? 1 : 0;   // holdK keeps the goal on the pot until the next level (render3d says why)
+  if (fin) {
+    fin.t += dt;
+    const t = fin.t;
+    if (!fin.boom && t >= FIN_BOOM) { fin.boom = true; finBoom(); }
+    finK = sstep(0, 0.3, t) * (1 - sstep(FIN_BACK, FIN_END, t));
+    holdK = sstep(0, 0.3, t);
+    wv *= Math.exp(finK * Math.log(Math.min(1, 2 * pot.rVis / 0.72 / wv)));
+    const pk = t < 0.2 ? 0.45 * (1 - t / 0.2) : t >= FIN_BOOM && t < FIN_BOOM + 0.4 ? 1 - (t - FIN_BOOM) / 0.4 : 0;
+    const amp = calm ? 0 : 0.022 * wv * pk;
+    shakeX = (rnd() * 2 - 1) * amp; shakeZ = (rnd() * 2 - 1) * amp;
+    if (t > FIN_END) { fin = null; finHold = true; shakeX = shakeZ = 0; }
   }
   let fx0 = pot.x, fz0 = pot.z;
   if (glance && !titleOn) {   // 35 % toward the course-② boss and back over 1.2 s, kept within 70 % of the room
@@ -706,6 +791,7 @@ function updateCamera(dt) {
     gx = BB ? (BB.x0 + BB.x1) / 2 + Math.sin(time * 0.11) * 1.2 : pot.x;
     gz = BB ? (BB.z0 + BB.z1) / 2 + Math.sin(time * 0.07) * 1.6 : pot.z;
   } else [gx, gz] = clampGoal(fx0, fz0);
+  if (holdK > 0) { gx = lerp(gx, pot.x, holdK); gz = lerp(gz, pot.z, holdK); if (finK > 0) { cam.x = lerp(cam.x, pot.x, finK * 0.35); cam.z = lerp(cam.z, pot.z, finK * 0.35); } }
   if (reveal && !titleOn) {   // hold on the ticket boss 0.7 s, then glide to the pot over 0.6 s
     reveal.t += dt;
     const t = reveal.t;
@@ -728,6 +814,12 @@ function spawn(x, y, z, vx, vy, vz, life, size, col, shape = 0, grav = 6, grow =
   fP[i * 3] = x; fP[i * 3 + 1] = y; fP[i * 3 + 2] = z;
   fV[i * 3] = vx; fV[i * 3 + 1] = vy; fV[i * 3 + 2] = vz;
   fLife[i] = life; fL0[i] = life; fSz[i] = size; fShape[i] = shape; fGrav[i] = grav; fGrow[i] = grow; fA[i] = a; fCol[i] = col;
+}
+function finBoom() {   // the boss lands in the stew: warm flash, gulp, confetti from the pot, sparkle ring
+  const v = 2.6 + 6.6 * pot.rVis, M = mood;
+  flash(0.62); M.biteT = 0.18; M.sizeT = 0.2; M.happyT = 2;
+  burst(pot.x, 0.3, pot.z, 110, ['#FFD34D', '#E5483B', '#4CC26A', '#FFF6E6', '#FF9EC4', '#4AA8E8'], { speed: 0.8 * v, up: 0.9 * v, size: 0.045 * v, shape: 1, grav: v, life: 1.6 });
+  sparkleRing(14, '#FFE27A', 0.4 * v);
 }
 function burst(x, y, z, n, col, opt = {}) {
   const sp = opt.speed || 1.5, up = opt.up ?? 2, life = opt.life || 0.6, size = opt.size || 0.06;
@@ -805,8 +897,9 @@ export function onFx(ev, data) {
       break;
     }
     case 'bossBite': {
-      bossCamT = 0; M.wideT = 0.8;
       const [x, z] = itemXZ(d.i);
+      if (!REC && d.final) { fin = { t: 0, i: d.i, boom: false, ang: Math.atan2(x - pot.x, z - pot.z) }; glance = null; flash(0.28); M.wideT = FIN_BOOM; }
+      else { bossCamT = 0; M.wideT = 0.8; if (!REC) flash(0.2); }
       burst(x, 0.4 + pot.rVis * 0.5, z, 70, ['#FFD34D', '#E5483B', '#4CC26A', '#FFF6E6'], { speed: 2.6, up: 4.2, size: 0.11, shape: 1, grav: 5, life: 1.6 });
       break;
     }
@@ -842,7 +935,7 @@ export function onFx(ev, data) {
     case 'start': reveal = null; break;
     case 'levelStart': {
       resetMood();
-      lid.on = false; lid.pop = lid.jig = 0; glance = bossRing = null;
+      lid.on = false; lid.pop = lid.jig = 0; glance = bossRing = null; fin = null; finHold = false; flashA = 0;
       const w = d.w || W;
       if (!d.retry && w && w.tickets && w.tickets.length) {
         const b = w.tickets[w.ti | 0] && w.tickets[w.ti | 0].boss;
@@ -863,6 +956,7 @@ export function onFx(ev, data) {
     }
     case 'cakeTier': {
       if (d.i >= 0 && d.i < ITEM_MAX) popT[d.i] = 0.25;
+      if (!REC) { bossCamT = 0; flash(0.16); }
       const [x, z] = itemXZ(d.i);
       burst(x, 0.8, z, 22, ['#FFF6E3', '#FF9EC4', '#FFFFFF', '#FFB3C7'], { speed: 1.7, up: 2.6, size: 0.08, shape: 0, life: 0.8 });
       break;
@@ -952,6 +1046,7 @@ export function update(w, dt, alpha = 1) {
   truckSq = Math.max(0, truckSq - dt);
   if (bossRing) { bossRing.t += dt; if (bossRing.t > 0.6) bossRing = null; }
   if (wipeT >= 0) { wipeT += dt / 0.6; if (wipeT >= 1) wipeT = -1; }
+  flashA *= Math.exp(-dt / 0.13);
 }
 
 function itemPos(w, i) {   // interpolated position → XS/ZS (and YS = height for carried food)
@@ -1068,6 +1163,7 @@ export function draw() {
   drawFx();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (wipeT >= 0) drawWipe();
+  if (flashA > 0.004) { ctx.fillStyle = 'rgba(255,226,150,' + flashA.toFixed(3) + ')'; ctx.fillRect(0, 0, cssW, cssH); ops++; }
 }
 
 function drawGround() {
@@ -1134,7 +1230,8 @@ function drawPot() {
   const over = M.sizeT > 0 ? 1 + 0.12 * Math.sin(PI * (1 - M.sizeT / 0.2)) : 1;
   let gulp = 1;
   if (M.biteT > 0) { const t = 0.18 - M.biteT; gulp = t < 0.06 ? lerp(1, 0.94, t / 0.06) : t < 0.12 ? lerp(0.94, 1.03, (t - 0.06) / 0.06) : lerp(1.03, 1, (t - 0.12) / 0.06); }
-  const R = rv * 1.25 * over * gulp;
+  const R = rv * 1.25 * over * gulp, G = rv * 1.7 * over;
+  if (rimCv) { ctx.drawImage(rimCv, pot.x - G, pot.z - G, 2 * G, 2 * G); ops++; }
   ctx.drawImage(potCv, pot.x - R, pot.z - R, 2 * R, 2 * R); ops++;
   // the stew swirls (two light arcs) and dims when the level is lost
   const sr = rv * 0.9 * over * gulp, a = time * 1.6;
@@ -1144,11 +1241,12 @@ function drawPot() {
   if (M.dim < 0.98) { ctx.fillStyle = 'rgba(30,18,10,' + (0.6 * (1 - M.dim)).toFixed(3) + ')'; disc(ctx, pot.x, pot.z, sr); ctx.fill(); ops++; }
 }
 
-function boostOf(K, a, openIng) {   // render3d's readability boost (§7.4): open-line ingredient ≥ 7 px, T0 ≥ 6 px
+function boostOf(K, a, openIng) {   // render3d's readability boost (§7.4, R3): T0 and open-line food ≥ 11 px, T1 × 1.3, under the rim
   const app = a * ppu;
-  if (openIng && app < 7) return Math.min(2.5, 7 / Math.max(app, 1e-3));
-  if (K.tier === 0 && app < 6) return Math.min(1.6, 6 / Math.max(app, 1e-3));
-  return 1;
+  let b = 1;
+  if ((openIng || K.tier === 0) && app < 11) b = Math.min(3.2, 11 / Math.max(app, 1e-3));
+  else if (K.tier === 1 && K.food) b = 1.3;
+  return b > 1 ? Math.max(1, Math.min(b, 0.8 * pot.rVis / Math.max(1e-3, a))) : 1;
 }
 function drawItems(w) {
   // DECISION (11-04): items draw in z order (lower on screen = in front) after the pot, which is a hole in the
@@ -1172,6 +1270,12 @@ function drawItems(w) {
     const i = keys[k] % 1024, K = KINDS[itemCat[i]], a = w.ia[i], fl = w.flags[i];
     const openIng = !!(fl & F_ING) && w.glow[i] > 0;
     let R = a * boostOf(K, a, openIng);
+    if (fin && fin.i === i && st[i] === 1) {   // R7: swells to the pot's size whatever the boss's real size, then shrinks to nothing
+      const q = sstep(0.32, FIN_BOOM, fin.t), pop = 1 + 0.16 * Math.sin(PI * sstep(0.12, 0.42, fin.t));
+      R *= lerp(1, Math.max(1.25, 1.05 * pot.rVis / Math.max(1e-3, R)), sstep(0, 0.28, fin.t)) * pop * (1 - 0.94 * q * q);
+      RS[i] = R;
+      continue;
+    }
     if (st[i] === 1) R *= 1 - 0.75 * sstep(0, 1, w.tp[i]);
     if (popT[i] > 0) R *= 1 + 0.3 * Math.sin(PI * (1 - popT[i] / 0.25));
     RS[i] = R;
@@ -1228,7 +1332,11 @@ function drawItems(w) {
 function drawBody(w, i, isCake, isTruck) {
   const K = KINDS[itemCat[i]], a = w.ia[i], s = w.st[i], R = RS[i];
   let x = XS[i], z = ZS[i] - YS[i] * LIFT;
-  if (s === 1) { const t = 0.8 * sstep(0, 1, w.tp[i]); x = lerp(x, pot.x, t); z = lerp(z, pot.z, t); ctx.globalAlpha = 1 - 0.5 * w.tp[i]; }
+  const finI = fin && fin.i === i && s === 1;
+  if (finI) {   // R7: pulled in along a tightening spiral (ctx rotation below spins it)
+    const q = sstep(0.32, FIN_BOOM, fin.t), ang = fin.ang + TAU * 1.6 * q * q, rad = 0.42 * pot.rVis * (1 - q), inP = sstep(0, 0.28, fin.t);
+    x = lerp(x, pot.x + Math.sin(ang) * rad, inP); z = lerp(z, pot.z + Math.cos(ang) * rad, inP);
+  } else if (s === 1) { const t = 0.8 * sstep(0, 1, w.tp[i]); x = lerp(x, pot.x, t); z = lerp(z, pot.z, t); ctx.globalAlpha = 1 - 0.5 * w.tp[i]; }
   // jitter: boss rattle, wobble, the fragile shiver (a 0.5 s tremble every 2.5 s)
   if (rattleT[i] > 0) x += Math.sin(time * 60) * 0.05 * a * (rattleT[i] / 0.4);
   if (wobT[i] > 0) x += Math.sin(time * 30) * 0.08 * a * (wobT[i] / 0.4);
@@ -1238,6 +1346,7 @@ function drawBody(w, i, isCake, isTruck) {
     const shape = SHAPE[K.id] || 'disc', e = K.icon ? art(K.icon) : null;
     let rot = TURNS.has(shape) && !(e && e.ok) ? itemRot[i] : 0;
     if (K.roll) rot += rollA[i];
+    if (finI) { const q = sstep(0.32, FIN_BOOM, fin.t); rot += TAU * 1.6 * q * q; }
     if (e && e.ok) {
       const L = 2.1 * R, mx = Math.max(e.sw, e.sh), dw = L * e.sw / mx, dh = L * e.sh / mx;
       if (isTruck) {

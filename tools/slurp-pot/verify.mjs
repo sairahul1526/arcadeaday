@@ -35,7 +35,7 @@ export function writeLevelsData(path, specs, rec, kindMax) {
   out.push('// Spec: { n, name, town, arch, W, D, seed, r0, T, items, mix [T0..T4 %], margin [lo, hi], tickets: [{ lines:');
   out.push('// [{ kind, need, place?, spare?, at? }], boss: { kind, a } }], twist: { pens, nested, walls, lanes, islands,');
   out.push('// gulls, cap, cake, truck }, gateR?, timed?, bossDist?, rings?, goal: { T, greedy, casual } (§4.4 table),');
-  out.push('// seed0?, marginBand?, stats? }. tune.mjs picks seed (seed0 + 7919·bump), T (goal.T ± 15 %) and margin (inside');
+  out.push('// seed0?, marginBand?, grace?, starter?, stats? }. tune.mjs picks seed (seed0 + 7919·bump), T (goal.T ± 15 %) and margin (inside');
   out.push('// the §4.2 band kept in marginBand); stats = the confirm run (verify.mjs, 100 runs per human bot) at that T.');
   out.push('export const SPECS = [');
   for (const s of specs) out.push('  ' + JSON.stringify(s) + ',');
@@ -52,22 +52,36 @@ export function writeLevelsData(path, specs, rec, kindMax) {
 
 // ------------------------------------------------------------------ targets (§5.1, §4.4)
 /** Band rules for level n: floors and ranges used by gates 2–4. */
+// DECISION (11-06 Fri, L4 ramp): from L25 the difficulty is a saw-tooth. Critics found no level that made an average
+// player sweat: the average bot kept 16-32 s on most of L21+. A peak is the last hard level before a breather or twist
+// intro, plus the town finales: L29 33 37 40 44 49 54 57 60. Greedy runs 80-95 % of T there and casual sits at ~52 %
+// (45-59), so the average bot still wins but with seconds left, and the average 3-star floor drops to 0: on a peak the
+// third star belongs to a fast hand. The every-5th boss levels that §4.4 calls breathers stay breathers (the brief wants
+// a breather after each peak). L43, L53 and L59 keep their Thu cliff fixes and are not peaks.
+export const PEAKS = [29, 33, 37, 40, 44, 49, 54, 57, 60];
 export function bandOf(n) {
   if (n <= 3) return { avg: [100, 99, 85][n - 1], exp: 100, plan: null, avg3: null, cas3: null };
   if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [20, 45], cas3: 15 };
   if (n <= 20) return { avg: 75, exp: 97, plan: 0.80, avg3: [15, 40], cas3: 15 };
-  if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [15, 35], cas3: 15 };
-  return { avg: 70, exp: 95, plan: 0.76, avg3: [15, 30], cas3: 15 };
+  if (n <= 40) return { avg: 72, exp: 96, plan: 0.78, avg3: [PEAKS.includes(n) ? 0 : 15, 35], cas3: 15 };
+  return { avg: 70, exp: 95, plan: 0.76, avg3: [PEAKS.includes(n) ? 0 : 15, 30], cas3: 15 };
 }
 // DECISION (11-04 Wed, §4.4): breathers (6 12 15 25 30 35 45 50 55) run greedy ≤ 76 % of T and casual ≥ 80 %;
 // each twist's first level (4 10 16 22 28 34 41 47 53) greedy ≤ 74 %, casual ≥ 80 %. Both clip the table windows
 // (goal.greedy ± 4, goal.casual ± 7); a casual goal under 80 (L55 78) keeps its own value as the floor.
 export const BREATHERS = [6, 12, 15, 25, 30, 35, 45, 50, 55], TWIST_FIRST = [4, 10, 16, 22, 28, 34, 41, 47, 53];
+// DECISION (11-06 Fri, L1 grace): a level's grace buys no stars, so every pace gate reads the pace T = T − grace. Greedy %
+// and the 3★ bands keep their meaning on a grace level; casual has the grace on top, so only its floor stays (see below).
+export const paceT = o => o.T - (o.grace > 0 ? o.grace : 0);
 /** Greedy share-of-T window (gate 2): table % ± 4; from L10 also inside 70–85 % (bakeoff call); §4.4 caps. */
 export function greedyWindow(spec) {
   const g = spec.goal && spec.goal.greedy;
-  if (!g) return null;
+  // DECISION (11-06 Fri, L1 grace): on a grace level the win is never in doubt for greedy, and the pace only prices the stars, so
+  // the average 3-star band sets it. Greedy is the slowest fast bot on these boards (L5 greedy 46 s, average 37 s; L10 53 s,
+  // 45 s), so a greedy window pulled T the other way from the star band. Gate 1 still needs greedy to win.
+  if (!g || spec.grace > 0) return null;
   let lo = g - 4, hi = g + 4;
+  if (PEAKS.includes(spec.n)) return [80, 95];
   if (spec.n >= 10) { lo = Math.max(lo, 70); hi = Math.min(hi, 85); }
   if (BREATHERS.includes(spec.n)) hi = Math.min(hi, 76);
   if (TWIST_FIRST.includes(spec.n)) hi = Math.min(hi, 74);
@@ -79,7 +93,8 @@ export function casualWindow(spec) {
   if (c == null) return null;
   let lo = c - 7;
   if (BREATHERS.includes(spec.n) || TWIST_FIRST.includes(spec.n)) lo = Math.max(lo, Math.min(80, c));
-  return [lo, c + 7];
+  // DECISION (11-06 Fri, L1 grace): grace exists to lift a slow hand over the table's casual goal, so a grace level has no ceiling.
+  return [lo, spec.grace > 0 ? 100 : c + 7];
 }
 
 // ------------------------------------------------------------------ static gates (§4.2) on an expanded level
@@ -191,13 +206,32 @@ export function staticGates(lv, spec) {
     }
     if (!gated) fails.push('5 placement: no line is gated or ≥ 60 % of D from spawn');
   }
+  // DECISION (11-06 Fri): L2–L10 starter promise. A dense patch of bites (≥ 12 in one 1.6 u circle) and an item of the
+  // order's first line, both inside the first portrait screen of spawn (±2.3 by ±5 u at r 0.3).
+  if (spec.starter) {
+    const view = o => Math.abs(o.x - sp.x) <= 2.3 && Math.abs(o.z - sp.z) <= 5;
+    const bites = it.filter(o => !isWall(o) && !isBoss(o) && o.lane < 0 && o.belt < 0 && L.canFit(r0, o.a) && view(o));
+    m.patch = Math.max(0, ...(lv.piles || []).map(p => bites.filter(o => Math.hypot(o.x - p.x, o.z - p.z) <= p.r).length));
+    if (m.patch < 12) fails.push(`5 starter: ${m.patch} bites in the patch (< 12)`);
+    const lead = lv.tickets[0].lines[0];
+    if (!it.some(o => o.kind === lead.kind && !isBoss(o) && view(o))) fails.push(`5 starter: no ${lead.kind} (first line) in the first screen`);
+  }
+  // DECISION (11-06 Fri, L3): the snack-pile promise. At least 5 piles from L21, one of them on the first screen of spawn.
+  if (spec.n >= 21) {
+    const ps = lv.piles || [];
+    if (ps.length < 5) fails.push(`5 piles: ${ps.length} (< 5)`);
+    if (!ps.some(p => Math.abs(p.x - sp.x) <= 2.3 + p.r && Math.abs(p.z - sp.z) <= 5 + p.r)) fails.push('5 piles: none in view of spawn');
+  }
   // margin (DECISION in levels.js: ingredients at K_ING, walls at their k)
   const bossA = Math.max(...it.filter(isBoss).map(o => o.a));
   const needR = L.needR(lv.cake && lv.cake.tiers ? lv.cake.tiers[lv.cake.tiers.length - 1] : bossA);
   let sup = 0;
   for (const o of it) if (!isBoss(o)) sup += ((o.flags & F.ING) ? K_ING : o.k) * o.a * o.a;
   m.margin = sup / ((needR * needR - r0 * r0) / 0.24);
-  if (spec.margin && (m.margin < spec.margin[0] - 0.005 || m.margin > spec.margin[1] + 0.005)) fails.push(`5 margin ${m.margin.toFixed(2)} outside [${spec.margin}]`);
+  // DECISION (11-06 Fri, L3): spec.margin bands the tuned layout; L21+ snack piles sit on top of it and add 0.02–0.03 of T0/T1
+  // supply (fixMargin cannot see them, by design: they must not move a draw). The band's top gets 0.05 for them.
+  const pileM = spec.n >= 21 ? 0.05 : 0;
+  if (spec.margin && (m.margin < spec.margin[0] - 0.005 || m.margin > spec.margin[1] + pileM + 0.005)) fails.push(`5 margin ${m.margin.toFixed(2)} outside [${spec.margin}]${pileM ? ' + piles' : ''}`);
   // DECISION (11-04, no cliffs §4.4): the growth ladder. ladderFrac = the smallest share f of every item's mass
   // with which the pot, eating in fit order (an item counts once it fits and its pen's gate piece fits), still
   // reaches needR(boss). A tier gap (L2 11-04: 0.28 → 0.90 with nothing between, the pot stalls at r 0.94 of 1.44)
@@ -302,7 +336,7 @@ function many(lv, kind, runs, opts = {}) {
 export function botStats(lv, spec, { runs = 100, xruns = runs, kinds = ['casual', 'average', 'expert'] } = {}) {
   const st = {};
   const g = B.runLevel(lv, 'greedy', 1);
-  st.greedy = { win: g.win, t: +g.tUsed.toFixed(2), stars: g.stars, pct: lv.timed === false ? null : +(100 * g.tUsed / lv.T).toFixed(1) };
+  st.greedy = { win: g.win, t: +g.tUsed.toFixed(2), stars: g.stars, pct: lv.timed === false ? null : +(100 * g.tUsed / paceT(lv)).toFixed(1) };
   let nw = 0;
   for (let s = 1; s <= 20; s++) if (B.runLevel(lv, 'greedy', 100 + s, { noiseDeg: 3 }).win) nw++;
   st.noise = pct(nw, 20);
@@ -450,7 +484,7 @@ export function statsRow(spec) {
   if (!st) return { row: `L${String(spec.n).padStart(2)} ${spec.arch} T${spec.T} | no stats | FAIL: not verified`, pass: false };
   const stale = [];
   if (Math.abs(m.margin - st.margin) > 0.005 || m.items !== st.items || m.kinds !== st.kinds) stale.push(`layout (margin ${m.margin.toFixed(2)} items ${m.items} now)`);
-  if (st.greedy && st.greedy.win && st.greedy.pct != null && Math.abs(st.greedy.pct - (100 * st.greedy.t) / spec.T) > 0.15) stale.push(`T (greedy ${st.greedy.pct}% was at another T)`);
+  if (st.greedy && st.greedy.win && st.greedy.pct != null && Math.abs(st.greedy.pct - (100 * st.greedy.t) / paceT(spec)) > 0.15) stale.push(`T (greedy ${st.greedy.pct}% was at another T)`);
   // bot gates are re-derived from the stored stats (so a gate change shows without a re-run); doom/determinism
   // fails (6, 7) are kept from the stored run
   const fails = (st.fails || []).filter(f => /^[67] /.test(f));
@@ -532,7 +566,7 @@ async function main() {
       `100 casual + 100 average runs, expert 34 in a tune confirm, greedy + 20 ±3° noise seeds, planner deterministic); static gates re-run now.`,
       `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 20–45 | L8–20 75/97/.80/15–40 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
       `casual 3★ ≤15 from L4; casual win within goal.casual ± 7; greedy % of T within goal.greedy ± 4 (70–85 from L10); D32 near ≥.6 on L3/L7;`,
-      `§4.4: breathers ${BREATHERS.join(' ')} greedy ≤76 casual ≥80; twist intros ${TWIST_FIRST.join(' ')} greedy ≤74 casual ≥80.`,
+      `§4.4: peaks ${PEAKS.join(' ')} greedy 80–95 casual 45–59 avg3★ floor 0; breathers ${BREATHERS.join(' ')} greedy ≤76 casual ≥80; twist intros ${TWIST_FIRST.join(' ')} greedy ≤74 casual ≥80.`,
       `${np}/${list.length} levels pass every gate`, ...rows.map(r => r.row), ...cliffLines(list)];
     report(out, args.includes('--append'), rpath);
     if (!quiet) console.log(out.join('\n'));

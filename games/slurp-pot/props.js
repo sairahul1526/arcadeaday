@@ -22,6 +22,7 @@
 // Lawn green appears only on hedges, trees, grass strips under fences and decor tufts.
 import * as T from './vendor/three.bundle.js';
 import { KIND } from './catalog.js';
+import { RUGS } from './dress.js';
 
 const PI = Math.PI, TAU = PI * 2;
 
@@ -30,9 +31,11 @@ export const GROUND_TILE = 4.0;                               // world units per
 const TEX = 512, WHITE_PX = 32.5;                              // texel that is white in every town's ground
 // White at canvas (32.5, 32.5) and at its flipY mirror row 479.5, so it holds whatever flipY render uses.
 export const WHITE_UV = [WHITE_PX / TEX, WHITE_PX / TEX];
-export const GROUND_BASE = { picnic: '#FFF1DC', market: '#D9C6A5', harbour: '#C99A63' };
+export const GROUND_BASE = { picnic: '#F7E9D4', market: '#D9C6A5', harbour: '#C99A63' };
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
-export const GINGHAM = { cream: '#FFF1DC', stripe: '#F4A493', cross: '#E8574A', lum: { cream: 0.893, stripe: 0.478, cross: 0.245 } };
+// R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
+// catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
+export const GINGHAM = { cream: '#F7E9D4', stripe: '#E4AC9D', cross: '#C9685A', lum: { cream: 0.828, stripe: 0.484, cross: 0.231 } };
 
 // ---------------------------------------------------------------- colour helpers
 const _lin = new Map();
@@ -2158,18 +2161,25 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
       P(box(bw, 0.004, id - 2 * bw), hex, [iw / 2 - bw / 2, y, 0]), P(box(bw, 0.004, id - 2 * bw), hex, [-iw / 2 + bw / 2, y, 0]));
   };
   if (type === 'path') {
-    parts.push(P(slab(rrShape(w, d, Math.min(w, d) / 2), 0.016, 0, 6), col));
+    // R6 (11-06): a square path renders as a disc: the spiral's stepping stones and the boss pad. In dark slate or brown they
+    // read as stains on the floor (the "eaten marks" of the 11-06 critics: nothing is left by eating, these are level
+    // surfaces from the first frame). So a disc is a pale paving stone with a darker kerb. Roads keep the level's colour.
+    const stone = Math.abs(w - d) < 0.01, rad = Math.min(w, d) / 2;
+    const top = stone ? mixC(col, '#FFF1DC', 0.74) : null, fleck = (t) => (stone ? mixC(col, '#FFF1DC', t) : shade(col, t > 0.5 ? 0.18 : -0.1));
+    parts.push(P(slab(rrShape(w, d, rad), 0.016, 0, 6), stone ? mixC(col, '#FFF1DC', 0.3) : col));
+    if (stone) parts.push(P(slab(rrShape(w - 0.2, d - 0.2, rad - 0.1), 0.016, 0, 6), top, [0, 0.004, 0]));
     const n = Math.max(2, Math.round((w * d) / 0.9));
     for (let i = 0; i < n; i++) {
-      const x = (hsh(i * 3 + 1) - 0.5) * (w - 0.3), z = (hsh(i * 3 + 2) - 0.5) * (d - 0.3), r = 0.05 + 0.05 * hsh(i * 3 + 3);
-      parts.push(P(cyl(r, r, 0.006, 7), shade(col, i % 2 ? 0.18 : -0.1), [x, 0.018, z], null, [1.3, 1, 1]));
+      const x = (hsh(i * 3 + 1) - 0.5) * (w - 0.3) * (stone ? 0.7 : 1), z = (hsh(i * 3 + 2) - 0.5) * (d - 0.3) * (stone ? 0.7 : 1), r = 0.05 + 0.05 * hsh(i * 3 + 3);
+      parts.push(P(cyl(r, r, 0.006, 7), fleck(i % 2 ? 0.86 : 0.5), [x, 0.022, z], null, [1.3, 1, 1]));
     }
   } else if (type === 'water') {
     parts.push(P(slab(rrShape(w, d, Math.min(0.4, Math.min(w, d) / 3)), 0.006, 0, 6), col));
     frame(0.06, 0.07, '#E8FBFF', 0.009);
   } else if (type === 'deck') {
-    const pw = 0.28, n = Math.max(1, Math.round(d / pw));
-    for (let i = 0; i < n; i++) parts.push(P(rbox(w, 0.03, d / n - 0.02, 0.012, 1), shade(col, i % 2 ? -0.08 : 0), [0, 0.006, -d / 2 + (i + 0.5) * d / n]));
+    // R4 (11-06): levels hand the harbour's near-white #E8FBFF here; a step down so white food reads on the planks.
+    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? shade(col, -0.15) : col;
+    for (let i = 0; i < n; i++) parts.push(P(rbox(w, 0.03, d / n - 0.02, 0.012, 1), mixC(base, '#3A2418', i % 2 ? 0.08 : 0), [0, 0.006, -d / 2 + (i + 0.5) * d / n]));
   } else {
     // blanket / rug: body + hem frame + inner line; blanket gets tassels on the short ends
     // DECISION: the hem is a contrasting accent (light cloth → town accent, dark cloth → cream), so a cream
@@ -2186,6 +2196,59 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
       }
     }
   }
+  const g = merge(parts);
+  setWhiteUV(g);
+  g.computeBoundingBox(); g.computeBoundingSphere();
+  return g;
+}
+
+/** R8 floor dressing, one piece from dress.js (origin on the floor, y up). Flat prints are 0.02 u or less, under the blob decals. */
+export function dressGeometry(d) {
+  const parts = [], c = d.c | 0, k = d.k, mat = (w, dd, r, h, col, y = 0) => P(slab(rrShape(w, dd, r), h, 0, 4), col, [0, y, 0]);
+  if (k === 'mat') {          // the woven mat under a snack pile: a straw round with two bands
+    const R = d.r, Y = 0.034;
+    parts.push(P(cyl(R, R, 0.006, 18), '#C9A869', [0, Y, 0]), P(cyl(R * 0.86, R * 0.86, 0.006, 18), '#E2C88F', [0, Y + 0.002, 0]),
+      P(cyl(R * 0.56, R * 0.56, 0.006, 16), '#D3B478', [0, Y + 0.004, 0]));
+  } else if (k === 'rug') {   // a market rug: body, two stripes, fringe on the short ends
+    const col = RUGS[c % 4], w = 3, dd = 2;
+    parts.push(mat(w, dd, 0.06, 0.012, col), P(box(w - 0.5, 0.004, 0.16), '#F4E6CC', [0, 0.014, 0.5]), P(box(w - 0.5, 0.004, 0.16), '#F4E6CC', [0, 0.014, -0.5]),
+      P(box(w - 0.5, 0.004, 0.42), shade(col, -0.16), [0, 0.014, 0]));
+    for (let i = 0; i < 8; i++) for (const s of [-1, 1]) parts.push(P(box(0.1, 0.006, 0.08), '#F4E6CC', [s * (w / 2 + 0.03), 0.006, -dd / 2 + (i + 0.5) * dd / 8]));
+  } else if (k === 'awning') { // striped canvas laid out to dry, scalloped along one edge
+    const n = 6, sw = 2.6 / n, col = RUGS[(c + 1) % 4];
+    for (let i = 0; i < n; i++) {
+      const x = -1.3 + (i + 0.5) * sw, hex = i % 2 ? '#F4E6CC' : col;
+      parts.push(P(box(sw, 0.01, 1.2), hex, [x, 0.008, -0.08]), P(cyl(sw / 2, sw / 2, 0.01, 10), hex, [x, 0.008, 0.52]));
+    }
+  } else if (k === 'hop') {    // chalk hopscotch
+    const line = '#F4E6CC', sq = (x, z) => [P(box(0.56, 0.004, 0.05), line, [x, 0.006, z - 0.28]), P(box(0.56, 0.004, 0.05), line, [x, 0.006, z + 0.28]),
+      P(box(0.05, 0.004, 0.56), line, [x - 0.28, 0.006, z]), P(box(0.05, 0.004, 0.56), line, [x + 0.28, 0.006, z])];
+    parts.push(sq(0, 1.25), sq(0, 0.7), sq(-0.3, 0.14), sq(0.3, 0.14), sq(0, -0.42), sq(-0.3, -0.98), sq(0.3, -0.98));
+  } else if (k === 'bars') {   // painted lines: a crossing in Market, a dock's yellow loading bars in the Harbour
+    const hb = d.town === 'harbour', n = hb ? 5 : 6, hex = hb ? '#E8B83A' : '#F4E6CC', dd = hb ? 0.9 : 1.5;
+    for (let i = 0; i < n; i++) parts.push(P(box(0.24, 0.004, dd), hex, [-1.2 + (i + 0.5) * 2.4 / n, 0.006, 0]));
+  } else if (k === 'rope') {   // a flat coil: rings with a tail
+    for (let i = 0; i < 4; i++) parts.push(P(new T.TorusGeometry(0.18 + i * 0.15, 0.075, 5, 16).rotateX(PI / 2), i % 2 ? '#C9A869' : '#B6935A', [0, 0.05, 0], null, [1, 0.5, 1]));
+    parts.push(P(box(0.62, 0.04, 0.12), '#B6935A', [0.86, 0.02, 0.2], [0, 0.4, 0]));
+  } else if (k === 'net') {    // a fishing net spread to dry: diagonal cords, a float at two corners
+    const hex = '#3E7F87';
+    for (let i = -4; i <= 4; i++) for (const s of [-1, 1]) parts.push(P(box(2.6, 0.006, 0.04), hex, [i * 0.34 * s * 0.2, 0.008, i * 0.26], [0, s * 0.62, 0], [0.8, 1, 1]));
+    parts.push(P(cyl(0.15, 0.15, 0.05, 9), '#E8824A', [-1.05, 0.03, -0.8]), P(cyl(0.15, 0.15, 0.05, 9), '#E8824A', [1.05, 0.03, 0.8]));
+  } else if (k === 'hatch') {  // a deck hatch: frame, slats, a rope ring
+    parts.push(mat(1.7, 1.7, 0.06, 0.012, '#7A5230'));
+    for (let i = 0; i < 5; i++) parts.push(P(box(1.42, 0.006, 0.23), i % 2 ? '#B08552' : '#C09560', [0, 0.014, -0.58 + i * 0.29]));
+    parts.push(P(new T.TorusGeometry(0.14, 0.03, 4, 12).rotateX(PI / 2), '#E9D9B8', [0, 0.028, 0], null, [1, 0.4, 1]));
+  } else if (k === 'ring') {   // a life ring, red and cream quarters
+    parts.push(P(new T.TorusGeometry(0.42, 0.15, 6, 20).rotateX(PI / 2), '#F4E6CC', [0, 0.05, 0], null, [1, 0.4, 1]));
+    for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; parts.push(P(box(0.32, 0.03, 0.3), '#D6523F', [Math.cos(a) * 0.42, 0.075, Math.sin(a) * 0.42], [0, -a, 0])); }
+  } else if (k === 'crate') {  // low slatted crate
+    parts.push(P(rbox(0.8, 0.34, 0.8, 0.03, 1), '#C98B4E', [0, 0.17, 0]));
+    for (const y of [0.09, 0.26]) parts.push(P(box(0.84, 0.05, 0.84), '#8E5C2C', [0, y, 0]));
+    parts.push(P(box(0.66, 0.012, 0.66), '#D9A066', [0, 0.345, 0]));
+  } else if (k === 'basket') { // a fish basket with its lid on: wicker bands, nothing alive in it
+    parts.push(P(cyl(0.42, 0.34, 0.34, 12), '#C49A5C', [0, 0.17, 0]), P(cyl(0.44, 0.44, 0.05, 12), '#8E6A36', [0, 0.33, 0]), P(cyl(0.4, 0.4, 0.05, 12), '#3E7F87', [0, 0.37, 0]));
+    parts.push(P(cyl(0.385, 0.385, 0.04, 12), '#8E6A36', [0, 0.13, 0]));
+  } else throw new Error('props: no dressing ' + k);
   const g = merge(parts);
   setWhiteUV(g);
   g.computeBoundingBox(); g.computeBoundingSphere();

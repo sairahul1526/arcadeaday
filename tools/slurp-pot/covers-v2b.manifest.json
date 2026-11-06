@@ -1,0 +1,26 @@
+{
+  "cover-melon-3": {
+    "prompt": "Tight close-up of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot and its big happy eyes fill the frame, a huge juicy watermelon half tipping into the open top rim, red juice droplets and seeds flying, bright gingham cloth and sunny blue-green background blurred softly behind. The pot has EXACTLY TWO eyes in total, both sitting on the front of the rim facing the viewer; the back of the rim has no eyes; the pot has NO mouth and NO opening on its body, just two eyes and pink blush.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "a7e9a647e3c6c50d3cbe5e2283620f0c"
+    ],
+    "bytes": 67004,
+    "at": "2026-11-06T08:14:08.561Z"
+  },
+  "cover-gulp-3": {
+    "prompt": "Front-and-centre hero shot of the same golden pot character from the reference image (same round sunflower-gold glossy enamel pot, same two big round cartoon eyes with white glints sitting on the front of the rim, same pink blush, no mouth, same chunky loop handles, glowing orange stew inside). Bright, sunny, saturated and cheerful, zero dead space, every part of the frame filled with the scene, the top-left corner area is simply bright blue sky or bright scenery (not empty, not dark) so a title can sit on it. Only the pot has a face: all food, cake and fruit are inanimate with no faces. Empty environment only: NO animals, NO people, NO insects, NO birds, NO text, NO letters The pot is large in the middle, mid-gulp, eyes wide with joy, an oversized strawberry cake sliding down into its open top rim, strawberries and cupcakes swirling in a spiral into the pot, bright red and white gingham picnic cloth below, clear blue sky with soft clouds and a green park with toy trees behind. The pot has EXACTLY TWO eyes in total, both sitting on the front of the rim facing the viewer; the back of the rim has no eyes; the pot has NO mouth and NO opening on its body, just two eyes and pink blush.",
+    "aspect": "16:9",
+    "model": "nano-banana-2",
+    "cutout": false,
+    "max": 1600,
+    "tasks": [
+      "0624118e8ddccb291b6a157da2799f2f"
+    ],
+    "bytes": 79938,
+    "at": "2026-11-06T08:15:14.754Z"
+  }
+}

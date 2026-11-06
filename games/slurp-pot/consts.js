@@ -25,7 +25,7 @@ export const FEAST = { start: 45, add0: 12, addMin: 6, tickets: 4, needMax: 6, s
 export const LADDER = [{coins:40},{chest:{coins:60, boost:'freeze'}},{lid:1},{coins:80},{boost:['magnet','mega']},{coins:120},{skin:'starladle', else:{coins:200, boost:'all'}}];
 export const SKINS = [['sunny',0],['cauldron',150],['wok',250],['teapot',350],['ricecooker',500],['dutch',650],['steamer',800],['royal',1200],['ufo',2000],['starladle',-1]];
 export const TOWNS = ['picnic', 'market', 'harbour'];
-export const LEVELS = 60, ITEM_MAX = 240, DECOR_MAX = 40, KINDS_MAX = 18;
+export const LEVELS = 60, ITEM_MAX = 340, DECOR_MAX = 40, KINDS_MAX = 18;
 export const TIER = { low: { dprMax: 1.25, mp: 1.0 }, mid: { dprMax: 2.0, mp: 2.2 }, high: { dprMax: 2.0, mp: 3.5 } };
 export const DPR_MIN = 0.75, DPR_START = 1.5, DPR_STEP = 0.125;   // start at min(dprMax, 1.5); adaptive ±0.125 per 2 s window
 export const FX_MAX = 256;                              // particle pool (one instanced pool, all tiers)

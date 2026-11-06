@@ -1,0 +1,34 @@
+{
+  "style": "Soft 3D clay-and-vinyl toy render, tabletop diorama miniature, rounded chunky shapes with generous bevels, smooth matte surfaces with a gentle satin sheen, warm sunny studio lighting from the upper left, one soft white rim light, soft contact shadow, saturated warm palette (golden yellow, tomato red, fresh green, teal), cheerful and cute, NO outlines, NO line art, NO text, NO letters, NO logos, NO watermark, family friendly.",
+  "outDir": "studio/art-raw/slurp-pot/covers-v2-webp",
+  "rawDir": "studio/art-raw/slurp-pot/covers",
+  "defaults": {
+    "aspect": "16:9",
+    "res": "2K",
+    "cutout": false,
+    "max": 1600,
+    "q": 82
+  },
+  "items": [
+    {
+      "id": "cover-tall",
+      "aspect": "2:3",
+      "max": 1200,
+      "refs": [
+        "../../studio/art-raw/slurp-pot/covers/cover-gulp-3.png",
+        "../../studio/art-raw/slurp-pot/art/pot-hero.png"
+      ],
+      "prompt": "Tall portrait frame. Same scene, same pot, same strawberry cake and same stew whirlpool as the first reference image (cover-gulp-3), recomposed. The pot has EXACTLY TWO eyes in total, both on the front of the rim facing the viewer, no mouth, no opening on its body, pink blush. Only the pot has a face; all food inanimate. Bright sunny saturated, blue sky, green park with toy trees, red and white gingham cloth. NO animals, NO people, NO text, NO letters. The giant pot fills the lower two thirds, cake and strawberries dropping in above it, and the top 18% of the frame is plain bright blue sky with a soft cloud (nothing important there)."
+    },
+    {
+      "id": "cover-square",
+      "aspect": "1:1",
+      "max": 1024,
+      "refs": [
+        "../../studio/art-raw/slurp-pot/covers/cover-gulp-3.png",
+        "../../studio/art-raw/slurp-pot/art/pot-hero.png"
+      ],
+      "prompt": "Square frame. Same scene, same pot, same strawberry cake and same stew whirlpool as the first reference image (cover-gulp-3), recomposed. The pot has EXACTLY TWO eyes in total, both on the front of the rim facing the viewer, no mouth, no opening on its body, pink blush. Only the pot has a face; all food inanimate. Bright sunny saturated, blue sky, green park with toy trees, red and white gingham cloth. NO animals, NO people, NO text, NO letters. The giant pot sits in the upper two thirds centred, and the bottom 18% of the frame is plain red and white gingham cloth with nothing important on it."
+    }
+  ]
+}
