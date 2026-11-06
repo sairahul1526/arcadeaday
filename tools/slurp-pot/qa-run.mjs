@@ -168,7 +168,9 @@ async function open(browser, bname, prof, { query = 'qa=1', save = null, wait = 
   }
   const page = await ctx.newPage();
   const s = { ctx, page, prof, bname, errors: [], logs: [], px: 0, py: 0, cdp: null, t0: Date.now() };
-  page.on('console', m => { s.logs.push(`${m.type()}: ${m.text().slice(0, 200)}`); if (m.type() === 'error') s.errors.push(m.text().slice(0, 240)); });
+  // P.error reports through console.warn, and paint() catches a render throw into it: a frozen scene with 0 console errors (11-07)
+  page.on('console', m => { const t = m.text(); s.logs.push(`${m.type()}: ${t.slice(0, 200)}`);
+    if (m.type() === 'error' || (m.type() === 'warning' && t.startsWith('[P]') && !/corrupt save|500 KiB/.test(t))) s.errors.push(t.slice(0, 240)); });
   page.on('requestfailed', r => s.errors.push(`request failed ${r.url().replace(ORIGIN, '')} ${r.failure() && r.failure().errorText}`));
   page.on('pageerror', e => s.errors.push('pageerror: ' + String(e.message).slice(0, 240)));
   page.on('response', r => { if (r.status() >= 400 && !/favicon/i.test(r.url())) s.errors.push(`HTTP ${r.status()} ${r.url().replace(ORIGIN, '')}`); });

@@ -1810,7 +1810,7 @@ function hand() {
 }
 
 // render3d / render2d finisher clock (real s from the final bite); neither renderer exports it, so these mirror their FIN_* constants.
-// Friday fix 2: the beats come from camw.js now, since a milestone's finisher (FIN_BIG) runs 0.7 s longer than the others.
+// Friday fix 2: the beats come from camw.js now, since a milestone's finisher (FIN_BIG) runs 1.2 s longer than the others.
 const finB = () => (hud && hud.big ? FIN_BIG : FIN_BEAT);
 const finOn = () => !!(hud && hud.fin != null && !REC_M.record);
 /** HUD opacity during the finisher: fades out in 0.2 s, stays off through the punch-in, returns after the beat's back time. */

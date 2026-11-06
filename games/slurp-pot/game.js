@@ -30,6 +30,7 @@ const WIN_STRIP_MAX = 20;        // up to here NEXT goes straight on and rewards
 const START_KEYS = new Set(['Enter', 'NumpadEnter', 'Space']);
 const FIN_CARD_S = 0.8;          // after a final boss bite: `win` lands ~1.3 s in, the finisher ends at 1.9, so the card comes at ~2.1 s
 const FIN_BIG_CARD_S = 2.0;      // milestones (L10 ... L60): the render lane holds the close-up 0.5 s longer, so the card comes at ~3.3 s
+const FIN_L60_CARD_S = 3.0;      // the finale: one more second so the L60 fireworks play out in front of the card, ~4.3 s
 // DECISION (11-06 Fri, mercy, see mercy.js): a fixed long clock took the sweat away from everyone (casual 100 % on L4 to L15), so the
 //   help follows the player instead. Each time-out on a level or Daily makes the next try easier, a win carries one step less to the
 //   next one (save.help), and the seconds are grace, so stars keep the old pace. Spoiled orders get none because time cannot help.
@@ -640,7 +641,7 @@ function onWin(ev, now) {
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
   if (S.kind === 'record') return;
   if (now) go('win', data);
-  else S.pend = { t: S.finBite ? (S.kind === 'level' && C.isMilestone(S.n) ? FIN_BIG_CARD_S : FIN_CARD_S) : WIN_CARD_S, screen: 'win', data };
+  else S.pend = { t: S.finBite ? (S.kind === 'level' && C.isMilestone(S.n) ? (S.n === 60 ? FIN_L60_CARD_S : FIN_BIG_CARD_S) : FIN_CARD_S) : WIN_CARD_S, screen: 'win', data };
 }
 /** The Daily level's own IST key (a run started before midnight still pays that day), else today's. */
 function dailyKeyOf() {
