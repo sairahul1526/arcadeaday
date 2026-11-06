@@ -262,7 +262,8 @@ export function merge(a, b) {
   m.daily.starPot = A.daily.starPot || B.daily.starPot;
   const fb = B.feast.best > A.feast.best || (B.feast.best === A.feast.best && nw === B) ? B.feast : A.feast;
   m.feast = { best: fb.best, bestBites: fb.bestBites, plays: Math.max(A.feast.plays, B.feast.plays), ghost: fb.ghost.slice() };
-  m.help = Math.min(A.help, B.help); // mercy is a gift, not progress: the calmer tab wins, so two tabs never add up to more help
+  // help is not merged: m starts from the newer save, so the last result wins. save() merges with the stored copy on every write, so a
+  //   min here would pin help at 0 for good. It is set, never added to, so two tabs can't stack it.
   return sanitize(m);
 }
 
