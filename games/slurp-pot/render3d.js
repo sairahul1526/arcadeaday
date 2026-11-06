@@ -5,7 +5,7 @@ import {
   WebGLRenderer, Scene, PerspectiveCamera, Group, Mesh, InstancedMesh, BufferGeometry, BufferAttribute,
   InstancedBufferAttribute, MeshLambertMaterial, MeshBasicMaterial, MeshPhongMaterial, ShaderMaterial,
   CanvasTexture, Color, Vector2, Vector3, Matrix4, Quaternion, HemisphereLight, DirectionalLight, Fog, CircleGeometry,
-  CylinderGeometry, PlaneGeometry, TorusGeometry, BoxGeometry, SphereGeometry, SRGBColorSpace, RepeatWrapping, BackSide,
+  CylinderGeometry, PlaneGeometry, TorusGeometry, RingGeometry, BoxGeometry, SphereGeometry, SRGBColorSpace, RepeatWrapping, BackSide,
   DynamicDrawUsage, AlwaysStencilFunc, EqualStencilFunc, NotEqualStencilFunc, ReplaceStencilOp, mergeGeometries,
 } from './vendor/three.bundle.js';
 import * as props from './props.js';
@@ -14,7 +14,7 @@ import { KINDS, KIND_ID } from './catalog.js';
 import { edible, createWorld } from './logic.js';
 import { TIER, DPR_MIN, DPR_START, DPR_STEP, FX_MAX, ITEM_MAX, isMilestone } from './consts.js';
 import { dressLayout } from './dress.js';
-import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, bossBoost } from './camw.js';
+import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, finSlow, bossBoost, camOpenW, CAM_OPEN_S, FIREWORKS, FIREWORK_COLS } from './camw.js';
 
 // R3 food readability, render copy only (sim sizes, fits and the "too big" cue never change). T0 and open-line food keep
 // an on-screen radius of FOOD_FLOOR_PX (11 on a 390 px phone, the baked tier scale counted) up to FOOD_BOOST_MAX; T1
@@ -73,7 +73,7 @@ const ALIASED = new Set(Object.values(EV_ALIAS));
 let renderer = null, scene = null, camera = null, canvas = null, gl = null;
 let tier = 'high', REC = false, OGP = false, STILL = false, dpr = 1, cssW = 1, cssH = 1;
 let play = { x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.6 };
-const U = { time: { value: 0 } };
+const U = { time: { value: 0 }, edge: { value: 0 }, calm: { value: 0 } };
 let time = 0, ppu = 50;
 let hemi, sun, fog;
 let propMat, potMat, gullMat;
@@ -81,7 +81,8 @@ const kindMesh = [];                   // by catalog index
 const kindCnt = new Int32Array(KINDS.length);
 let used = [];                         // catalog indices present in the loaded level
 let staticMesh, staticMat, groundTex = null, blankTex, curTown = null, LV = null, BB = null;   // BB = board bounds
-let holeG, rimDisc, pitStew, stewMat;
+let holeG, rimDisc, pitStew, stewMat, rimXray;
+const GREATER_DEPTH = 6;   // three's GreaterDepth: the bundle does not export the name
 let potRoot, potG = null, potExtras = {}, skin = null, warmGlow = null;
 let eyes, eyeMat;
 let decMesh, decA, bbMk, bbP, bbM, fxMesh, fxP, fxC, fxR;
@@ -113,6 +114,9 @@ const evSeen = new Set();
 const pot = { x: 0, z: 0, r: 0.3, rVis: 0.3 };
 const cam = { x: 0, z: 0, vx: 0, vz: 0, rCam: 0.3, yaw: 0, pitch: 55 * D2R, wv: 6, ax: 0, ay: 0 };
 let titleOn = false, titleT = 0, reveal = null, punchT = 0, punchA = 0.08, bossCamT = -1, bossCamA = 0.1, shakeX = 0, shakeZ = 0, recWinT = -1;
+let openK = 0, openT = -1, openW = 1;         // R1: the close opening view, 1 until the first touch, then eases to 0
+let apK = 0, apFit = null, apWait = 0, bossNear = null;   // R5: L60's pre-bite framing of pot and lighthouse
+let fw = null;                                // R6: L60's fireworks
 let fin = null, finHold = false, flashA = 0, flashMesh = null, calm = false;   // boss finisher state, warm flash, prefers-reduced-motion
 const mood = { biteT: 0, biteK: 1, flash: 0, biteDx: 0, biteDz: 1, sizeT: 0, happyT: 0, wideT: 0, squintT: 0, bumpDx: 0, bumpDz: 0,
   celebrateT: -1, sad: false, worried: false, blinkIn: 3, blinkT: -1, sqzT: 0, lookX: 0, lookY: -0.08,
@@ -168,7 +172,7 @@ function stencilOnly(m) {   // pit + stew: only inside the hole
 function makePropMat() {
   const m = new MeshLambertMaterial({ vertexColors: true });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = U.time;
+    sh.uniforms.uTime = U.time; sh.uniforms.uEdge = U.edge;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec4 aFx;\nvarying vec4 vFx;\nuniform float uTime;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -189,6 +193,7 @@ if (aFx.w > 2.5 && color.r > 0.95) {
       .replace('#include <common>', `#include <common>
 varying vec4 vFx;
 uniform float uTime;
+uniform float uEdge;
 float spB2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
 float spB4(vec2 a) { return spB2(0.5 * a) * 0.25 + spB2(a); }`)
       .replace('void main() {', `void main() {
@@ -200,7 +205,10 @@ float spB4(vec2 a) { return spB2(0.5 * a) * 0.25 + spB2(a); }`)
   outgoingLight += vec3(1.0, 0.91, 0.67) * 0.25 * spF * (1.0 - spFood);
   // R2 (round 2): every edible turns a soft ink line where it curves away from the eye, so a waffle reads on planks. Warm
   // food on a warm floor has no hue or value gap for the eye to catch; a dark edge makes one, at no extra draw.
-  outgoingLight = mix(outgoingLight, vec3(0.13, 0.07, 0.045), spFood * 0.8 * smoothstep(0.3, 0.68, spE));
+  // FIX-LIST-3 R2: on the harbour deck the line starts earlier and a cool light band sits just inside it, so a brown crumb has a
+  // bright edge and a dark edge against the grey planks. A uniform: no cost per item, and the other towns don't change.
+  outgoingLight += vec3(0.8, 0.92, 1.0) * (uEdge * spFood * 0.34) * smoothstep(0.1, 0.3, spE) * (1.0 - smoothstep(0.3, 0.5, spE));
+  outgoingLight = mix(outgoingLight, vec3(0.13, 0.07, 0.045), spFood * (0.8 + 0.15 * uEdge) * smoothstep(0.3 - 0.06 * uEdge, 0.68 - 0.1 * uEdge, spE));
   outgoingLight = outgoingLight * (1.0 + 0.04 * vFx.x) + vec3(0.55) * vFx.x * spF;
   // R4 (round 2): a slow breath, not the old 10 rad/s buzz, so the glow reads as "this is the one" and not as a fault.
   outgoingLight += vec3(1.0, 0.65, 0.07) * vFx.z * (0.26 + 0.14 * sin(uTime * 3.77)) * (0.5 + spF);
@@ -209,7 +217,7 @@ float spB4(vec2 a) { return spB2(0.5 * a) * 0.25 + spB2(a); }`)
 }
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => 'sp-prop-v2';
+  m.customProgramCacheKey = () => 'sp-prop-v3';
   return m;
 }
 
@@ -221,22 +229,31 @@ function makeDecalMat() {
   // DECISION (11-04, perf): blob shadows, the pot's ring shadow and every flat marker share ONE instanced pool and
   // one draw (was two): vM = (type, phase, alpha, extra). Shadows are written first, flats after, so instance
   // order = paint order. Types: 10 blob · 11 pot ring · 0 halo · 1 gate · 2 gull telegraph (extra = warn) · 3 shock ·
-  // 4 boss floor glow · 5 chili hazard ring.
+  // 4 boss floor glow · 5 chili hazard. Type 11's extra = the rim's edge as a fraction of the decal's radius.
   return stencilSkip(new ShaderMaterial({
-    uniforms: { uTime: U.time },
+    uniforms: { uTime: U.time, uCalm: U.calm },
     vertexShader: SH_GROUND_V,
-    fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec4 vM;
+    fragmentShader: `uniform float uTime; uniform float uCalm; varying vec2 vUv; varying vec4 vM;
 ${COV}
+// Four chevrons round a marker, tips inward, the same arrow the conveyors use. o pulls them in. x = coverage, y = its ink edge.
+vec2 chev(float r, float ang, float o) {
+  float u = fract(ang * 0.63662 + 0.5) - 0.5, v = r - (0.85 - o) - abs(u) * 0.42, m = step(abs(u), 0.25);
+  return vec2(cov(abs(v) - 0.05), cov(abs(v) - 0.085)) * m;
+}
 void main() {
   float r = length(vUv); vec4 c;
-  if (vM.x > 9.5) {
+  if (vM.x > 10.5) {
+    // FIX-LIST-3 R1: the pot's ground halo. A saturated gold glow off the rim, one crisp bright ring with an ink edge that reads
+    // on cream gingham, grey planks and cobbles alike, and a slow breath. Its px floor (update) marks a tiny pot in a wide shot.
+    float r0 = vM.w, wd = 1.0 - r0, pu = mix(0.5 + 0.5 * sin(uTime * 2.8), 0.6, uCalm);
+    float rc = r0 + wd * (0.5 + 0.1 * pu), hw = wd * 0.1;
+    float aG = (0.66 + 0.2 * pu) * (1.0 - smoothstep(r0 + wd * 0.3, 1.0, r)), aI = 0.62 * cov(abs(r - rc) - hw * 1.8), aR = cov(abs(r - rc) - hw);
+    vec3 col = mix(mix(vec3(1.0, 0.6, 0.05), vec3(0.227, 0.141, 0.094), aI), vec3(1.0, 0.8, 0.16), aR);
+    c = vec4(col, max(aG, max(aI, aR)));
+  } else if (vM.x > 9.5) {
     // R4: the blob gets a tight dark core that peeks out round the item's foot, so a tomato reads on red gingham and a
-    // white sandwich on a white deck with no extra draw. R9: the pot's ring is a warm glow hugging the rim (r 0.69) inside a
-    // thin soft shadow, so the pot lifts off busy boards in the same instance.
-    float a = vM.x < 10.5 ? 0.28 * (1.0 - smoothstep(0.2, 1.0, r)) + 0.34 * (1.0 - smoothstep(0.66, 0.94, r))
-      : 0.3 * (1.0 - smoothstep(0.0, 0.14, abs(r - 0.84))) * (1.0 - smoothstep(0.92, 1.0, r));
-    float gl = vM.x < 10.5 ? 0.0 : 0.62 * (1.0 - smoothstep(0.69, 0.86, r));
-    c = vec4(mix(vec3(0.227, 0.141, 0.094), vec3(1.0, 0.8, 0.38), gl / max(gl + a, 1e-3)), max(a, gl));
+    // white sandwich on a white deck with no extra draw.
+    c = vec4(0.227, 0.141, 0.094, 0.28 * (1.0 - smoothstep(0.2, 1.0, r)) + 0.34 * (1.0 - smoothstep(0.66, 0.94, r)));
   } else if (vM.x < 0.5) {
     float pu = 0.5 + 0.5 * sin(uTime * 7.54 + vM.y);
     // R5: the ring breathes and has a thin ink edge, so gold still reads on tan cobbles and harbour planks, not just gingham.
@@ -249,17 +266,24 @@ void main() {
     float dash = step(0.45, fract(ang * 14.0 / 6.2832));
     c = vec4(1.0, 0.98, 0.94, cov(abs(r - 0.86) - 0.05) * dash * 0.9);
   } else if (vM.x < 2.5) {
-    // gull telegraph: a dark shadow disc growing with warn (0.35 R → R over 1.6 s) + a spinning stamp-red dashed ring
-    float w = clamp(vM.w, 0.0, 1.0), rf = 0.8 * mix(0.35, 1.0, w);
-    float aD = max((1.0 - smoothstep(rf - 0.08, rf, r)) * (0.2 + 0.22 * w), cov(abs(r - rf) - 0.035) * 0.55);
-    float ang = atan(vUv.y, vUv.x) - uTime * 1.6;
-    float aR = cov(abs(r - 0.84) - 0.055) * step(0.4, fract(ang * 12.0 / 6.2832)) * (0.62 + 0.38 * sin(uTime * (8.0 + 10.0 * w)));
-    c = vec4(mix(vec3(0.227, 0.141, 0.094), vec3(0.898, 0.282, 0.231), aR / max(aR + aD, 1e-3)), max(aD, aR));
+    // gull telegraph. FIX-LIST-3 R4: a solid red fill growing with warn (0.3 R → R over 1.6 s) inside a fixed thick ring, so the
+    // ring says where and the fill says when. White chevrons close in on the target and the beat quickens as the gull commits.
+    float w = clamp(vM.w, 0.0, 1.0), rf = 0.72 * mix(0.3, 1.0, w), pu = mix(0.5 + 0.5 * sin(uTime * (9.0 + 13.0 * w)), 0.7, uCalm);
+    float aF = (1.0 - smoothstep(rf - 0.03, rf, r)) * (0.36 + 0.34 * w) * (0.78 + 0.22 * pu);
+    float aR = cov(abs(r - 0.74) - 0.055), aI = 0.5 * cov(abs(r - 0.74) - 0.09);
+    vec2 ch = chev(r, atan(vUv.y, vUv.x), 0.045 * w * (1.0 - uCalm));
+    vec3 col = mix(vec3(0.227, 0.141, 0.094), vec3(0.93, 0.15, 0.11), max(aF, aR) / max(max(aF, aR) + aI * (1.0 - aR), 1e-3));
+    col = mix(mix(col, vec3(0.227, 0.141, 0.094), ch.y * 0.6), vec3(1.0), ch.x);
+    c = vec4(col, max(max(aF, aR * (0.74 + 0.26 * pu)), max(aI, max(ch.x, ch.y * 0.5))));
   } else if (vM.x > 4.5) {
-    // R7: a thin warm ring with an ink edge: "careful", in the same grammar as the ingredient halo but thinner, redder, no fill.
-    float pu = 0.5 + 0.5 * sin(uTime * 5.03 + vM.y);
-    float ring = cov(abs(r - 0.83) - 0.045), edge = cov(abs(r - 0.83) - 0.08);
-    c = vec4(mix(vec3(0.227, 0.141, 0.094), vec3(1.0, 0.36, 0.1), ring), max(ring * (0.72 + 0.28 * pu), edge * 0.45));
+    // FIX-LIST-3 R3: "keep off", in the L30 conveyor's grammar: a pulsing red pad, a thick red ring and gold chevrons with an ink
+    // edge, so it reads at 390 wide. Reduced motion holds it steady.
+    float pu = mix(0.5 + 0.5 * sin(uTime * 6.3 + vM.y), 0.6, uCalm);
+    float aF = (1.0 - smoothstep(0.69, 0.72, r)) * (0.2 + 0.32 * pu), aR = cov(abs(r - 0.72) - 0.05), aI = 0.5 * cov(abs(r - 0.72) - 0.085);
+    vec2 ch = chev(r, atan(vUv.y, vUv.x), 0.03 * pu * (1.0 - uCalm));
+    vec3 col = mix(vec3(0.227, 0.141, 0.094), vec3(0.95, 0.14, 0.09), max(aF, aR) / max(max(aF, aR) + aI * (1.0 - aR), 1e-3));
+    col = mix(mix(col, vec3(0.227, 0.141, 0.094), ch.y * 0.6), vec3(1.0, 0.83, 0.3), ch.x);
+    c = vec4(col, max(max(aF, aR), max(aI, max(ch.x, ch.y * 0.5))));
   } else if (vM.x > 3.5) {
     // R4: the boss stands in a pool of its own light. Breathes with the shader glow on the prop.
     float pu = 0.5 + 0.5 * sin(uTime * 3.77), g = 1.0 - smoothstep(0.2, 1.0, r);
@@ -490,7 +514,8 @@ void main() {
   if (A < 0.004) discard;
   gl_FragColor = vec4(col, A);
 }`,
-    transparent: true, depthWrite: false,
+    // FIX-LIST-3 R1: no depth test. The eyes draw last (renderOrder 10), so no bin, tree or boss can ever bury the face.
+    transparent: true, depthWrite: false, depthTest: false,
   });
 }
 
@@ -960,6 +985,12 @@ export async function initRender(cv, opts = {}) {
   holeG.add(rimDisc, pitStew);
 
   potRoot = new Group(); scene.add(potRoot);
+  // FIX-LIST-3 R1: the near rim shows through whatever stands in front of it. A flat arc just above the rim that only passes where
+  // something is already nearer than it (GreaterDepth), so it is one small draw whatever the item count and invisible on a clear
+  // board. Near arc only: the back of the rim is never hidden by items, and skin lids and crowns live there.
+  rimXray = new Mesh(new RingGeometry(0.92, 1.12, 40, 1, PI - 0.3, PI + 0.6).rotateX(-PI / 2).translate(0, 0.19, 0),
+    new MeshBasicMaterial({ transparent: true, opacity: 0.92, depthWrite: false, depthFunc: GREATER_DEPTH, toneMapped: false }));
+  rimXray.frustumCulled = false; rimXray.renderOrder = 9; potRoot.add(rimXray);
   warmGlow = new Mesh(new PlaneGeometry(0.01, 0.01), props.potGlowMaterial ? props.potGlowMaterial() : new MeshBasicMaterial());
   warmGlow.visible = false; warmGlow.position.set(0, -60, 0); scene.add(warmGlow);   // compiles the skin-lights program at warm-up
   setSkin('sunny');
@@ -1029,6 +1060,7 @@ export async function initRender(cv, opts = {}) {
   flashMesh = new Mesh(new PlaneGeometry(2, 2), makeFlashMat());
   flashMesh.visible = false; flashMesh.frustumCulled = false; flashMesh.renderOrder = 21; scene.add(flashMesh);
   try { calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { calm = false; }
+  U.calm.value = calm ? 1 : 0;
 
   // context loss: three restores its own GL state; game.js refills the level on restore
   ctxHandlers = {
@@ -1092,6 +1124,7 @@ export function loadLevel(L, skinId) {
   LV = L; W = null;
   const town = TOWN[L.town] ? L.town : 'picnic';
   buildStatic(L, town);
+  U.edge.value = town === 'harbour' ? 1 : 0;
   if (town !== curTown) {
     const T = TOWN[town], Lt = LIGHT[town] || LIGHT.picnic;
     scene.background.set(T.sky); fog.color.set(T.fog);
@@ -1119,6 +1152,7 @@ export function loadLevel(L, skinId) {
   for (let i = 0; i < FX_MAX; i++) fl[i] = 0;
   fxN = 0; fxMesh.count = 0; fxMesh.visible = false;
   reveal = null; punchT = 0; bossCamT = -1; recWinT = -1; fin = null; finHold = false; flashA = 0; shakeX = shakeZ = 0;
+  openK = 0; openT = -1; apK = 0; apFit = null; bossNear = null; fw = null;
   const sp = L.spawn || { x: 0, z: 0 }, r0 = +L.r0 || 0.3;
   pot.x = +sp.x || 0; pot.z = +sp.z || 0; pot.r = r0; pot.rVis = r0;
   cam.x = pot.x; cam.z = pot.z; cam.vx = cam.vz = 0; cam.rCam = r0;
@@ -1290,6 +1324,7 @@ export function setSkin(id) {
   });
   potG = g; potRoot.add(g); skin = id;
   if (eyeMat) eyeMat.uniforms.uLidCol.value = sv(LID[id] || LID.sunny);
+  rimXray.material.color.set(LID[id] || LID.sunny).lerp(new Color(1, 1, 1), 0.25);
 }
 
 // ------------------------------------------------------------------ resize / tier / stats
@@ -1482,6 +1517,13 @@ function updateCamera(dt) {
   const land = cssW > cssH;
   if (STILL) cam.rCam = pot.r; else cam.rCam += (pot.r - cam.rCam) * ek(dt, 0.45);
   let wv = followWv() * (OGP ? 0.8 : 1), yawT = 0, pitchT = 55 * D2R, ax = play.cx, ay = play.cy;
+  // R1: close on the pot until the first touch, out to the follow width over CAM_OPEN_S. Reads the world, not the 'start' event, so a
+  // world that started while this renderer was away (a swap from 2D, a Feast course) still lets go.
+  if (openK > 0 && !titleOn) {
+    if (openT < 0 && W && W.tStart != null) openT = 0;
+    if (openT >= 0) { openT += dt; openK = 1 - inOut(Math.min(1, openT / CAM_OPEN_S)); }
+    wv *= lerp(1, openW, openK);
+  }
   let pull = 0;
   if (recWinT >= 0 && REC && !STILL && !titleOn) {
     recWinT += dt;
@@ -1512,6 +1554,14 @@ function updateCamera(dt) {
     shakeX = (rnd() * 2 - 1) * amp; shakeZ = (rnd() * 2 - 1) * amp;
     if (t > 0.9) { bossCamT = -1; shakeX = shakeZ = 0; }
   }
+  // FIX-LIST-3 R5: L60's lighthouse stands in a far corner, under the HUD from the follow view, and only came on screen with the
+  // bite. Over the last 6 u the view frames pot and boss together in the play rect, as tight as both allow. The fit is a search,
+  // so it refreshes 4 times a second, on this one level, near this one boss. The finisher takes over from wherever this is.
+  const apT = bossNear && !fin && !calm && !titleOn ? 1 - sstep(bossNear.e, bossNear.e + 6, bossNear.d) : 0;
+  apK += (apT - apK) * ek(dt, 0.3);
+  if (apK < 0.002 && !apT) { apK = 0; apFit = null; }
+  else if (bossNear && (apWait -= dt) <= 0) { apWait = 0.25; apFit = revealFit(bossNear, 0.55 * wv, 0, cam.pitch, cam.ax, cam.ay); }
+  if (apFit) wv = Math.exp(lerp(Math.log(wv), Math.log(apFit.wv), apK));
   // R7 finisher: punch in until the pot spans FIN_POT of the screen width, at any board or boss size (L40's stall and
   // L60's corner boss are tiny against a late pot, so the shot is framed on the pot and the boss is scaled up to it).
   // DECISION (11-06): the zoom eases in log space so its speed reads even, and the goal drops the board clamp as the zoom
@@ -1527,7 +1577,7 @@ function updateCamera(dt) {
     holdK = sstep(0, B.push, t);
     wv *= Math.exp(finK * Math.log(Math.min(1, 2 * pot.rVis * Math.max(1 / FIN_POT, cssW / cssH / 0.62) / wv)));
     // Milestones creep in a little more through the held frame, and the pot rumbles as it strains on the boss.
-    if (big && !calm) wv *= 1 - 0.06 * sstep(B.sink, B.hold, t) * (1 - sstep(B.boom, B.back, t));
+    if (big && !calm) wv *= 1 - 0.08 * sstep(B.sink, B.hold, t) * (1 - sstep(B.boom, B.back, t));
     const hold = big && t >= B.sink * 0.8 && t < B.boom ? 0.18 + 0.3 * sstep(B.sink, B.boom, t) : 0;
     const pk = Math.max(hold, t < 0.2 ? 0.45 * (1 - t / 0.2) : t >= B.boom && t < B.boom + 0.4 ? (big ? 1.5 : 1) * (1 - (t - B.boom) / 0.4) : 0);
     const amp = calm ? 0 : 0.022 * wv * pk;
@@ -1550,9 +1600,13 @@ function updateCamera(dt) {
   cam.wv = wv;
   // The finisher looks down into the pot (a round stew reads better than an ellipse) and sits it low, under the centred
   // ORDER UP band that ui.js stamps on the final bite.
-  const pitch = finK > 0 ? lerp(cam.pitch, 68 * D2R, finK) : cam.pitch, anY = holdK > 0 ? lerp(cam.ay, cssH * 0.72, holdK) : cam.ay;
+  // The 72 % anchor is capped so the face (eyes on the near rim) stays in frame: on wide screens the pot fills 62 % of the
+  // height and a fixed anchor put the eyes past the bottom edge. The cap reads the live zoom, so it relaxes as the shot pulls back.
+  const pitch = finK > 0 ? lerp(cam.pitch, 68 * D2R, finK) : cam.pitch;
+  const anY = holdK > 0 ? lerp(cam.ay, Math.min(cssH * 0.72, cssH - 6 - 1.25 * Math.sin(pitch) * pot.rVis * cssW / wv), holdK) : cam.ay;
   let [gx, gz] = titleOn ? (BB ? [(BB.x0 + BB.x1) / 2, (BB.z0 + BB.z1) / 2] : [pot.x, pot.z])
     : STILL ? [fx0, fz0] : clampGoal(fx0, fz0, wv, yawT, pitch, cam.ax, anY);
+  if (apFit) { gx = lerp(gx, apFit.x, apK); gz = lerp(gz, apFit.z, apK); }
   const keep = !titleOn && !STILL && !REC && holdK <= 0;   // the finisher frames the pot itself
   if (keep) [gx, gz] = keepPot(gx, gz, wv, yawT, pitch, cam.ax, anY, 12);
   if (holdK > 0) { gx = lerp(gx, pot.x, holdK); gz = lerp(gz, pot.z, holdK); if (finK > 0) { cam.x = lerp(cam.x, gx, finK * 0.35); cam.z = lerp(cam.z, gz, finK * 0.35); } }
@@ -1658,6 +1712,44 @@ function finBoom(big = false) {
   if (big) bossRing = { t: 0, x: pot.x, z: pot.z, R: 1.5 * rv };
   if (fin && fin.win) celebrate();
 }
+/**
+ * FIX-LIST-3 R6: L60's fireworks. Shells are placed by screen position on a plane between camera and pot, so they sit in the sky of
+ * the shot at any aspect, and sized off that plane's smaller screen side. They use the particle pool and run on their own clock, so
+ * they carry on behind the card. Low tier: 4 shells, half the sparks, no rocket trails. Reduced motion: 2 quiet shells, no rockets.
+ */
+function fwStart() {
+  let S = LV ? FIREWORKS(LV.n) : null;
+  if (!S) return;
+  if (calm) S = [S[1], S[3]]; else if (tier === 'low') S = S.slice(0, 4);
+  fw = { t: 0, n: calm ? 14 : tier === 'low' ? 18 : 28, s: S.map(o => ({ ...o, done: false })) };
+}
+function fwAt(nx, ny) {
+  const cp = camera.position, d = 0.62 * Math.hypot(pot.x - cp.x, cp.y, pot.z - cp.z);
+  _v.set(nx, ny, 0.5).unproject(camera).sub(cp).normalize();
+  return [cp.x + _v.x * d, cp.y + _v.y * d, cp.z + _v.z * d, 2 * d * Math.tan(camera.fov * D2R / 2) * Math.min(1, cssW / cssH)];
+}
+function updateFireworks(dt) {
+  fw.t += dt;
+  let left = 0;
+  for (const S of fw.s) {
+    if (S.done) continue;
+    left++;
+    if (fw.t >= S.at) {
+      S.done = true;
+      // The shot pulls back through the show and sparks stay put in the world, so a shell fired in the close-up is scaled for the wide view.
+      const [x, y, z, u0] = fwAt(S.x, S.y), u = u0 * clamp(followWv() / Math.max(1e-3, cam.wv), 1, 3), C = FIREWORK_COLS[S.c], sp = (calm ? 0.22 : 0.42) * u;
+      for (let k = 0; k < fw.n; k++) {
+        const a = rnd() * TAU, e = rnd() * 2 - 1, q = Math.sqrt(1 - e * e), v = sp * (0.72 + 0.28 * rnd());
+        spawn(x, y, z, Math.cos(a) * q * v, e * v, Math.sin(a) * q * v, 0.95 + 0.35 * rnd(), 0.06 * u * (0.8 + 0.4 * rnd()), C[k % 3 ? 0 : 1], 2, 0.2 * u);
+      }
+      if (!calm) { spawn(x, y, z, 0, 0, 0, 0.24, 0.2 * u, '#FFF6E0', 2, 0); flash(0.08); }
+    } else if (!calm && tier !== 'low' && S.rise > 0 && fw.t >= S.at - S.rise) {
+      const k = 1 - (S.at - fw.t) / S.rise, [x, y, z, u] = fwAt(S.x * (0.7 + 0.3 * k), lerp(-0.2, S.y, k * (2 - k)));
+      spawn(x, y, z, 0, -0.05 * u, 0, 0.26, 0.03 * u, FIREWORK_COLS[S.c][1], 2, 0.1 * u);
+    }
+  }
+  if (!left) fw = null;
+}
 function sparkleRing(n, col, up = 1.4) {
   for (let k = 0; k < n; k++) {
     const a = (k / n) * TAU + rnd() * 0.3, r = pot.rVis * 1.05;
@@ -1720,6 +1812,7 @@ export function onFx(ev, data) {
       if (!REC && d.final) {
         const B = LV && isMilestone(LV.n) ? FIN_BIG : FIN_BEAT;
         fin = { t: 0, i: d.i, boom: false, B, ang: Math.atan2(x - pot.x, z - pot.z) }; glance = null; flash(0.28); mood.wideT = B.boom;
+        fwStart();
       }
       else { bossCamT = 0; mood.wideT = 0.8; bossCamA = REC ? 0.1 : 0.2; if (!REC) flash(0.2); }
       const m = REC ? 1 : Math.max(1, 0.6 * pot.rVis);   // late pots: confetti that still reads against the big view
@@ -1772,9 +1865,11 @@ export function onFx(ev, data) {
     case 'start': if (reveal) reveal.t = Math.max(reveal.t, 0.7); break;   // straight into the glide: a cut from the wide shot jars
     case 'levelStart': {
       resetMood();
-      lid.on = false; lid.pop = lid.jig = lid.steamT = 0; glance = null; bossRing = null; recWinT = -1; fin = null; finHold = false; flashA = 0;
-      const w = d.w || W;
-      if (!d.retry && w && w.tickets && w.tickets.length) {
+      lid.on = false; lid.pop = lid.jig = lid.steamT = 0; glance = null; bossRing = null; recWinT = -1; fin = null; finHold = false; flashA = 0; fw = null;
+      const w = d.w || W, n = LV && LV.n;
+      openT = -1; openK = !d.retry && !REC && !OGP && !STILL && !calm ? 1 : 0; openW = camOpenW(n);
+      // L1 opens on the pot, not on a boss the new player has no use for yet (FIX-LIST-3 R1).
+      if (!d.retry && n !== 1 && w && w.tickets && w.tickets.length) {
         const b = w.tickets[w.ti | 0] && w.tickets[w.ti | 0].boss;
         if (b >= 0 && b < w.n) {
           const a = w.ia[b];
@@ -1958,7 +2053,8 @@ export function update(w, dt, alpha = 1) {
   evSeen.clear();
   dt = clamp(+dt || 0, 0, 0.1);
   alpha = clamp(+alpha || 0, 0, 1);
-  time += dt; U.time.value = time;
+  const slow = fin ? finSlow(fin.B, fin.t) : 1;   // R5: the held frame's slow-mo, for everything on the render clock
+  time += dt * slow; U.time.value = time;
   if (w && w !== W) bindWorld(w);
   if (!w && titleOn && LV && (!W || W.level !== LV)) bindWorld(createWorld(LV, { mode: 'level' }));
   if (!w) w = W;
@@ -1991,6 +2087,7 @@ export function update(w, dt, alpha = 1) {
   const decArr = decMesh.instanceMatrix.array, decM = decA.array;
   const bP = bbP.array, bM = bbM.array;
   let look = null, lookPri = -1, lookD = 1e9;
+  bossNear = null;
   for (const m of [cakeRest, cakeTop]) { m.count = 0; m.visible = false; }
   truckSq = Math.max(0, truckSq - dt);
   if (w && itemCat) {
@@ -2000,6 +2097,7 @@ export function update(w, dt, alpha = 1) {
     if (trI >= 0) { const d = Math.atan2(Math.sin(TR.ang - truckYaw), Math.cos(TR.ang - truckYaw)); truckYaw += d * ek(dt, 0.12); }
     const Ck = w.cake, ckI = Ck && Ck.i >= 0 && Ck.n > 0 && props.bossTierGeometry ? Ck.i : -1;
     const eyeY = 0.12 * rv, mile = !!LV && isMilestone(LV.n);
+    const lastBoss = !REC && !!LV && LV.n === 60 && (!w.tickets || (w.ti | 0) >= w.tickets.length - 1);
     for (let i = 0; i < n; i++) {
       if (prevKind[i] !== w.kind[i]) {   // Feast respawn: spawnItem rewrote this slot's kind
         prevKind[i] = w.kind[i];
@@ -2039,6 +2137,9 @@ export function update(w, dt, alpha = 1) {
       if (boost > 1) boost = Math.max(1, Math.min(boost, FOOD_RIM * rv / Math.max(1e-3, a * vis)));
       // R4 (round 2): a milestone's boss is drawn as big as the board's rim lets it, render only. The sim's a never changes.
       if (boss && mile) boost = bossBoost(a, x, z, BB);
+      // FIX-LIST-3 R3: a chili was 7 px on a phone. Half as big again, with a floor. It goes down whatever its size, so no rim cap.
+      const hot = K.id === 'chili';
+      if (hot) boost = Math.min(2.4, Math.max(1.5, 15 / Math.max(app * vis, 1e-3)));
       let sc = (a / ud.catA) * boost, y = 0, sy = 1;
       if (isCake) { const key = Ck.n + ':' + Ck.tier + ':' + Ck.tiers.join(','); if (key !== cakeKey) cakeBuild(Ck, key); }
       const h = isCake ? cakeH * sc * ud.catA / Math.max(1e-4, a) : ud.h * sc;
@@ -2113,7 +2214,9 @@ export function update(w, dt, alpha = 1) {
       const eTarget = s !== 1 && !finI && dist < 3 * pot.r && !(fl8[i] & F_HOT) && edible(w, i) ? 1 : 0;   // R7: a chili goes down but is no invitation
       eGlow[i] += (eTarget - eGlow[i]) * ek(dt, 0.05);
       let occ = 1;
-      if (s !== 1 && !finI && !titleOn && h > 0.22 && z > pot.z - a - 0.1) {
+      // A milestone's open boss never ghosts: its boosted body always "hit" the pot, so L60's lighthouse dithered away just as it
+      // mattered. The pot's rim and eyes draw through it now (rimXray, depthTest off).
+      if (s !== 1 && !finI && !titleOn && h > 0.22 && z > pot.z - a - 0.1 && !(boss && open && mile)) {
         const fz = Math.cos(cam.yaw), fx = Math.sin(cam.yaw);
         const hit = segHitsCyl(cp.x, cp.y, cp.z, pot.x, 0.05, pot.z, x, z, a * boost, h)
           || segHitsCyl(cp.x, cp.y, cp.z, pot.x - rv, 0.05, pot.z, x, z, a * boost, h)
@@ -2122,6 +2225,7 @@ export function update(w, dt, alpha = 1) {
         if (hit) occ = 0.4;
       }
       eOcc[i] += (occ - eOcc[i]) * ek(dt, occ < eOcc[i] ? 0.05 : 0.1);
+      if (lastBoss && boss && open && s === 0) bossNear = { x, z, a: Math.max(a * boost, h / 1.8), wv: 0, d: dist, e: rv + a * boost };
       const oc = eOcc[i] > 0.995 ? 1 : eOcc[i];
       // instance (the cake draws its own tier meshes instead of the 3-tier kind mesh)
       if (isCake) {
@@ -2179,7 +2283,7 @@ export function update(w, dt, alpha = 1) {
         }
       }
       if (boss && (open || mile)) nF = flatInst(fScr, fScrM, nF, x, z, 2.1 * a * boost, 4, 0, open ? 1 : 0.6, 0);
-      if (K.id === 'chili') nF = flatInst(fScr, fScrM, nF, x, z, Math.max(1.55 * a * boost * vis, 13 / ppu), 5, i * 1.3, 1, 0);
+      if (hot) nF = flatInst(fScr, fScrM, nF, x, z, Math.max(1.5 * a * boost * vis, 28 / ppu), 5, i * 1.3, 1, 0);
       if (fl8[i] & F_GATE) nF = flatInst(fScr, fScrM, nF, x, z, 1.15 * a, 1, 0, 1, 0);
       if (boss && !open && nB < 48) {
         const sz = Math.max(28 / ppu, 0.42 * a), rt = rattleT[i];
@@ -2191,8 +2295,13 @@ export function update(w, dt, alpha = 1) {
       if (pri > 0 && (pri > lookPri || (pri === lookPri && dist < lookD))) { lookPri = pri; lookD = dist; look = [x - pot.x, z - pot.z]; }
     }
   }
-  // the pot's soft ring shadow (type 11)
-  if (!titleOn) nSh = shInst(decArr, decM, nSh, pot.x, pot.z, 2.9 * rv, 11, 1, 0.04 + potLift);
+  // the pot's ground halo (type 11): its band is 16 to 40 px past the rim at any pot size, and it never shrinks under 46 px, so even a
+  // tiny pot in a wide shot has a mark on it
+  if (!titleOn) {
+    const Rg = Math.max(1.12 * rv + clamp(0.47 * rv, 16 / ppu, 40 / ppu), 46 / ppu);
+    nSh = shInst(decArr, decM, nSh, pot.x, pot.z, 2 * Rg, 11, 1, 0.04 + potLift);
+    decM[(nSh - 1) * 4 + 3] = 1.02 * rv / Rg;
+  }
   // SIZE UP shock ring (big beats only, D31)
   if (mood.shockT >= 0) {
     mood.shockT += dt;
@@ -2229,7 +2338,7 @@ export function update(w, dt, alpha = 1) {
       ga[nG * 3] = g * 1.3; ga[nG * 3 + 1] = amp; ga[nG * 3 + 2] = rate;
       nG++;
       nSh = shInst(decArr, decM, nSh, G.x, G.z, 0.9, 10, 1 - 0.75 * clamp(G.y / 4, 0, 1), 0.042);
-      if (sI === 1 && G.i >= 0 && w && G.i < w.n) nF = flatInst(fScr, fScrM, nF, G.tx, G.tz, Math.max(0.5, 1.3 * w.ia[G.i] + 0.2), 2, 0, 1, G.warn || 0);
+      if (sI === 1 && G.i >= 0 && w && G.i < w.n) nF = flatInst(fScr, fScrM, nF, G.tx, G.tz, Math.max(0.5, 1.3 * w.ia[G.i] + 0.2, 44 / ppu), 2, 0, 1, G.warn || 0);
     }
     flush(gullMesh, [gullMesh.instanceMatrix, gullA], nG);
   }
@@ -2255,7 +2364,8 @@ export function update(w, dt, alpha = 1) {
   else { flashA = 0; flashMesh.visible = false; }
 
   updatePot(dt, look);
-  updateFx(dt);
+  if (fw) updateFireworks(dt);
+  updateFx(dt * slow);
 }
 /** Starts the Feast steam wipe (also started by the feastWipe bus event). */
 export function steamWipe() { wipeT = 0; }
@@ -2283,8 +2393,9 @@ function bbInst(P, M, n, x, y, z, size, type, a, cell) {
 function updatePot(dt, look) {
   // DECISION: on the title the UI draws the 2D pot-hero (GDD §9 title row) over this scene, so the 3D pot, its
   // hole, ring shadow and eyes are hidden and the camera orbits the board centre: one pot on screen, never two.
-  // DECISION: sclera radius = max(0.16·rVis, 4.5 px) capped at 0.26·rVis, so the face reads at L1's tiny pot.
+  // DECISION: sclera radius = max(0.16·rVis, 6.5 px) capped at 0.26·rVis, so the face reads at L1's tiny pot.
   potRoot.visible = holeG.visible = eyes.visible = !titleOn;
+  rimXray.visible = !fin;   // the finisher's boss hangs over the rim on purpose
   const rv = pot.rVis, M = mood;
   // timers
   M.biteT = Math.max(0, M.biteT - dt); M.sizeT = Math.max(0, M.sizeT - dt); M.happyT = Math.max(0, M.happyT - dt);
@@ -2370,7 +2481,7 @@ function updatePot(dt, look) {
   u.uLid.value = Math.min(1, Math.max(M.lid, blink));
   u.uHappy.value = M.happy; u.uWide.value = M.wide; u.uWorry.value = M.worry; u.uDroop.value = M.droop; u.uSqueeze.value = M.squeeze;
   // placement: front rim (toward the camera), billboarded, pulled toward the camera so the rim never hides them
-  const S = Math.min(Math.max(0.16 * rv, 4.5 / ppu), 0.26 * rv) * (1 + 0.04 * (over - 1) * 8);
+  const S = Math.min(Math.max(0.16 * rv, 6.5 / ppu), 0.26 * rv) * (1 + 0.04 * (over - 1) * 8);
   const sep = Math.max(0.21 * rv, 1.08 * S);
   const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
   const ey = (0.13 * rv + S * 0.15) * sy + yOff;
@@ -2428,7 +2539,7 @@ export function dispose() {
   if (beltTex) beltTex.dispose();
   if (beltMat) beltMat.dispose();
   atlasTex.dispose(); blankTex.dispose(); propMat.dispose(); potMat.dispose(); stewMat.dispose(); eyeMat.dispose(); gullMat.dispose();
-  pitStew.geometry.dispose(); rimDisc.geometry.dispose(); rimDisc.material.dispose(); eyes.geometry.dispose();
+  pitStew.geometry.dispose(); rimDisc.geometry.dispose(); rimDisc.material.dispose(); eyes.geometry.dispose(); rimXray.geometry.dispose(); rimXray.material.dispose();
   renderer.dispose();
   renderer = null; scene = null; camera = null; W = null; LV = null; BB = null; curTown = null; skin = null; potG = null;
   gullMesh = gullA = beltMesh = beltMat = beltTex = cakeRest = cakeTop = splatMesh = lidMesh = wipeMesh = flashMesh = null;

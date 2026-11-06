@@ -34,7 +34,9 @@ export const WHITE_UV = [WHITE_PX / TEX, WHITE_PX / TEX];
 // R2 (11-06 Fri, round 2, art director): Market and Harbour floors, about 15 % less saturated and darker, and the Harbour planks
 // moved from orange to weathered teak, so tan food has a gap to read against. Display only: catalog.js SURF keeps the old
 // colours because level generation reads them and Dailies may not move.
-export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#AB8E6E' };
+// FIX-LIST-3 R2 (L45, L58): the teak still swallowed brown and tan food, same hue and same value. The deck is now sea-bleached grey,
+// cooler and lighter: warm food has a hue gap, white food still has a value gap. Display only, as above.
+export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#B3BAB8' };
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
 // R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
 // catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
@@ -2336,7 +2338,7 @@ export function groundTexture(town = 'picnic') {
       }
     }
   } else if (town === 'harbour') {
-    x.fillStyle = tone('#68513C');
+    x.fillStyle = tone('#747C7C');
     x.fillRect(0, 0, TEX, TEX);
     for (let r = 0; r < 8; r++) {
       const y0 = r * 64, off = (r * 173) % 300, rr = r;
@@ -2345,12 +2347,12 @@ export function groundTexture(town = 'picnic') {
         const forced = (rr === 0 || rr === 7) && xx + 2 <= WHITE_PX && xx + 298 > WHITE_PX;
         for (const dx of [0, TEX]) {
           const X = xx + dx;
-          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#8F7355');
+          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#A2AAAA');
           x.fillRect(X + 2, y0 + 2, 296, 60);
-          x.fillStyle = tone('#9C8061');
+          x.fillStyle = tone('#A9B1B0');
           x.fillRect(X + 2, y0 + 16, 296, 2);
           x.fillRect(X + 2, y0 + 47, 296, 2);
-          x.fillStyle = tone('#5B4633');
+          x.fillStyle = tone('#636A6A');
           for (const ny of [y0 + 12, y0 + 52]) for (const nx of [X + 12, X + 288]) { x.beginPath(); x.arc(nx, ny, 3, 0, TAU); x.fill(); }
         }
       }
