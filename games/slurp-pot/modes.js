@@ -331,11 +331,15 @@ function installQa(api, M) {
    * U17: __qaSteer(kind) picks who steers __qaInput: 'greedy' (default) or any other bot kind on the SLOW hand model, so a run
    * plays like a slow casual person. Holds across levels. Only exists under ?qa=1.
    */
-  W.__qaSteer = (kind = 'greedy') => safe(api, '__qaSteer', () => {
+  // DECISION (11-07 Sat r7c): every non-greedy steer played on the slow hand, so the kid and the designer critics played as the
+  //   grandparent does (lag 0.7 s, 35 deg aim, 55 % push) and read 2 stars everywhere while the same bot on its own hand 3-stars
+  //   L4-L10 87-100 % of the time. hand 'normal' keeps the bot's own hand; 'slow' (the default, as before) is the first-timer model.
+  W.__qaSteer = (kind = 'greedy', hand = 'slow') => safe(api, '__qaSteer', () => {
     kind = BOT_POLL_KINDS.includes(kind) ? kind : 'greedy';
+    hand = hand === 'normal' ? 'normal' : 'slow';
     qaSteerKind = kind;
-    return { kind, ok: isFn(api.setQaSteer) ? !!api.setQaSteer(kind) : false };
-  }, { kind: '', ok: false });
+    return { kind, hand, ok: isFn(api.setQaSteer) ? !!api.setQaSteer(kind, hand) : false };
+  }, { kind: '', hand: '', ok: false });
   W.__qaTime = s => safe(api, '__qaTime', () => !!api.setTime(+s), false);
   W.__qaWin = () => safe(api, '__qaWin', () => !!api.forceResult('win', { stars: 3, tLeft: 21.4, chainBest: 12 }), false);
   /** DECISION: __qaFail(why) -> plausible card data: progress 0.62, the ticket's open lines, canFreeze true. */

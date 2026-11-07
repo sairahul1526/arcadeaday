@@ -20,7 +20,7 @@
 
 import P from '../shared/platform.js';
 import { computeLayout, cardLayout, insets as safeInsets, setTicketLines } from './layout.js';
-import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, GILD_PRICE, LID_MAX, TOWNS, isMilestone, HOT_SECS } from './consts.js';
+import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, FEAST, SKINS, GILD_PRICE, LID_MAX, TOWNS, isMilestone, HOT_SECS } from './consts.js';
 import { FIN_BEAT, FIN_BIG } from './camw.js';
 import { guide } from './guide.js';
 
@@ -68,7 +68,7 @@ export const STR = {
   mercyRetry: 'Extra time to help you! +{n}s', mercyRetryGrow: 'Extra time and a bigger pot to help you!',
   mercyGift: 'A little gift: +{n}s on the clock!', mercyGiftGrow: 'A little gift: extra time and a bigger pot!',
   tipArrows: 'Follow the arrows to the food you still need.', tipSmall: 'Eat small things first to grow.', tipBig: "Big things have to wait until you're bigger.",
-  goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars',
+  goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars', goal2Left: 'Finish with {n} left for 2 stars', goal2LeftShort: '{n} left for 2 stars',
   starFinish: 'Finish', starLeft: '{n}s left',
   bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossEaten: 'BOSS EATEN!',
   canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', canGild: 'Gild your {skin}!', canGildShort: 'You can gild a pot!', replayBonus: 'Replay bonus',
@@ -84,7 +84,7 @@ export const STR = {
   credits: 'Slurp Pot · Arcade a Day', on: 'On', off: 'Off', unlocksAt: 'Unlocks at Level {n}', dailyOrder: 'Daily Order', dailyWhat: 'A new order every day. Cook 7 days in a row for the top prize!', dailyWhatShort: 'A new order every day', winMore1: 'Win 1 more level to unlock', winMoreN: 'Win {n} more levels to unlock', winMoreShort: 'Win {n} more',
   cookToday: "Cook today's order", startFeast: 'Start Feast', allDone: 'All 60 orders served!',
   dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', keepStreak: 'Streak {n} · cook in {t} to keep it', keepStreakShort: 'Streak {n} · {t} left', dailyDone: 'Order served! Come back tomorrow.',
-  feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
+  feastBody: 'Serve as many orders as you can!', feastPay: '+{c} coins an order · +{b} for a new best', feastPayShort: '+{c} an order · +{b} best', shopBody: 'New pots are on the way. Save your coins!',
   cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Harbour is done. You ate the lighthouse!', allDoneStamp: 'HEAD CHEF!', allDoneLeft: 'The Daily Order and the Feast stay open.', allDoneLeft2: 'Feast is open. A new Daily tomorrow.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
   giftBody: 'Tap them during a level.', giftMagnet: 'Tap it during a level to pull food in.', giftFreeze: 'Tap it during a level for more time.',
@@ -2440,7 +2440,9 @@ function drawWin(st, w) {
   if (brag) {
     const bk = back(clamp((cardT - 0.35) / 0.25, 0, 1)), bh = clamp(B.hero.h * 0.3, 32, 46 * cu), bw = Math.min(B.hero.w * 0.5, Math.max(150, 200 * cu));
     if (bk > 0.02) {
-      const bx = B.hero.x + B.hero.w * 0.73, by = B.hero.y + B.hero.h - bh * 0.62;
+      // 11-07 Sat r7c (kid13 r7 #5): the ribbon's forked tails reach bh/2 past its body, so at 390 wide the right fork touched the
+      //   card edge; the centre now stops where the whole ribbon, tails included, stays 6 px inside the hero box.
+      const bx = Math.min(B.hero.x + B.hero.w * 0.73, B.hero.x + B.hero.w - bw / 2 - bh / 2 - 6), by = B.hero.y + B.hero.h - bh * 0.62;
       g.save(); g.translate(bx, by); g.rotate(-0.05); g.scale(bk, bk);
       ribbon(0, 0, bw, bh, fmt(STR.bestChain, { n: d.chainBest }), Math.max(14, bh * 0.5));
       g.restore();
@@ -2516,7 +2518,9 @@ function drawWin(st, w) {
   }
   // NEXT (auto-highlight after 0.9 s) · Replay · Map
   const last = (d.n | 0) >= LEVELS && (d.kind || 'level') === 'level';
-  const nb = reg('next', B.next, () => act('next'), { primary: true });
+  // DECISION (11-07 Sat r7c, curator r7b #4 "a fast tapper skips the star count"): a tap on NEXT (or Enter) in the first 0.5 s
+  //   finishes the count instead (stars, goal bar and coins jump to their end), and the next tap goes on. QA taps retry.
+  const nb = reg('next', B.next, () => { if (cardT < 0.5) { cardT = 0.9; return; } act('next'); }, { primary: true });
   const hi = cardT > 1.2 ? 0.5 + 0.5 * Math.sin((cardT - 1.2) * 5) : 0;
   goldBtn(nb, last ? STR.allDoneBtn : STR.next, { u: cu, fs: fs.btn, glow: hi });
   paperBtn(reg('replay', B.replay, () => act('retry')), STR.replay, { u: cu, fs: fs.btn2, icon: (x, y, s) => glyph('restart', x, y, s) });
@@ -2597,6 +2601,11 @@ function starGoal(d, w) {
   // DECISION (11-07 Sat r7, grandparent r7 #1): "Finish 54s faster for 3 stars" sat beside "0:11 left", two clocks for one
   //   target. The goal now reads the way the stat beside it and the HUD tag read: "Finish with 0:44 left for 3 stars", in m:ss.
   const ms = n => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+  // DECISION (11-07 Sat r7c, mobile-designer r7 #2, kid13 r7 #2): a slow 1★ win was shown the 3★ line ("57s faster"), a target
+  //   two steps away that reads as out of reach. A 1★ win off the clock (not a card Freeze) now names the next star, the 2★ line,
+  //   in the same clock words; 2★ wins and Freeze wins keep the 3★ line.
+  const t2 = st ? st.t2 : 0, need2 = +d.t2Left || 0;
+  if ((d.stars | 0) === 1 && need2 > 0 && t2 > 0) { const n = ms(Math.ceil(t2)); return { text: fmt(STR.goal2Left, { n }), short: fmt(STR.goal2LeftShort, { n }), fill: clamp(1 - need2 / t2, 0.04, 0.96), two: true }; }
   if (need > 0 && t3 > 0) { const n = ms(Math.ceil(t3)); return { text: fmt(STR.goal3Left, { n }), short: fmt(STR.goal3LeftShort, { n }), fill: clamp(1 - need / t3, 0.04, 0.96) }; }
   if (need > 0) return { text: fmt(STR.goal3, { n: need }), short: fmt(STR.goal3Short, { n: need }), fill: 0.5 };
   // quick enough on time, but a Freeze from the card holds the stars back: name the target instead
@@ -2994,7 +3003,9 @@ function drawMap(st, dt) {
   // DECISION (11-07 Sat, r4 curator): on a desktop-shaped viewport the first town sits at the very bottom of the content, so the old
   //   "node at 60 %" clamp opened on L1-6 with the next node low in the corner. The view may now scroll a little past the bottom
   //   (onto the table's wood) so the next node can open centred; phones keep the 60 % framing.
-  const wide = L.aspect === 'landscape', want = wide ? 0.5 : 0.6, cn0 = mp.nodes[here - 1];
+  // DECISION (11-07 Sat r7c, curator r7b #2 "844x390 map shows only L1-3"): a short landscape view (under 400 px of trail) opens
+  //   with the current node at 76 % of its height, so the three levels ahead are in view above it; taller views keep 50 %.
+  const wide = L.aspect === 'landscape', want = wide ? (V.h < 400 ? 0.76 : 0.5) : 0.6, cn0 = mp.nodes[here - 1];
   const extra = wide && cn0 ? Math.max(0, cn0.y - V.h * want - Math.max(0, mp.contentH - V.h)) : 0;
   MAP.max = Math.max(0, mp.contentH - V.h) + extra;
   const key = `${Math.round(V.w)}x${Math.round(V.h)}:${here}`;
@@ -3702,6 +3713,15 @@ function drawFeast(st) {
     icon('ui-ticket', x0 + is / 2, bc, is, (x, y, s2) => tornPaper(x - s2 * 0.3, y - s2 * 0.4, s2 * 0.6, s2 * 0.8, cu));
     txt(s, x0 + is + 8, bc + 1, fs.stat * 1.1, { align: 'left', col: C.ink, maxW: br.w - is - 10 });
   } else txt2(STR.feastBody, br.x + br.w / 2, bc, fs.body, { f: FB, col: C.ink, maxW: br.w });
+  // DECISION (11-07 Sat r7c, mobile-designer r7 #5): the start card showed only "Best: N" and never what a run pays. One coin
+  //   line under it reads the payout from consts FEAST (coins an order, coins on a new best), so the card and the payout agree.
+  if (B.pay && B.pay.h > 12) {
+    const pr = B.pay, pc = pr.y + pr.h / 2, ci = Math.min(pr.h * 0.36, 11 * cu + 3), v = { c: FEAST.coins, b: FEAST.pbCoins };
+    const s = [fmt(STR.feastPay, v), fmt(STR.feastPayShort, v)].find(t => measure(t, fs.small * 1.05, FB, '800') <= pr.w - ci * 2 - 10) || fmt(STR.feastPayShort, v);
+    const tw = Math.min(measure(s, fs.small * 1.05, FB, '800'), pr.w - ci * 2 - 10), x0 = pr.x + (pr.w - ci * 2 - 8 - tw) / 2;
+    coin(x0 + ci, pc, ci);
+    txt(s, x0 + ci * 2 + 8, pc + 1, fs.small * 1.05, { f: FB, align: 'left', col: C.goldS, maxW: pr.w - ci * 2 - 10 });
+  }
   if (Array.isArray(B.towns)) B.towns.forEach((r, i) => {
     const t = open[i]; if (!t) return;
     const on = t === feastSel;

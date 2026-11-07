@@ -38,7 +38,9 @@ export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1) * (w > h && 
  * a portrait phone sees, the pot 40 % of the screen's height (curator r5 r-play-844x390). The short side now shows at least
  * 0.75 of the portrait view: max(1.35, 0.75 * w / h). 16:10 and 16:9 desktops stay at 1.35 (0.75 * 1.78 = 1.33).
  */
-export const camLand = (w, h) => Math.max(1.35, 0.75 * w / h);
+// DECISION (11-07 Sat r7c, curator r7b #1 "landscape cramped"): a short landscape phone (under 600 px tall) now shows 0.85 of the
+// portrait depth (1.84 at 844x390, was 1.62), so the pot is about 30 % of the height instead of a third. Desktops keep 0.75.
+export const camLand = (w, h) => Math.max(1.35, (h < 600 ? 0.85 : 0.75) * w / h);
 /** Near + far table the view may show past the board in depth (the clamps' 0.6 u + 2 u), and that view's slack. */
 export const CAM_EDGE = 2.6, CAM_SLACK = 1.15;
 /**

@@ -191,10 +191,17 @@ async function withTab(browser, bname, prof, o, fn) {
 }
 /** One __qaInput round (the primary-button tap on a card), then a short settle. */
 async function tapPrimary(s) {
-  const steps = (await s.page.evaluate(() => window.__qaInput()).catch(() => [])) || [];
-  for (const a of steps) await act(s, a).catch(() => {});
-  await sleep(700);
-  return qa(s.page);
+  // r7c: the win card's first tap in its first 0.5 s finishes the star count, so a card that is still up gets one more tap.
+  const before = await qa(s.page);
+  let q = null;
+  for (let i = 0; i < 2; i++) {
+    const steps = (await s.page.evaluate(() => window.__qaInput()).catch(() => [])) || [];
+    for (const a of steps) await act(s, a).catch(() => {});
+    await sleep(700);
+    q = await qa(s.page);
+    if (!before || !q || q.screen !== before.screen) break;
+  }
+  return q;
 }
 /** __qaAdvance in 10 s chunks until the screen leaves play/pause (or capMs wall). */
 async function advanceToCard(s, capMs, maxChunks = 60) {

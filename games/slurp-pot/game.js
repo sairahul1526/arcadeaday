@@ -530,7 +530,7 @@ function startLevel(n, opt = {}) {
 const SLOW_HAND = { m: 0.55, lag: 0.7, sigma: 35 * Math.PI / 180, every: 0.5 };
 function qaSteerBot(seed) {
   const k = S.qaKind || 'greedy';
-  return safe(bots.createBot, k, seed, k === 'greedy' ? {} : { P: SLOW_HAND });
+  return safe(bots.createBot, k, seed, k === 'greedy' || S.qaHand === 'normal' ? {} : { P: SLOW_HAND });
 }
 function retry() {
   if (S.kind === 'feast') return startLevel(0, { kind: 'feast', town: S.fsTown, retry: S.screen !== 'feastend' });
@@ -636,6 +636,8 @@ function onWin(ev, now) {
   const data = { n: S.n, kind: S.kind, stars, tLeft, chainBest, coins: 0, newStars: 0, gifts: [], chest: null, milestone: null, nextSkin: null, ...res, ...(ev.data || {}) };
   const st = w && safe(logic.starTimes, w);
   data.t3Left = st && stars < 3 ? Math.max(0, Math.ceil(st.t3 - (tLeft - ((w && w.freezeAdded) || 0)))) : 0;
+  // 11-07 Sat r7c: a 1★ win off the clock (no card Freeze) names the 2★ line on the card, the next star rather than the far third.
+  data.t2Left = st && stars < 2 && !(w && w._ && w._.cardFreeze) ? Math.max(0, Math.ceil(st.t2 - (tLeft - ((w && w.freezeAdded) || 0)))) : 0;
   data.bigBoss = S.kind === 'level' && S.n > 0 && S.n % 10 === 0;
   data.strip = S.kind === 'level' && S.n <= WIN_STRIP_MAX;
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
@@ -970,8 +972,9 @@ const api = {
     return !!S.bot;
   },
   /** QA (U17): what __qaInput steers from. 'greedy' is the default; any other kind plays as a slow first-time hand. */
-  setQaSteer(kind) {
+  setQaSteer(kind, hand) {
     S.qaKind = kind || 'greedy';
+    S.qaHand = hand === 'normal' ? 'normal' : 'slow';
     S.qaBot = M.qa && bots && !S.bot && S.lvl ? qaSteerBot((S.lvl.seed | 0) + 7) : null;
     return !!S.qaBot;
   },

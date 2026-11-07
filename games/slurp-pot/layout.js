@@ -55,7 +55,8 @@ export function webInset(H) {
     if (!nav) return 0;
     const r = nav.getBoundingClientRect();
     if (!r.height || getComputedStyle(nav).display === 'none') return 0;
-    return clamp(Math.round(innerHeight - r.top + 2), 0, 90);
+    // 11-07 Sat r7c (curator r7b #3 "more games sits tight under the Shop label at 360x640"): 10 px of air over the chips, was 2.
+    return clamp(Math.round(innerHeight - r.top + 10), 0, 98);
   } catch { return 0; }
 }
 
@@ -199,7 +200,10 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
     const px = col.x + colW + U(10), py = below + Math.max(4, U(6));
     play = R(px, py, sr - px, sb - py);
-    play.cx = play.x + play.w / 2; play.cy = play.y + 0.6 * play.h;
+    // DECISION (11-07 Sat r7c, curator r7b #1 "landscape pot at the bottom edge, eyes cut"): a short landscape phone anchors the
+    //   pot at 52 % of the play rect (was 60 %). On 844x390 the pot is a third of the height, so 60 % put its near rim and eyes
+    //   on the bottom edge whenever the near-edge clamp pulled it lower. Desktops keep 60 %.
+    play.cx = play.x + play.w / 2; play.cy = play.y + (lphone ? 0.52 : 0.6) * play.h;
   }
   // DECISION: the Daily bump-counter chip (a daily with a "No bumps" line) sits at the bottom-left of the safe rect:
   //   the boosters own the right edge, the landscape ticket column is empty below the ticket, and the pot is centred.
@@ -714,6 +718,8 @@ export function cardLayout(L, name, opts = {}) {
     const rowsA = [titleRow, { id: 'hero', h: U(150), min: 56, gap }];
     const rowsB = [
       { id: 'best', h: Math.max(fs.stat * 1.7, U(38)), min: fs.stat * 1.5, gap },
+      // 11-07 Sat r7c (mobile-designer r7 #5): the payout line, so the card says why a run is worth coins.
+      { id: 'pay', h: Math.max(fs.small * 1.7, U(26)), min: fs.small * 1.4, gap: gap * 0.6 },
       ...(nT > 1 ? [{ id: 'towns', h: Math.max(44, U(48)), min: 44, gap }] : []),
       { id: 'primary', h: primH, min: primH, gap: gap * 1.4 },
       { id: 'back', h: secH, min: secH, gap: gap * 1.1 }];
