@@ -174,6 +174,17 @@ export function createInput(uiCanvas, getLayout) {
       if (!on) release();
     },
     get enabled() { return enabled; },
+    /**
+     * QA only (modes.js __qaAdvance under ?qa=1): applies the page-px point the QA driver just dispatched as a touch move.
+     * DECISION (11-07 Sat r7): Chrome hands touchmove/pointermove to the page at the next animation frame, and a headless
+     *   frame is ~0.2 s, so a scripted run steered one loop late (greedy L3 37 s of clock in the browser vs 19 s in node).
+     *   The real event still arrives and lands on the same point, so this only removes the frame of delivery lag.
+     */
+    qaMove(x, y) {
+      if (pid === null || !isFinite(x) || !isFinite(y)) return false;
+      onMove({ pointerId: pid, clientX: +x, clientY: +y });
+      return true;
+    },
   };
   return api;
 }

@@ -279,10 +279,11 @@ function steerPush(api) {
   return clamp(num(api.botPush(), 0.55), 0, 1);
 }
 
+let qaPendingMove = null; // the last 'move' __qaInput handed out; __qaAdvance applies it before stepping (input.qaMove)
 function makeQaInput(api) {
   let down = false; // is the (virtual) pointer we asked the checker to press still down?
   let lx = 0, ly = 0; // last pointer position we sent
-  const at = (type, x, y) => { lx = x; ly = y; return { type, x, y }; };
+  const at = (type, x, y) => { lx = x; ly = y; qaPendingMove = type === 'move' ? { x, y } : null; return { type, x, y }; };
   const up = () => ({ type: 'up', x: lx, y: ly });
   return function qaInput() {
     let st;
@@ -353,6 +354,9 @@ function installQa(api, M) {
   W.__qaAdvance = (seconds = 1) => safe(api, '__qaAdvance', () => {
     const useAdvance = isFn(api.advance);
     if (!useAdvance) fallback('advance');
+    // r7: the move the driver just dispatched reaches the page a frame later; apply it now so the stick is not a loop behind.
+    const pm = qaPendingMove; qaPendingMove = null;
+    if (pm && api.input && api.input.held && isFn(api.input.qaMove)) { try { api.input.qaMove(pm.x, pm.y); } catch {} }
     const t0 = performance.now();
     const max = Math.max(1, Math.round(num(+seconds, 1) * 60));
     let k = 0, after = 0;

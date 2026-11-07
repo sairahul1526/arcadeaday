@@ -94,7 +94,7 @@ export const STR = {
   goAround: 'Go around the {w}', goAroundIt: 'Go around it', growFirst: 'Eat more to grow', starsLive: '3 stars: {t}', beatLeft: '{n} to go!', beatBig: 'Bigger pot!', feastOneMore: '1 more order to beat your best', tip_magnet: 'Magnet pulls food in', tip_freeze: 'Freeze adds 10 seconds', tip_mega: 'Mega eats bigger food', magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
   nice: 'Nice!', phew: 'Phew!', savedLid: 'Saved by a lid!', lidBody: 'Your streak is safe. {n} lid left.',
   lidBody0: 'Your streak is safe!', again: 'Again', titleBtn: 'Title', feastOver: 'Feast over!', opensAt: 'Opens at L{n}',
-  later: 'Later', gild: 'Gild', gilded: 'Gilded', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
+  later: 'Later', gild: 'Gild', gildSet: '{skin} · {n}/{of} gilded', gilded: 'Gilded', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
   lidName: 'Streak Lid', full: 'Full', boosters: 'Boosters', pots: 'Pots', buy: 'Buy', locked: 'Locked',
   playFreeA: 'Play free →', playFreeB: 'no download', ogTag: 'Slurp it all. Fill the order.',
   dServe: 'Serve the order', dEat: 'Eat {n} {name}', dChain: 'Chain ×{n}', dBig: '{n} big bites',
@@ -102,7 +102,7 @@ export const STR = {
   stCake: 'Top tier first!', stTruck: 'Chase the truck!', stGulls: 'Beat the gulls!', stTwo: 'Two orders today!',
   stBelt: 'Ride the belts', stStack: 'Easy on stacks!', stRoll: 'Catch the rollers', stSimmer: 'Lid on! Go around',
   stPens: 'Grow to open', bumps: 'Bumps {n}', dayN: 'Day {n}', tomorrow: 'Tomorrow', tmrLine: 'Tomorrow: {r}', tmrLineShort: '{r}', tmrLocked: 'Daily day {d}: {r}', tmrLockedShort: 'Day {d}: {r}', nextOrder: 'Next order in {t}',
-  bestN: 'Best: {n}', servedN: '{n} served', stamps: 'Stamps', streakN: 'Streak {n}', todayOrder: "Today's order",
+  bestN: 'Best: {n}', servedN: '{n} served', stamps: 'Stamps', streakN: 'Streak {n}', streakStart: 'Start a streak!', todayOrder: "Today's order",
   nextTown: 'Next town', feastPick: 'Pick a town', chestOpen: 'Chest!', milestoneT: 'Star milestone!', ticketsN: 'Orders {n}',
   secsN: '{n} s', ghostBest: 'Best', starsTo: '★ {have} / {need}', bookChapter: '{town} · {n} / 20', comeBack: 'Come back tomorrow',
   sealed: 'Coming up', allStars: 'Every star!', served: 'orders served', served1: 'order served', dailyNew: 'Daily Order!', dayServed: "Today's order is served!",
@@ -1560,6 +1560,9 @@ function drawArrows(w) {
     // DECISION (11-07 Sat, r4): the lost pulse also runs on L21-24 and L41-44, where a new ticket pool arrives and players lose the target again.
     const nn = hud.n || 0;
     if (arrows.length && !seen.size && (nn <= 10 || (nn >= 21 && nn <= 24) || (nn >= 41 && nn <= 44))) lost = true;
+    // DECISION (11-07 Sat r7, playables curator r6b #1, a slow thumb sat in empty cloth on L4): the gold guide trail already shows after 4 s
+    //   without order progress, but it is easy to miss on a busy table. While it is up the edge arrows pulse too, on any level.
+    if (arrows.length && hud.gd && hud.gd.a > 0.5) lost = true;
   }
   arrowPlaced.length = 0;
   for (const a of arrows.slice(0, 4)) edgeArrow(a.p.x, a.p.y, a.ic, lost ? 1.2 + 0.12 * Math.sin(T * TAU * 1.5) : 1);
@@ -1880,7 +1883,9 @@ function drawGhost(w) {
   if (cyc < 0.25) { sc = 1 - 0.12 * (cyc / 0.25); a = cyc / 0.25; }
   else if (cyc < 1.25) { sc = 0.88; dy = -ease((cyc - 0.25) / 1.0) * 90 * u; }
   else { sc = 0.88 + 0.12 * ((cyc - 1.25) / 0.55); dy = -90 * u; a = 1 - (cyc - 1.25) / 0.55; }
-  const x = clamp(p.x + R + 26 * u, L.play.x + 30 * u, L.play.x + L.play.w - 30 * u), y = p.y + 34 * u + dy;
+  // DECISION (11-07 Sat r7, playables curator r6b #2): the hand started on the pot's right rim and hid the soup the player
+  //   is meant to look at; it now starts lower-right of the pot and swipes up beside it.
+  const x = clamp(p.x + R + 40 * u, L.play.x + 30 * u, L.play.x + L.play.w - 30 * u), y = p.y + 52 * u + dy;
   const hs = sc * u * 1.1;
   if (cyc >= 0.25 && cyc < 1.25) { g.save(); g.globalAlpha = 0.35 * a; circle(x, y - 32 * hs, 16 * u); g.fillStyle = C.paper; g.fill(); g.restore(); }
   g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(x, y); g.scale(hs, hs);
@@ -3253,7 +3258,11 @@ function drawShop(st) {
     if (sel.gilded) gildMark(cx, cy + bob, s);
     if (sel.worn) tick(cx + s * 0.38, cy - s * 0.34, Math.max(20, s * 0.2));
   }
-  if (B.name) txt(skinName(sel.id), B.name.x + B.name.w / 2, B.name.y + B.name.h / 2, fs.body * 1.2, { col: C.ink, maxW: B.name.w });
+  // DECISION (11-07 Sat, mobile-designer r6/r6b "Gild 600 is one purchase, coins pile up"): Gild is once PER POT (10 x 600 on
+  //   top of 5,000 in pots), so an owned pot's name line counts the set, "Sunny · 0/10 gilded"; it falls back to the name alone.
+  const gN = list.filter(s => s.gilded).length;
+  if (B.name) txtMin(sel.owned ? [fmt(STR.gildSet, { skin: skinName(sel.id), n: gN, of: list.length }), skinName(sel.id)] : [skinName(sel.id)],
+    B.name.x + B.name.w / 2, B.name.y + B.name.h / 2, fs.body * 1.2, { col: C.ink, maxW: B.name.w });
   // Wear / Buy (an owned pot shares the row with Gild)
   const armed = !!(armBuy && armBuy.id === sel.id && !armBuy.poor && T - armBuy.t < 3);
   const poorK = armBuy && armBuy.poor && armBuy.id === sel.id ? T - armBuy.t : 9;
@@ -3551,7 +3560,10 @@ function drawNextTown(r, fs, cu) {
 }
 function ladderTitle(r, fs, ds) {
   if (!r || !ds) return;
-  txt(fmt(STR.streakN, { n: ds.streak || 0 }), r.x + 2, r.y + r.h / 2, fs.small * 1.1, { f: FB, align: 'left', col: C.ink, maxW: r.w * 0.45 });
+  // DECISION (11-07 Sat r7, grandparent r6b #5 "Streak 0 with Day 1 highlighted is confusing"): with no streak yet the ladder
+  //   says what to do, "Start a streak!", and falls back to "Streak 0" only where that does not fit.
+  const sk = ds.streak | 0;
+  txtMin(sk > 0 ? [fmt(STR.streakN, { n: sk })] : [STR.streakStart, fmt(STR.streakN, { n: 0 })], r.x + 2, r.y + r.h / 2, fs.small * 1.1, { f: FB, align: 'left', col: C.ink, maxW: r.w * 0.45 });
   if (ds.tomorrow) txt(`${STR.tomorrow}: ${rewardShort(ds.tomorrow.reward)}`, r.x + r.w - 2, r.y + r.h / 2, fs.small * 1.1, { f: FB, align: 'right', col: C.goldS, maxW: r.w * 0.52 });
 }
 function drawDaily(st) {
@@ -3571,7 +3583,8 @@ function drawDaily(st) {
   //   clock it runs out on (IST midnight, meta.msToNext), "Streak 3 · cook in 5h 12m to keep it"; lids still save a missed day.
   const keep = !intro && !done && (ds.streak | 0) > 0 ? msShort((ds.msToNext || 0) - (T - dsCache.t) * 1000) : null;
   if (B.sub) txtMin(intro ? [STR.dailyBody, STR.dailyBodyShort] : keep ? [fmt(STR.keepStreak, { n: ds.streak, t: keep }), fmt(STR.keepStreakShort, { n: ds.streak, t: keep })]
-    : [`${fmt(STR.dayN, { n: ds.day })} · ${fmt(STR.streakN, { n: ds.streak || 0 })}`], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.small, { f: FB, col: keep ? C.stamp : C.goldS, maxW: B.sub.w });
+    : (ds.streak | 0) > 0 ? [`${fmt(STR.dayN, { n: ds.day })} · ${fmt(STR.streakN, { n: ds.streak })}`]
+    : [fmt(STR.dayN, { n: ds.day })], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.small, { f: FB, col: keep ? C.stamp : C.goldS, maxW: B.sub.w });
   const lines = dailyLines(ds.key, curLv());
   drawReceipt(B, fs, cu, lines, ds.mask, `${STR.daily} · ${String(ds.key || '').slice(5).replace('-', '/')}`, ds.done ? 1 : null);
   ladderTitle(B.ladderT, fs, ds);
