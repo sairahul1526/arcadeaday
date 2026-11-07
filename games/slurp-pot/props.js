@@ -2201,7 +2201,10 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
     frame(0.06, 0.07, '#E8FBFF', 0.009);
   } else if (type === 'deck') {
     // R4 (11-06): levels hand the harbour's near-white #E8FBFF here; a step down so white food reads on the planks.
-    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? shade(col, -0.15) : col;
+    // 11-07 (art-director r5, L50/L55): one step was not enough, the deck still rendered near white and mint sweets, ice cream and
+    // cotton candy sank into it. A near-white deck is now a sea-weathered blue-grey (half way to slate in linear light, about
+    // #B0C5CB), so white and pastel food read by value and brown food by hue. Display only, like GROUND_BASE.
+    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? mixC(col, '#4E6E7C', 0.5) : col;
     for (let i = 0; i < n; i++) parts.push(P(rbox(w, 0.03, d / n - 0.02, 0.012, 1), mixC(base, '#3A2418', i % 2 ? 0.08 : 0), [0, 0.006, -d / 2 + (i + 0.5) * d / n]));
   } else {
     // blanket / rug: body + hem frame + inner line; blanket gets tassels on the short ends
@@ -2693,14 +2696,30 @@ function potParts(id) {
   }
   return { body, extra };
 }
-function potGeoFor(id) {
-  let e = _potGeo.get(id);
+// DECISION (11-07 Sat, r4, Gild): a gilded pot gets a fat gold rim, eight gold studs round it and every body colour pulled 30 % toward gold.
+// It is its own cached geometry (key id + '+g'), so a plain pot costs nothing extra and no skin's parts change.
+const GILD_COL = [1, 0.79, 0.29];
+function gildTint(g) {
+  const c = g.attributes.color; if (!c) return g;
+  const a = c.array;
+  for (let i = 0; i < a.length; i += 3) for (let k = 0; k < 3; k++) a[i + k] += (GILD_COL[k] - a[i + k]) * 0.3;
+  c.needsUpdate = true;
+  return g;
+}
+function potGeoFor(id, gilded = false) {
+  const key = gilded ? id + '+g' : id;
+  let e = _potGeo.get(key);
   if (e) return e;
   const { body, extra } = potParts(id);
   const done = (g) => { setWhiteUV(g); g.computeBoundingBox(); g.computeBoundingSphere(); g.userData = { tris: g.attributes.position.count / 3 }; return g; };
-  e = { body: done(merge(body)), extra: {} };
+  if (gilded) {
+    body.push(rim('#FFC93C', '#FFE88A', '#B8800F', 0.17));
+    for (let i = 0; i < 8; i++) { const a = i * TAU / 8; body.push(P(sph(0.06, 6, 4), '#FFE88A', [Math.cos(a) * 1.0, RIM_Y + 0.17, Math.sin(a) * 1.0])); }
+  }
+  const bg = merge(body);
+  e = { body: done(gilded ? gildTint(bg) : bg), extra: {} };
   for (const k of Object.keys(extra)) e.extra[k] = done(merge(extra[k]));
-  _potGeo.set(id, e);
+  _potGeo.set(key, e);
   return e;
 }
 /**
@@ -2709,9 +2728,9 @@ function potGeoFor(id) {
  * children: 'lights' (ricecooker, blink), 'lightsA'/'lightsB' (ufo, alternate blink), 'sparkle' (royal, twinkle).
  * Geometries and materials are shared/cached; render scales the group by rVis.
  */
-export function potGroup(skinId = 'sunny') {
+export function potGroup(skinId = 'sunny', gilded = false) {
   const id = POT_SKINS.indexOf(skinId) >= 0 ? skinId : 'sunny';
-  const e = potGeoFor(id), g = new T.Group();
+  const e = potGeoFor(id, !!gilded), g = new T.Group();
   const body = new T.Mesh(e.body, potMaterial());
   body.name = 'body';
   g.add(body);
@@ -2722,5 +2741,6 @@ export function potGroup(skinId = 'sunny') {
   }
   g.name = 'pot-' + id;
   g.userData.skin = id;
+  g.userData.gilded = !!gilded;
   return g;
 }

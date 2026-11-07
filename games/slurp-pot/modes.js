@@ -11,9 +11,9 @@
 // kind (the save is meta.js through P). Plain ES module, no DOM at import time, so Node can import parseModes.
 //
 // Everything that the UI needs from record mode is published on api.rec and window.__recState:
-//   { t, frames, over, hook, cap2, end, still, ready }   t = video seconds (frames / 60), over = t >= 24.5.
+//   { t, frames, over, hook, cap2, end, still, ready }   t = video seconds (frames / 60), over = t >= REC_OVER_T.
 //   show: { hook, cap2, end, iris }  caption / end-card alphas 0..1 for this frame (recShow(t)); iris = loop wipe 0..1.
-//   step (pot SIZE UP step now), beats [{ t, step }] (the planned big beats), looped (true after the 24.5 s restart).
+//   step (pot SIZE UP step now), beats [{ t, step }] (the planned big beats), looped (true after the restart at REC_OVER_T).
 //
 // DECISION: flags are on only for the exact value "1" (the platform layer's qa test is /[?&]qa=1\b/, record.mjs and
 //   og.mjs also send 1), so ?qa=true is not qa. ?level=n is honoured only together with ?qa=1 (GDD §11.4).
@@ -34,7 +34,13 @@ export const HOOK_DEFAULT = 'Can a pea-sized pot eat the WHOLE park?';
 export const CAP2_DEFAULT = '…even the giant cake?';
 export const LEVELS = 60;
 const DT = 1 / 60;
-const REC_OVER_T = 24.5;      // mode 'over' once the end card has shown 1.0 s (GDD §12.1)
+// DECISION (11-07 Sat, viral r4): the cake is gone by 17.6 s and the old beat sheet then sat on an idle pot until 23.5 s, seven seconds of dead air in a clip
+//   that has to hold a thumb. ORDER UP now gets 1.4 s, the end card comes in at 19.0 s and the loop closes at 20.5 s (was 25.0 s). Everything before 17.6 s stands.
+// DECISION (11-07 Sat, viral r6 "3 s of static ORDER UP, CTA only 1.4 s"): the end card comes in at 18.0 s (ORDER UP keeps
+//   about 0.8 s after the cake drops), so the call to action holds 2.0 s solid plus the 0.5 s loop iris, which now opens
+//   on the restarted frame-0 scene instead of closing to a teal dot (ui.js drawRecord): the last frame matches the first.
+const REC_OVER_T = 20.0;      // mode 'over' and the loop restart, after the end card has shown 2.0 s (GDD §12.1)
+export const REC_END_T = 18.0, REC_LOOP_T = 20.5;
 // DECISION (11-04, og at the tip): GDD §12.3 says 1,092 steps (18.2 s), but on today's REC course that frame is past
 //   the gulp (win heart showing). Measured in record.mjs snaps: final boss bite 16.63 s, cake whole on the rim 16.8 s,
 //   half sunk 17.2 s, a sliver + ORDER UP 17.6 s, heart 18.0 s. 1,020 steps (17.0 s) = the cake tipping into the pot.
@@ -385,6 +391,8 @@ const REC_Q = 0.92;                                 // every course item fits wi
 const REC_V = 0.86;                                 // planned cruise = 86 % of top speed (the director has headroom)
 const REC_GAP = 0.06, REC_GAP_MAX = 0.5;            // bite spacing (s); 0.5 keeps the chain alive (CHAIN_WIN 0.7)
 const REC_HOLD_D = 4.0;                             // pot centre to cake centre at the padlock (0.5 s rush)
+const REC_FLANK = 100, REC_FLANK_T = 12;             // crowd items beside the route, and until when (340 cap: 237 + 100)
+export const REC_BACK = 20;                         // food either side of the pot's wake on frame 0 (not in the plan, never eaten)
 const REC_ITEMS = 236;                              // course items (+ the cake), well under ITEM_MAX; the clip is tuned at this count
 // The course's kind ladder (16 kinds + strawberry + cake = KINDS_MAX 18): colourful tiny food, picnic snacks, then
 // the props a hole game is remembered for (cooler, bench, parasol, tree, swing set, gazebo) before the cake.
@@ -505,6 +513,7 @@ export function recPlan(base) {
   const route = recRoute(hi, spawn, cake);
   const x0 = num(base.x0, -9) + 0.3, x1 = num(base.x1, 9) - 0.3, z0 = num(base.z0, -15) + 0.3, z1 = num(base.z1, 15) - 0.3;
   const items = [Object.assign({}, boss, { zone: 0 })], plan = [];
+  let flank = 0;
   bites.forEach((b, j) => {
     // lateral spread inside the swallow band, so the straight route collects every item
     const reach = Math.max(0, b.r - 0.25 * b.k.a);
@@ -513,7 +522,37 @@ export function recPlan(base) {
     items.push({ kind: b.k.id, ki: b.k.i, x: r3(clamp(x, x0, x1)), z: r3(clamp(z, z0, z1)), a: b.k.a, h: b.k.h, k: num(b.k.k, 1),
       flags: b.ing ? Lg.F.ING : 0, rot: r3(frac(j * 0.381966) * 2 * Math.PI - Math.PI), lane: -1, lu: 0, belt: -1, stack: null, zone: 0 });
     plan.push({ i: items.length - 1, t: b.t });
+    // DECISION (11-07 Sat, viral r4): one bite-wide line of food on a bare blanket read as a thin trail. Up to REC_FLANK more items sit just outside the swallow
+    // band on alternating sides while the pot is small, so the frame is crowded. They are not in the plan and the pot passes them; same kind as the bite, so they fit.
+    if (j >= REC_FIRST.length && !b.ing && b.t < REC_FLANK_T && flank < REC_FLANK && (used[b.k.id] | 0) < num(KIND_MAX[b.k.id], 0)) {
+      const [fx, fz] = routeAt(route, arcs[j], (j & 1 ? 1 : -1) * (reach + b.k.a + 0.3 + frac(j * 0.754877) * 0.9));
+      items.push({ kind: b.k.id, ki: b.k.i, x: r3(clamp(fx, x0, x1)), z: r3(clamp(fz, z0, z1)), a: b.k.a, h: b.k.h, k: num(b.k.k, 1),
+        flags: 0, rot: r3(frac(j * 0.569840) * 2 * Math.PI - Math.PI), lane: -1, lu: 0, belt: -1, stack: null, zone: 0 });
+      used[b.k.id] = (used[b.k.id] | 0) + 1; flank++;
+    }
   });
+  // DECISION (11-07 Sat, viral r6 "frame 0: tiny pot on an empty blanket, lower half of the frame blank"): the course runs
+  //   away from the camera and the preroll has already carried the pot about 1.6 up the first leg, so everything below
+  //   it on frame 0 was bare blanket. REC_BACK small foods sit in two columns either side of the wake the pot has just
+  //   cut (0.44-0.96 out, 0.2-1.2 behind its frame-0 point: the close camera sees about 0.8 either side), at least 0.38 off
+  //   the first leg (the frame-0 pot is r 0.16); the pot never comes back, so they stay uneaten (modes-test checks) and off the plan.
+  {
+    const back = ['blueberry', 'cherry', 'pea'].map(byId).filter(Boolean);
+    const cnt = {}; for (const it of items) cnt[it.kind] = (cnt[it.kind] | 0) + 1;
+    const [px, pz] = routeAt(route, sAt(0));
+    const spots = [];
+    for (const dz of [0.22, 0.5, 0.78, 1.06]) for (const dx of [0.44, 0.7, 0.96]) { spots.push([-dx, dz + (dx === 0.7 ? 0.14 : 0)]); spots.push([dx, dz + (dx === 0.7 ? 0 : 0.14)]); }
+    let n = 0;
+    spots.forEach(([dx, dz], j) => {
+      if (n >= REC_BACK || !back.length) return;
+      const k = back[j % back.length];
+      if ((cnt[k.id] | 0) >= num(KIND_MAX[k.id], 0)) return;
+      const jx = (frac(j * 0.618034) - 0.5) * 0.1, jz = (frac(j * 0.754877) - 0.5) * 0.12;
+      items.push({ kind: k.id, ki: k.i, x: r3(clamp(px + dx + jx, x0, x1)), z: r3(clamp(pz + dz + jz, z0, z1)), a: k.a, h: k.h, k: num(k.k, 1),
+        flags: 0, rot: r3(frac(j * 0.381966) * 2 * Math.PI - Math.PI), lane: -1, lu: 0, belt: -1, stack: null, zone: 0 });
+      cnt[k.id] = (cnt[k.id] | 0) + 1; n++;
+    });
+  }
   const tickets = [{ lines: [{ kind: 'strawberry', need: Math.min(3, bites.filter(b => b.ing).length) || 1, place: 'open' }], boss: 0 }];
   const level = Object.assign({}, base, {
     items, tickets, path: route.map(([x, z]) => ({ x: r3(x), z: r3(z) })),
@@ -622,16 +661,17 @@ function startRecordLevel(api, rec) {
 
 /**
  * Caption alphas and the loop iris for ui.js, from video time t (s). DECISION: hook on from frame 0, fading out
- * 2.75–3.0 s and back in over 24.5–25.0 (so the last frame matches frame 0); cap2 12.8–15.6 s with 0.2 s fades;
- * end card in over 23.5–23.7 s and held until the loop frame; iris 0→1 over 24.5–25.0 (circle wipe on the pot).
+ * 2.75–3.0 s and back in over the last 0.5 s (so the last frame matches frame 0); cap2 12.8–15.6 s with 0.2 s fades;
+ * end card in over 0.2 s from REC_END_T and held until the loop frame; iris 0→1 over the last 0.5 s (the end card opens in
+ * a circle on the restarted frame-0 pot, so the loop frame is frame 0).
  */
 export function recShow(t) {
   const up = (a, b) => clamp((t - a) / (b - a), 0, 1);
   return {
-    hook: t < 24.5 ? 1 - up(2.75, 3.0) : up(24.5, 25.0),
+    hook: t < REC_OVER_T ? 1 - up(2.75, 3.0) : up(REC_OVER_T, REC_LOOP_T),
     cap2: up(12.8, 13.0) * (1 - up(15.4, 15.6)),
-    end: t < 25.0 ? up(23.5, 23.7) : 0,
-    iris: up(24.5, 25.0),
+    end: t < REC_LOOP_T ? up(REC_END_T, REC_END_T + 0.2) : 0,
+    iris: up(REC_OVER_T, REC_LOOP_T),
   };
 }
 
@@ -663,9 +703,9 @@ function makeCapture(api) {
 }
 
 /**
- * ?record=1 / ?og=1 / ?cover=: the __rec contract (§12.1), window.__recState for ui.js captions, the 25.0 s loop.
- * DECISION (loop): at 24.5 s (mode 'over') the REC restarts with a fresh director and preroll, and the last 30
- *   frames only repaint (tick 0) under the iris, so frame 1500 shows the same pose as frame 0. Bus events after
+ * ?record=1 / ?og=1 / ?cover=: the __rec contract (§12.1), window.__recState for ui.js captions, the loop at REC_LOOP_T.
+ * DECISION (loop): at REC_OVER_T (mode 'over') the REC restarts with a fresh director and preroll, and the last 30
+ *   frames only repaint (tick 0) under the iris, so the loop frame shows the same pose as frame 0. Bus events after
  *   the restart and before frame 0 are not sent to the soundtrack.
  */
 function installRecord(api, M, still) {

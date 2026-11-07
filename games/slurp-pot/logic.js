@@ -1017,9 +1017,12 @@ export function doomed(w) {
 /** A level's grace in seconds: 0 unless 0 < grace < T. */
 const graceOf = w => { const g = w.level ? +w.level.grace : 0; return g > 0 && g < w.T ? g : 0; };
 /** Seconds of tLeft (Freeze excluded) that still earn 3★ and 2★. UI's clock notch reads t3. */
+// 11-07 Sat (grandparent r5): every clean win of a slow hand was 1★ (the grace bought no 2★ either, L6 won with 11 s of
+// 72 left). 2★ now reads the full clock: (tLeft − freezeAdded) / T ≥ STAR2. 3★ keeps the grace-free pace, so a fast kid
+// needs the same time as before; with grace 0 both are the old formula bit for bit (Daily and Feast do not move).
 export function starTimes(w) {
   const g = graceOf(w), pace = w.T - g;
-  return { t3: g + STAR3 * pace, t2: g + STAR2 * pace };
+  return { t3: g + STAR3 * pace, t2: STAR2 * w.T };
 }
 export function starsFor(w) {
   if (!w.timed || (w.level && w.level.n === 1)) return 3;
@@ -1027,7 +1030,7 @@ export function starsFor(w) {
   const tl = w._.finalBite ? w._.biteTLeft : w.tLeft;
   const g = graceOf(w);
   const left = (tl - w.freezeAdded - g) / (w.T - g);
-  return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
+  return left >= STAR3 ? 3 : (tl - w.freezeAdded) / w.T >= STAR2 ? 2 : 1;
 }
 
 /** rMaxShown of the HUD meter: needR(final boss a) × 1.15 (§9.3). */

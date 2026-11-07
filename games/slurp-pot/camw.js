@@ -7,19 +7,38 @@
  * DECISION (11-06 Fri, round 2, curator "25 to 30 % of the width", kid13 "L1 pot is tiny"): 1.6 + 6.2 r, so the pot spans
  * about 17 % of a portrait screen at r 0.3 and 26 % at r 1 (it was 13 % and 22 %). The pull-back cap still wins late.
  */
-export const camW = r => 1.6 + 6.2 * r;
+// DECISION (11-07 Sat, art director + curator r5: "the pot is small", "the cover oversells its size"): a small pot sits closer,
+// about 20 % of the width at r 0.3 (was 17 %), and the line meets the old one at r 1 (7.8), so the mid and late game and the
+// pull-back cap do not move. The order pointers on the screen edge keep the lookahead a slow hand loses up close.
+export const camW = r => (r < 1 ? 0.943 + 6.857 * r : 1.6 + 6.2 * r);
 /**
  * The width the record, og and cover framings were tuned on (modes.js timeline, §12.2, §12.3). From r 1.2 up, where the og and
  * cover pots and the back half of the video live, it is the old 3.6 + 7.2 r. Below that it closes in, because the hook opens on
  * a pot of r 0.14 that was 20 px across on a 540 px frame (FIX-LIST-3 R1). The two lines meet at r 1.2, so no zoom jumps.
  */
-export const camWRec = r => (r < 1.2 ? 1.2 + 9.2 * r : 3.6 + 7.2 * r);
+// DECISION (11-07 Sat, viral r4): the first 8 s still read as a thin line of peas on a far blanket. The pot now spans about 25 % of the width up to r 0.7, then the
+// view pulls out to the old line by r 1.2, so the growth reads as the camera giving way.
+export const camWRec = r => (r < 0.7 ? 0.5 + 6.8 * r : r < 1.2 ? 5.26 + (r - 0.7) * 13.96 : 3.6 + 7.2 * r);
 /**
  * R1: the view waits close on the pot until the first touch, then eases out to the follow width, so the first thing on
  * screen is the character. Render only. L1 is the first impression and sits closest. Reduced motion, record and retries skip it.
  */
 export const camOpenW = n => (n === 1 ? 0.72 : 0.84);
 export const CAM_OPEN_S = 2.2;
+/**
+ * Render-only follow-width scale for the viewport (the sim's VIEW_R / SEE_R never read it).
+ * DECISION (11-07 Sat, r4): under 700 px tall the pot read small (360x640), so the view closes in 12 %; a wide desktop view on L1 pulls
+ * back 20 % so the first level shows more of the table than the pot. 390x844 gets 1, so its framing is unchanged.
+ */
+// 11-07 (r5 landscape check): the 0.88 is for a short PORTRAIT screen only; on a 844x390 phone it closed a view that was
+// already too close (see camLand).
+export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1) * (w > h && w >= 1100 && n === 1 ? 1.2 : 1);
+/**
+ * Landscape follow-width factor. DECISION (11-07 Sat, r5): a flat 1.35 left a 844x390 phone (2.16:1) seeing about half the depth
+ * a portrait phone sees, the pot 40 % of the screen's height (curator r5 r-play-844x390). The short side now shows at least
+ * 0.75 of the portrait view: max(1.35, 0.75 * w / h). 16:10 and 16:9 desktops stay at 1.35 (0.75 * 1.78 = 1.33).
+ */
+export const camLand = (w, h) => Math.max(1.35, 0.75 * w / h);
 /** Near + far table the view may show past the board in depth (the clamps' 0.6 u + 2 u), and that view's slack. */
 export const CAM_EDGE = 2.6, CAM_SLACK = 1.15;
 /**

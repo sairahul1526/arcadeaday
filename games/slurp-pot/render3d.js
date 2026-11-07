@@ -14,7 +14,7 @@ import { KINDS, KIND_ID } from './catalog.js';
 import { edible, createWorld } from './logic.js';
 import { TIER, DPR_MIN, DPR_START, DPR_STEP, FX_MAX, ITEM_MAX, isMilestone } from './consts.js';
 import { dressLayout } from './dress.js';
-import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, finSlow, bossBoost, camOpenW, CAM_OPEN_S, FIREWORKS, FIREWORK_COLS } from './camw.js';
+import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, finSlow, bossBoost, camOpenW, CAM_OPEN_S, camViewK, camLand, FIREWORKS, FIREWORK_COLS } from './camw.js';
 
 // R3 food readability, render copy only (sim sizes, fits and the "too big" cue never change). T0 and open-line food keep
 // an on-screen radius of FOOD_FLOOR_PX (11 on a 390 px phone, the baked tier scale counted) up to FOOD_BOOST_MAX; T1
@@ -113,6 +113,7 @@ const evSeen = new Set();
 // pot + camera state
 const pot = { x: 0, z: 0, r: 0.3, rVis: 0.3 };
 const cam = { x: 0, z: 0, vx: 0, vz: 0, rCam: 0.3, yaw: 0, pitch: 55 * D2R, wv: 6, ax: 0, ay: 0 };
+let recSnap = false;   // record: the first frame after levelStart puts the camera on its goal (no spring in from the last shot)
 let titleOn = false, titleT = 0, reveal = null, punchT = 0, punchA = 0.08, bossCamT = -1, bossCamA = 0.1, shakeX = 0, shakeZ = 0, recWinT = -1;
 let openK = 0, openT = -1, openW = 1;         // R1: the close opening view, 1 until the first touch, then eases to 0
 let apK = 0, apFit = null, apWait = 0, bossNear = null;   // R5: L60's pre-bite framing of pot and lighthouse
@@ -1002,7 +1003,7 @@ export async function initRender(cv, opts = {}) {
     g.setAttribute('position', new BufferAttribute(new Float32Array(36), 3));
     g.setAttribute('corner', new BufferAttribute(new Float32Array(cs), 2));
     g.setAttribute('side', new BufferAttribute(new Float32Array(sd), 1));
-    eyeMat = makeEyeMat(); eyeMat.uniforms.uLidCol.value = sv(LID[skin] || LID.sunny);
+    eyeMat = makeEyeMat(); eyeMat.uniforms.uLidCol.value = sv(LID[skin && skin.replace('+g', '')] || LID.sunny);
     eyes = new Mesh(g, eyeMat); eyes.frustumCulled = false; eyes.renderOrder = 10; scene.add(eyes);
   }
 
@@ -1304,11 +1305,14 @@ function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
 export function setSkin(id) {
   if (!potRoot) return;
   const skins = props.POT_SKINS || ['sunny'];
+  const gild = typeof id === 'string' && id.endsWith('+g');   // Gild: game.js sends 'skin+g' for a gilded pot
+  if (gild) id = id.slice(0, -2);
   id = skins.indexOf(id) >= 0 ? id : 'sunny';
-  if (id === skin && potG) return;
+  const key = gild ? id + '+g' : id;
+  if (key === skin && potG) return;
   if (potG) potRoot.remove(potG);
   let g = null;
-  try { g = props.potGroup(id); } catch (e) { g = null; }
+  try { g = props.potGroup(id, gild); } catch (e) { g = null; }
   if (!g) {
     const t = new TorusGeometry(1, 0.11, 10, 40).rotateX(-PI / 2).translate(0, 0.03, 0);
     const n = t.attributes.position.count, c = new Float32Array(n * 3), gc = new Color('#F5B323');
@@ -1322,7 +1326,7 @@ export function setSkin(id) {
     o.frustumCulled = false;
     if (o.name === 'body') o.material = potMat; else potExtras[o.name] = o;
   });
-  potG = g; potRoot.add(g); skin = id;
+  potG = g; potRoot.add(g); skin = key;
   if (eyeMat) eyeMat.uniforms.uLidCol.value = sv(LID[id] || LID.sunny);
   rimXray.material.color.set(LID[id] || LID.sunny).lerp(new Color(1, 1, 1), 0.25);
 }
@@ -1424,8 +1428,8 @@ function springTo(gx, gz, dt) {   // critically damped, ω = 9 (exact step, stab
 }
 function followWv() {
   let wv = (REC ? camWRec : camW)(cam.rCam);
-  if (cssW > cssH) wv *= 1.35;
-  return REC ? wv : Math.min(wv, boardCapWv(cam.rCam));
+  if (cssW > cssH) wv *= camLand(cssW, cssH);
+  return REC ? wv : Math.min(wv, boardCapWv(cam.rCam)) * camViewK(cssW, cssH, LV && LV.n);
 }
 /**
  * R2: the widest follow view that still leaves the board filling the screen.
@@ -1507,10 +1511,10 @@ function updateCamera(dt) {
   // (radius, pitch, anchor): modes.js paints only the last ~30 of the 1,092 og steps, so an eased camera was caught
   // mid-zoom and 120 px left of the anchor. og zooms to 0.8 × the follow width (the pot spans ~55 % of the panel).
   // Record snaps the anchor too (its play rect never changes; it started 70 px off and eased in over the hook).
-  // DECISION (11-04, §12.2 21.5–23.5 s): in record mode the camera pulls straight up 2.0 s after the win, over 2.0 s:
+  // DECISION (11-04, tail cut 11-07): in record mode the camera pulls straight up 0.15 s after the win, over 0.75 s (it lands before the 18.0 s end card; was 0.3 + 1.1 s before viral r6):
   // pitch 55° → 78° and the view widens until the board's near edge reaches the play-rect bottom (capped at 1.8 ×),
   // with the goal and anchor kept on the pot, so the pot stays below the centred ORDER UP ticket while the board
-  // shows eaten bare. Counted in painted frames only. loadLevel / levelStart reset it (the 24.5 s loop).
+  // shows eaten bare. Counted in painted frames only. loadLevel / levelStart reset it (the 20.5 s loop).
   // DECISION (11-04): the boss ② glance (35 % of the way to the boss) is scaled down so the pot stays within 70 % of
   // the room between its anchor and the play-rect edge, and the view widens 12 % at the glance peak: on L28 the full
   // 35 % pushed the pot off the bottom of a 390×844 screen for ~0.6 s while the player still steers.
@@ -1527,7 +1531,7 @@ function updateCamera(dt) {
   let pull = 0;
   if (recWinT >= 0 && REC && !STILL && !titleOn) {
     recWinT += dt;
-    pull = inOut(clamp((recWinT - 2.0) / 2.0, 0, 1));
+    pull = inOut(clamp((recWinT - 0.15) / 0.75, 0, 1));
     if (pull > 0 && BB) {
       const lowPx = Math.max(80, (play.h > 1 ? play.y + play.h : cssH) - ay), dz = Math.max(1, BB.z1 + 1 - pot.z);
       const fit = cssW * dz * Math.sin(78 * D2R) / lowPx * 1.05;
@@ -1627,7 +1631,8 @@ function updateCamera(dt) {
       return;
     }
   }
-  if (titleOn || STILL) { cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0; } else springTo(gx, gz, dt);
+  // 11-07 (viral r5): frame 0 of the clip had the camera still springing in, with the pot hidden under the hook caption.
+  if (titleOn || STILL || recSnap) { cam.x = gx; cam.z = gz; cam.vx = cam.vz = 0; recSnap = false; } else springTo(gx, gz, dt);
   if (keep) [cam.x, cam.z] = keepPot(cam.x, cam.z, wv, yawT, pitch, cam.ax, anY, 3);   // the spring lags a pot at full speed
   placeCamera(cam.x + shakeX, cam.z + shakeZ, wv, yawT, pitch, cam.ax, anY);
 }
@@ -1867,9 +1872,10 @@ export function onFx(ev, data) {
       resetMood();
       lid.on = false; lid.pop = lid.jig = lid.steamT = 0; glance = null; bossRing = null; recWinT = -1; fin = null; finHold = false; flashA = 0; fw = null;
       const w = d.w || W, n = LV && LV.n;
-      openT = -1; openK = !d.retry && !REC && !OGP && !STILL && !calm ? 1 : 0; openW = camOpenW(n);
+      openT = -1; openK = !d.retry && !REC && !OGP && !STILL && !calm ? 1 : 0; openW = camOpenW(n); recSnap = REC && !STILL;
       // L1 opens on the pot, not on a boss the new player has no use for yet (FIX-LIST-3 R1).
-      if (!d.retry && n !== 1 && w && w.tickets && w.tickets.length) {
+      // 11-07 (viral r5): no boss reveal in a record run. Its wide frame was the clip's first frame (the pot a speck) and it cut in 0.3 s later.
+      if (!d.retry && n !== 1 && !REC && w && w.tickets && w.tickets.length) {
         const b = w.tickets[w.ti | 0] && w.tickets[w.ti | 0].boss;
         if (b >= 0 && b < w.n) {
           const a = w.ia[b];
@@ -2222,9 +2228,10 @@ export function update(w, dt, alpha = 1) {
           || segHitsCyl(cp.x, cp.y, cp.z, pot.x - rv, 0.05, pot.z, x, z, a * boost, h)
           || segHitsCyl(cp.x, cp.y, cp.z, pot.x + rv, 0.05, pot.z, x, z, a * boost, h)
           || segHitsCyl(cp.x, cp.y, cp.z, pot.x + fx * rv, eyeY, pot.z + fz * rv, x, z, a * boost, h);
-        if (hit) occ = 0.4;
+        if (hit) occ = 0.28;   // 11-07 (art-director r5): 0.4 still hid half the pot behind an L1 bin; the ghost is thinner now
       }
-      eOcc[i] += (occ - eOcc[i]) * ek(dt, occ < eOcc[i] ? 0.05 : 0.1);
+      // 11-07 (art-director, viral r4): food going in shows solid at once. It used to ease back from its ghost over the whole 0.3 s tip, so the gulp itself read as a speckled smear.
+      eOcc[i] = s === 1 ? 1 : eOcc[i] + (occ - eOcc[i]) * ek(dt, occ < eOcc[i] ? 0.05 : 0.1);
       if (lastBoss && boss && open && s === 0) bossNear = { x, z, a: Math.max(a * boost, h / 1.8), wv: 0, d: dist, e: rv + a * boost };
       const oc = eOcc[i] > 0.995 ? 1 : eOcc[i];
       // instance (the cake draws its own tier meshes instead of the 3-tier kind mesh)

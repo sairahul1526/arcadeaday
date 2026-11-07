@@ -17,10 +17,12 @@ export const CRACK_V = 2.0, WOBBLE_V = 0.9, WOBBLE_D = 0.8;   // fragile: crack 
 export const SIMMER = { shoveA: 0.5, shoveMax: 0.8, boilT: 0.3, boilV: 0.6 };   // shove junk with a < 0.5r up to 0.8 u; boil 0.3 s at vMax × 0.6
 export const GULL = { warn: 1.6, missCoins: 1 };        // telegraph s; target radius = SEE_R(w.pot.r) (logic.js); gullEvery is level data
 export const MAGNET = { t: 3, range: 2.5, v: 3 }, FREEZE_ADD = 10, MEGA = { t: 5, mul: 1.25 };
+// DECISION (11-07 Sat, r4, Gild): a coin sink for players who own every pot they like. Each owned pot can be gilded once for GILD_PRICE.
+export const GILD_PRICE = 600;
 export const PRICES = { magnet: 40, freeze: 60, mega: 80, lid: 120 }, LID_MAX = 2;   // lid = Streak Lid (shop shelf, not an in-level booster)
 export const BOOST_UNLOCK = { magnet: 6, freeze: 9, mega: 13 }, BOOST_GIFT = { magnet: 2, freeze: 2, mega: 1 };
 export const DAILY_UNLOCK = 6, FEAST_UNLOCK = 12, DAILY_START = '2026-11-08';
-export const FEAST = { start: 45, add0: 12, addMin: 6, tickets: 4, needMax: 6, sizzleCap: 3, coins: 2, pbCoins: 25 };
+export const FEAST = { start: 45, add0: 12, addMin: 6, tickets: 4, needMax: 6, sizzleCap: 3, coins: 5, pbCoins: 50 };   // 11-07 (mobile r5): 2 + 25 gave no reason to play it for coins
                                                         // add(c) = c <= 4 ? 12 : max(6, 12 − (c − 4)) (add0 14 → 12 on 11-04: runs were 1.5× the target); need from c5 [2+(c−4), 3+(c−4)] ≤ 6
 export const LADDER = [{coins:40},{chest:{coins:60, boost:'freeze'}},{lid:1},{coins:80},{boost:['magnet','mega']},{coins:120},{skin:'starladle', else:{coins:200, boost:'all'}}];
 export const SKINS = [['sunny',0],['cauldron',150],['wok',250],['teapot',350],['ricecooker',500],['dutch',650],['steamer',800],['royal',1000],['ufo',1300],['starladle',-1]];

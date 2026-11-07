@@ -20,7 +20,7 @@
 
 import P from '../shared/platform.js';
 import { computeLayout, cardLayout, insets as safeInsets, setTicketLines } from './layout.js';
-import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, LID_MAX, TOWNS, isMilestone, HOT_SECS } from './consts.js';
+import { LOW_TIME, STAR3, BOOST_UNLOCK, PRICES, LEVELS, DAILY_UNLOCK, FEAST_UNLOCK, SKINS, GILD_PRICE, LID_MAX, TOWNS, isMilestone, HOT_SECS } from './consts.js';
 import { FIN_BEAT, FIN_BIG } from './camw.js';
 import { guide } from './guide.js';
 
@@ -71,10 +71,10 @@ export const STR = {
   goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n}s left for 3 stars', goal3LeftShort: '{n}s left for 3 stars',
   starFinish: 'Finish', starLeft: '{n}s left',
   bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossEaten: 'BOSS EATEN!',
-  canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', replayBonus: 'Replay bonus',
+  canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', canGild: 'Gild your {skin}!', canGildShort: 'You can gild a pot!', replayBonus: 'Replay bonus',
   hotIntro: 'Hot chili! It burns {n} seconds. Steer around it.', hotIntroShort: 'Hot chili! Steer around it.', hotPop: '-{n}s',
   replay: 'Replay', map: 'Map', resume: 'Resume', restart: 'Restart', settings: 'Settings', paused: 'Paused',
-  orderUp: 'ORDER UP!', serveIt: 'Serve it!', soClose: 'SO CLOSE!', almost: 'Almost!', outOfTime: 'Out of time!',
+  orderUp: 'ORDER UP!', serveIt: 'Serve it!', recEaten: '{n} eaten', soClose: 'SO CLOSE!', almost: 'Almost!', outOfTime: 'Out of time!',
   spoiled: 'Spoiled!', spoilLeft: 'Not enough {name} left', spoilLeftShort: 'Ran out of food', spoilGrow: 'Not enough food left to grow', spoilGrowShort: 'Ran out of food', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', freezeLeft: '{n} left', timeLeft: '{t} left',
   bestChain: '{n} in a row!', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} more coins', nextSkinShort: 'Next pot: {n} more coins', nextSkin1: 'Next pot: {skin}, 1 more coin', nextSkinShort1: 'Next pot: 1 more coin',
   backIn: 'Back in {t}', chestIn: 'Win {n} more for a chest', chestIn1: 'Win 1 more for a chest', giftIn: '{n} more stars for a gift', giftIn1: '1 more star for a gift',
@@ -94,14 +94,14 @@ export const STR = {
   goAround: 'Go around the {w}', goAroundIt: 'Go around it', growFirst: 'Eat more to grow', starsLive: '3 stars: {t}', beatLeft: '{n} to go!', beatBig: 'Bigger pot!', feastOneMore: '1 more order to beat your best', tip_magnet: 'Magnet pulls food in', tip_freeze: 'Freeze adds 10 seconds', tip_mega: 'Mega eats bigger food', magnet: 'Magnet', freezeB: 'Freeze', mega: 'Mega rim', needCoins: 'Needs {n} coins',
   nice: 'Nice!', phew: 'Phew!', savedLid: 'Saved by a lid!', lidBody: 'Your streak is safe. {n} lid left.',
   lidBody0: 'Your streak is safe!', again: 'Again', titleBtn: 'Title', feastOver: 'Feast over!', opensAt: 'Opens at L{n}',
-  later: 'Later', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
+  later: 'Later', gild: 'Gild', gilded: 'Gilded', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
   lidName: 'Streak Lid', full: 'Full', boosters: 'Boosters', pots: 'Pots', buy: 'Buy', locked: 'Locked',
-  playFree: 'Play free, no download →', ogTag: 'Slurp it all. Fill the order.',
+  playFreeA: 'Play free →', playFreeB: 'no download', ogTag: 'Slurp it all. Fill the order.',
   dServe: 'Serve the order', dEat: 'Eat {n} {name}', dChain: 'Chain ×{n}', dBig: '{n} big bites',
   dLeft: 'Finish with {p}% time', dNoBumps: 'No bumps', dNoBoost: 'No boosters', dSizzle: '{n} sizzles',
   stCake: 'Top tier first!', stTruck: 'Chase the truck!', stGulls: 'Beat the gulls!', stTwo: 'Two orders today!',
   stBelt: 'Ride the belts', stStack: 'Easy on stacks!', stRoll: 'Catch the rollers', stSimmer: 'Lid on! Go around',
-  stPens: 'Grow to open', bumps: 'Bumps {n}', dayN: 'Day {n}', tomorrow: 'Tomorrow', nextOrder: 'Next order in {t}',
+  stPens: 'Grow to open', bumps: 'Bumps {n}', dayN: 'Day {n}', tomorrow: 'Tomorrow', tmrLine: 'Tomorrow: {r}', tmrLineShort: '{r}', tmrLocked: 'Daily day {d}: {r}', tmrLockedShort: 'Day {d}: {r}', nextOrder: 'Next order in {t}',
   bestN: 'Best: {n}', servedN: '{n} served', stamps: 'Stamps', streakN: 'Streak {n}', todayOrder: "Today's order",
   nextTown: 'Next town', feastPick: 'Pick a town', chestOpen: 'Chest!', milestoneT: 'Star milestone!', ticketsN: 'Orders {n}',
   secsN: '{n} s', ghostBest: 'Best', starsTo: '★ {have} / {need}', bookChapter: '{town} · {n} / 20', comeBack: 'Come back tomorrow',
@@ -898,7 +898,7 @@ export function draw(state, w, dt) {
       else if (screen === 'feast') drawFeast(st);
       else if (screen === 'feastend') drawFeastEnd(st);
       else if (screen !== 'play') drawInfo(st, screen);
-      if (screen === 'play' && !finOn() && w) { if (!unlockOn()) drawCallout(dt); drawBossBanner(w); drawUnlock(w); drawBeat(w); }
+      if (screen === 'play' && !finOn() && w) { if (!unlockOn() && bossBannerOut(w) >= 1) drawCallout(dt); drawBossBanner(w); drawUnlock(w); drawBeat(w); }
     }
   } catch (e) { try { P.error(e); } catch {} }
   lastBtns = btns;
@@ -914,6 +914,7 @@ function drawHud(st, w, dt) {
   // DECISION (§12.1): record keeps the ticket, meter, timer, chain and ORDER UP; it hides the pause tag, boosters,
   //   coins, edge arrows, the stick, the ghost hand, tutorials and callouts.
   const rec = REC_M.record;
+  applyCompact(compactK(w, t));
   // tutorial timers (real time; only while playing)
   if (playing && !rec) { tutorialTick(st, w); stuckTick(w); guideTick(w, dt); }
   drawMeter(w, dt);
@@ -985,16 +986,70 @@ function tornPaper(x, y, w, h, u, o = {}) {
   // faint ruled lines
   g.restore();
 }
+// DECISION (11-07 Sat, r4 playables-curator L58, grandparent): a ticket with 4 or more lines shows the full card for the first 3 s
+//   (the player reads the order), then folds into a one-row strip (ring + count per line, no header) and the meter row and callout
+//   band slide up into the space. The layout and the play rect (camera) are not touched: only the drawn rects move, from a baseline
+//   saved on the layout object, so the 3D board never shifts and the sim cannot see it. Portrait and square only (the landscape
+//   ticket is a side column with nothing under it); record/og keep the full card.
+const COMPACT_AFTER = 3, COMPACT_MIN_LINES = 4;
+function compactOn(t) { return !!t && t.lines.length >= COMPACT_MIN_LINES && L.aspect !== 'landscape' && !REC_M.record && !REC_M.og && !!L.hud.ticket; }
+function compactK(w, t) {
+  if (!compactOn(t) || !hud) return 0;
+  const t0 = Math.max(hud.t0, hud.reveal, hud.course > 0 ? hud.course + 1 : -9);
+  return ease(clamp((T - t0 - COMPACT_AFTER) / 0.4, 0, 1));
+}
+function compactBase() {
+  const H = L.hud;
+  if (!H._cb) H._cb = { th: H.ticket.h, my: H.meter.y, cy: H.callout.y, sy: H.strip ? H.strip.y : 0 };
+  return H._cb;
+}
+/** Folded ticket height and how far everything below it moves up. */
+function compactGeo() {
+  const H = L.hud, u = L.u, b = compactBase(), railH = H.rail.h;
+  const rowC = Math.max(28, H.chip.h * 0.85), thC = railH + Math.max(3, 4 * u) + rowC + Math.max(8, 10 * u);
+  const starH = Math.max(22, 24 * u);   // the "3 stars: 0:20" tag hangs under the clock, the meter must stay clear of it
+  const rowB = Math.max(b.th, H.tmr, H.btn), rowB2 = Math.max(thC, H.tmr + starH, H.btn);
+  return { rowC, thC, dy: Math.max(0, rowB - rowB2), b };
+}
+function applyCompact(k) {
+  const H = L.hud; if (!H.ticket) return;
+  const b = compactBase();
+  if (k <= 0) { H.ticket.h = b.th; H.meter.y = b.my; H.callout.y = b.cy; if (H.strip) H.strip.y = b.sy; return; }
+  const gm = compactGeo();
+  H.ticket.h = b.th + (gm.thC - b.th) * k;
+  H.meter.y = b.my - gm.dy * k; H.callout.y = b.cy - gm.dy * k; if (H.strip) H.strip.y = b.sy - gm.dy * k;
+}
+/** The one-row strip: icon ring + "got/need" per line. A line that just ticked pops big for 0.6 s and wears the green count + tick. */
+function drawCompactRow(w, t, r, cy) {
+  const u = L.u, fs = L.fs, lines = t.lines, n = lines.length, pad = r.pad, inner = r.w - 2 * pad, slot = inner / n;
+  const cfs = Math.max(12.5, fs.count * 0.92);
+  const nud = T - hud.chipNudge < 0.6 ? 0.5 + 0.5 * Math.sin((T - hud.chipNudge) * 30) : 0;
+  let cw = 0; for (const l of lines) cw = Math.max(cw, measure(`${l.need}/${l.need}`, cfs));
+  const d = clamp(slot - cw - Math.max(5, 6 * u), 18, L.hud.chip.ring * 0.9);
+  lines.forEach((l, i) => {
+    const done = l.got >= l.need, frac = l.need ? l.got / l.need : 0;
+    const gw = d + Math.max(3, 4 * u) + cw, x0 = r.x + pad + i * slot + (slot - gw) / 2, rx = x0 + d / 2;
+    const pk = T - (hud.chipPop[i] ?? -9) < 0.6 ? 1 + 0.4 * Math.sin(clamp((T - hud.chipPop[i]) / 0.6, 0, 1) * Math.PI) : 1;
+    chipRing(rx, cy, d, frac, done, 0, !done ? nud : 0);
+    hud.chipXY[i] = { x: rx, y: cy, s: d };
+    g.save(); g.translate(rx, cy); g.scale(pk, pk); ingIcon(l.kind, 0, 0, d * 0.82); g.restore();
+    if (done) tick(rx + d * 0.36, cy + d * 0.3, Math.max(12, d * 0.5));
+    g.save(); g.translate(x0 + d + Math.max(3, 4 * u), cy); g.scale(pk, pk); g.translate(-(x0 + d + Math.max(3, 4 * u)), -cy);
+    txt(`${Math.min(l.got, l.need)}/${l.need}`, x0 + d + Math.max(3, 4 * u), cy + cfs * 0.05, cfs, { align: 'left', col: done ? '#2E8A45' : C.ink, maxW: cw + 4 });
+    g.restore();
+  });
+}
 function drawTicket(w, t) {
   // DECISION: no "2" tab under the ticket: the gap to the meter is ~8 px, so a tab was clipped to a sliver that read as a glitch.
   const H = L.hud, u = L.u, fs = L.fs, r = H.ticket;
   if (!r || !t) return;
   const n = (w.level && w.level.n) || hud.n;
   // goal reveal: ticket swings in from the rail (D15), first attempt only
-  const rv = T - hud.reveal, swing = rv >= 0 && rv < 0.9 ? Math.exp(-rv * 4.2) * Math.cos(rv * 13) * 0.32 * (1 - ease(rv / 0.9)) : 0;
+  // 11-07 (viral r5): a record ticket never swings, unfolds or slides: frame 0 caught it tilted and a course change squashed the count mid-tick.
+  const rv = REC_M.record ? -9 : T - hud.reveal, swing = rv >= 0 && rv < 0.9 ? Math.exp(-rv * 4.2) * Math.cos(rv * 13) * 0.32 * (1 - ease(rv / 0.9)) : 0;
   const drop = rv >= 0 && rv < 0.25 ? (1 - ease(rv / 0.25)) * -r.h * 0.9 : 0;
   // order-up: the HUD ticket leaves (the win card takes over); two-course: ticket 1 slides off left
-  const ou = T - hud.orderUp, crs = T - hud.course;
+  const ou = T - hud.orderUp, crs = REC_M.record ? -9 : T - hud.course;
   let ox = 0, oy = 0, sc = 1, alpha = 1;
   if (ou >= 0 && ou < 9) {
     const k = ease(ou / 0.5), fo = recOrderFade();
@@ -1038,16 +1093,43 @@ function drawTicket(w, t) {
     : w.mode === 'daily' ? [name || STR.dailyLabel, STR.dailyLabel]
     : w.mode === 'feast' ? [STR.feastLabel + ' · ' + ((w.ti || 0) + 1), STR.feastLabel]
     : [fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })];
-  const flipT = T - hud.flip, flipping = flipT >= 0 && flipT < 0.3;
+  const flipT = T - hud.flip, flipping = !REC_M.record && flipT >= 0 && flipT < 0.3;
   const showServe = t.done && !(flipping && flipT < 0.15);
   const fsY = flipping ? Math.abs(Math.cos(flipT / 0.3 * Math.PI)) : 1;
-  txtMin(head, r.x + r.w / 2, hy, fs.hdr, { col: C.ink, maxW: r.w - 2 * pad });
   const bodyY = hy + fs.hdr * 0.6 + Math.max(2, 3 * u), bodyH = by + r.h - railR.h * 0.5 - Math.max(8, 10 * u) - bodyY;
-  g.save(); g.translate(0, bodyY + bodyH / 2); g.scale(1, Math.max(0.05, fsY)); g.translate(0, -(bodyY + bodyH / 2));
-  if (showServe) { if (!(REC_M.record && ou >= 0)) drawServe(w, t, r, bodyY, bodyH); }
-  else if (L.aspect === 'landscape') drawLinesList(w, t, r, bodyY);
-  else drawChips(w, t, r, bodyY);
+  const ck = compactK(w, t);
+  if (ck < 1) {
+    g.save();
+    if (ck > 0) { g.beginPath(); g.rect(r.x - 4, r.y - 4, r.w + 8, r.h + 4); g.clip(); g.globalAlpha = alpha * Math.max(0, 1 - ck * 2.5); }
+    // header and full chips are gone from k 0.4 on: the strip below owns the paper
+    // record: the header and the count clear as the stamp lands, so nothing ghosts through it (viral r5)
+    const recUp = REC_M.record && ou >= 0 && ou < 9, clr = recUp ? 1 - clamp((ou - 0.15) / 0.12, 0, 1) : 1;
+    if (ck < 0.4 && clr > 0) { g.save(); g.globalAlpha *= clr; txtMin(head, r.x + r.w / 2, hy, fs.hdr, { col: C.ink, maxW: r.w - 2 * pad }); g.restore(); }
+    g.save(); g.translate(0, bodyY + bodyH / 2); g.scale(1, Math.max(0.05, fsY)); g.translate(0, -(bodyY + bodyH / 2));
+    if (ck < 0.4) {
+      if (REC_M.record) { if (clr > 0) { g.save(); g.globalAlpha *= clr; drawRecCount(w, r, bodyY, bodyH); g.restore(); } }
+      else if (showServe) drawServe(w, t, r, bodyY, bodyH);
+      else if (L.aspect === 'landscape') drawLinesList(w, t, r, bodyY);
+      else drawChips(w, t, r, bodyY);
+    }
+    g.restore();
+    g.restore();
+  }
+  if (ck > 0.4) {
+    const gm = compactGeo(), ry = r.y + railR.h + Math.max(3, 4 * u);
+    g.save(); g.globalAlpha = alpha * clamp((ck - 0.4) / 0.6, 0, 1);
+    if (showServe) drawServe(w, t, r, ry, gm.rowC); else drawCompactRow(w, t, r, ry + gm.rowC / 2);
+    g.restore();
+  }
   g.restore();
+}
+// DECISION (11-07 Sat, viral r4): the clip's course has no ingredient lines, so its ticket sat as a blank cream box over 15 s of footage. It counts the bites
+//   instead: the number climbing is the proof the caption promises, and it is the run's real count, not a script.
+function drawRecCount(w, r, y, h) {
+  const n = (w.stats && w.stats.bites) | 0; if (!n) return;
+  const pk = popK(hud.lastBite ?? -9, 0.14);
+  g.save(); g.translate(r.x + r.w / 2, y + h / 2); g.scale(pk, pk);
+  txt(fmt(STR.recEaten, { n }), 0, 0, Math.min(h * 0.8, L.fs.serve * 2.1), { col: C.stamp, maxW: r.w - 2 * r.pad });
   g.restore();
 }
 function drawServe(w, t, r, y, h) {
@@ -1427,12 +1509,13 @@ function drawBoosters(st, w) {
       circle(bx, byy, bs / 2); g.fillStyle = C.stamp; g.fill(); g.lineWidth = 1.5; g.strokeStyle = C.ink; g.stroke();
       txt(String(cnt), bx, byy + 0.5, Math.max(12.5, L.fs.badge), { col: '#fff' });
     } else if (!used) {
-      const pw = Math.max(30, 34 * u), ph = Math.max(16, 18 * u);
+      // 11-07 (art-director r5): the price read tiny at 390 px; tag and numerals about 25 % bigger.
+      const pw = Math.max(37, 42 * u), ph = Math.max(19, 21 * u);   // ph * 0.45 below the tin stays inside the 10u gap
       const poor = hud.boostPoor && hud.boostPoor.kind === kind && T - hud.boostPoor.t < 0.4 ? Math.sin((T - hud.boostPoor.t) * 60) * 3 : 0;
       g.translate(poor, 0);
       rr(cx - pw / 2, r.y + r.h - ph * 0.55, pw, ph, ph / 2); g.fillStyle = C.paper; g.fill(); g.lineWidth = 1.5; g.strokeStyle = C.ink; g.stroke();
       coin(cx - pw * 0.24, r.y + r.h - ph * 0.55 + ph / 2, ph * 0.34);
-      txt(String(PRICES[kind]), cx + pw * 0.12, r.y + r.h - ph * 0.55 + ph / 2 + 0.5, Math.max(12.5, 12 * u), { col: C.ink });
+      txt(String(PRICES[kind]), cx + pw * 0.12, r.y + r.h - ph * 0.55 + ph / 2 + 0.5, Math.max(15.5, 15 * u), { col: C.ink });
     }
     g.restore();
   });
@@ -1447,7 +1530,7 @@ function drawArrows(w) {
   if (!RD || !w.tickets || T - hud.reveal < 1.3) return;
   if (hud.result) return;
   const t = w.tickets[w.ti || 0]; if (!t) return;
-  const arrows = [];
+  const arrows = []; let lost = false;
   if (t.boss >= 0 && !isHid(w, t.boss) && (!w.st || w.st[t.boss] === 0 || w.st[t.boss] === 1)) {
     const p = worldToScreen(w.ix[t.boss], w.iz[t.boss]);
     if (p && !onPlay(p)) arrows.push({ p, ic: iconFor(bossKind(w, t)), boss: true });
@@ -1469,13 +1552,17 @@ function drawArrows(w) {
     [...best.values()].sort((x, y) => x.d - y.d).slice(0, cap).forEach(b => {
       const p = worldToScreen(w.ix[b.i], w.iz[b.i]); if (p) arrows.push({ p, ic: iconFor(itemKind(w, b.i)) });
     });
+    // 11-07 Sat (r4 grandparent): up to L10, with nothing on the order in view, the arrows are the only guide, so they pulse bigger.
+    // DECISION (11-07 Sat, r4): the lost pulse also runs on L21-24 and L41-44, where a new ticket pool arrives and players lose the target again.
+    const nn = hud.n || 0;
+    if (arrows.length && !seen.size && (nn <= 10 || (nn >= 21 && nn <= 24) || (nn >= 41 && nn <= 44))) lost = true;
   }
   arrowPlaced.length = 0;
-  for (const a of arrows.slice(0, 4)) edgeArrow(a.p.x, a.p.y, a.ic);
+  for (const a of arrows.slice(0, 4)) edgeArrow(a.p.x, a.p.y, a.ic, lost ? 1.2 + 0.12 * Math.sin(T * TAU * 1.5) : 1);
 }
 const arrowPlaced = [];
 const isHid = (w, i) => !!(w.hid && w.hid[i] === 1);
-function edgeArrow(tx, ty, ic) {
+function edgeArrow(tx, ty, ic, big = 1) {
   // DECISION: an arrow that would overlap the callout bubble moves below it.
   const Z = L.hud.arrowZone, s = L.hud.arrow, cx = L.play.cx, cy = L.play.cy;
   let dx = tx - cx, dy = ty - cy; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
@@ -1499,7 +1586,7 @@ function edgeArrow(tx, ty, ic) {
   const bob = Math.sin(T * TAU * 2) * 3 * L.u;
   ax += dx * bob; ay += dy * bob;
   const ang = Math.atan2(dy, dx);
-  g.save(); g.translate(ax, ay); g.lineJoin = 'round';
+  g.save(); g.translate(ax, ay); g.scale(big, big); g.lineJoin = 'round';
   g.save(); g.rotate(ang);
   g.beginPath(); g.moveTo(s * 0.72, 0); g.lineTo(s * 0.34, -s * 0.3); g.lineTo(s * 0.34, s * 0.3); g.closePath();
   g.fillStyle = C.gold; g.fill(); g.lineWidth = Math.max(2, 2 * L.u); g.strokeStyle = C.ink; g.stroke();
@@ -1823,11 +1910,11 @@ function finHudA() {
 let hudOff = null;
 
 // ---- order up (boss bite): stamp lands on the ticket in screen centre ----
-// DECISION: in a record run the centred ORDER UP ticket and its stamp drift up and fade out over 21.5-21.9 s of
-//   record time (__recState.t), so the camera pull-up reads before the end card (Render request, 11-04).
+// DECISION: in a record run the ticket and its stamp fade out over 17.8-18.0 s of record time (__recState.t), so they are gone
+//   when the end card lands at 18.0 s (modes.js REC_END_T; 18.6-19.0 s before viral r6, 21.5-21.9 s before the 11-07 tail cut).
 function recOrderFade() {
   const rs = REC_M.record ? recState() : null;
-  return rs && typeof rs.t === 'number' ? 1 - clamp((rs.t - 21.5) / 0.4, 0, 1) : 1;
+  return rs && typeof rs.t === 'number' ? 1 - clamp((rs.t - 17.8) / 0.2, 0, 1) : 1;
 }
 function drawOrderUp(w) {
   const fo = recOrderFade(), k = T - hud.orderUp + (REC_M.record ? 0.3 : 0);   // record: the stamp lands 0.3 s sooner
@@ -1927,8 +2014,10 @@ function drawBumpChip(w) {
 //   8/3 u ink rim and an ink drop shadow (a sticker), max 2 lines, centred on L.hud.caption (22 % height); the text is ink with a thin paper
 //   halo, because white on the paper pill read as "white on a clear box" (Meta QA 11:16). Readable over any scene.
 //   Alphas come from recState.show (modes' beat sheet).
-//   The end card (23.5-25.0 s) is teal with the gold wordmark, pot-happy, "Play free, no download →" and the
-//   ?end text (never a hard-coded URL); the iris closes on the end card's pot from 24.5 to 25.0 s.
+//   The end card (18.0-20.5 s) is teal with the gold wordmark, pot-happy, "Play free →" / "no download" and the
+//   ?end text (never a hard-coded URL). DECISION (11-07 Sat, viral r6 "ends on an empty dark frame"): in the last 0.5 s
+//   the end card opens in a gold-rimmed circle on the restarted frame-0 pot and the hook caption fades back in on top,
+//   so the clip's last frame is its first (it used to close to a teal dot, then cut).
 function drawRecord(st, w) {
   const rs = recState(); if (!rs) return;
   const sh = rs.show || {}, u = L.u, k = u / 3;
@@ -1949,12 +2038,20 @@ function drawRecord(st, w) {
     txt2(text, cx, cy, size, { col: C.ink, stroke: C.paper, sk: Math.max(2, 4 * k), maxW });
     g.restore();
   };
-  cap(rs.hook, sh.hook);
+  const ir = clamp(rs.iris || (sh.iris || 0), 0, 1);
+  let hole = null;
+  if (ir > 0.001) {
+    let c = null;
+    if (w && w.pot) { const p = worldToScreen(w.pot.x, w.pot.z); if (p) c = { x: p.x, y: p.y }; }
+    if (!c) c = { x: cssW / 2, y: cssH / 2 };
+    hole = { x: c.x, y: c.y, r: Math.hypot(Math.max(c.x, cssW - c.x), Math.max(c.y, cssH - c.y)) * ease(ir) };
+  }
+  if (!hole) cap(rs.hook, sh.hook);
   cap(rs.cap2, sh.cap2);
   const ea = clamp(sh.end || 0, 0, 1);
-  let potC = null;
   if (ea > 0.01) {
     g.save(); g.globalAlpha = ea;
+    if (hole) { g.beginPath(); g.rect(0, 0, cssW, cssH); g.arc(hole.x, hole.y, Math.max(0, hole.r), 0, TAU, true); g.clip('evenodd'); }
     g.fillStyle = '#0F4C5C'; g.fillRect(0, 0, cssW, cssH);
     const vg = g.createRadialGradient(cssW / 2, cssH * 0.45, Math.min(cssW, cssH) * 0.2, cssW / 2, cssH * 0.45, Math.max(cssW, cssH) * 0.75);
     vg.addColorStop(0, 'rgba(255,255,255,0.06)'); vg.addColorStop(1, 'rgba(0,0,0,0.35)'); g.fillStyle = vg; g.fillRect(0, 0, cssW, cssH);
@@ -1963,24 +2060,21 @@ function drawRecord(st, w) {
     txt(STR.title, 0, 0, ls, { col: C.gold, stroke: C.ink, sk: Math.max(5, ls * 0.14), shadow: C.ink, maxW: cssW * 0.9, min: 24 });
     g.restore();
     const ps = Math.min(cssW * 0.6, cssH * 0.3);
-    potC = { x: cssW / 2, y: cssH * 0.5 + bob, r: ps * 0.4 };
-    potArt('pot-happy', potC.x, potC.y, ps);
-    // DECISION: the end-card call to action scales with the frame (about 6 % of the width on a phone), so it reads
-    //   as the payoff line of the video, not a footnote.
-    const f2 = Math.max(16, 40 * k, Math.min(cssW * 0.062, cssH * 0.04));
-    txt(STR.playFree, cssW / 2, cssH * 0.72, f2, { f: FB, wt: '800', col: C.paper, stroke: C.ink, sk: Math.max(2, 5 * k), maxW: cssW * 0.9 });
-    if (rs.end) txt(String(rs.end), cssW / 2, cssH * 0.72 + f2 * 1.5, f2 * 0.9, { f: FB, wt: '800', col: C.goldL, maxW: cssW * 0.9 });
+    potArt('pot-happy', cssW / 2, cssH * 0.5 + bob, ps);
+    // DECISION (11-07 Sat, viral r6 "Play free is small"): the call to action is the biggest text after the wordmark,
+    //   "Play free →" at about 10 % of the width, "no download" under it, then the ?end text in gold (the clip passes
+    //   "link in bio · arcadeaday.com", matching the caption). Was one 6 %-wide line.
+    const f2 = Math.max(18, Math.min(cssW * 0.1, cssH * 0.056)), y2 = cssH * 0.705;
+    txt(STR.playFreeA, cssW / 2, y2, f2, { f: FB, wt: '800', col: C.paper, stroke: C.ink, sk: Math.max(3, f2 * 0.14), maxW: cssW * 0.9 });
+    txt(STR.playFreeB, cssW / 2, y2 + f2 * 1.02, f2 * 0.55, { f: FB, wt: '800', col: C.paper, maxW: cssW * 0.9 });
+    if (rs.end) txt(String(rs.end), cssW / 2, y2 + f2 * 1.95, f2 * 0.62, { f: FB, wt: '800', col: C.goldL, maxW: cssW * 0.9 });
     g.restore();
+    if (hole && hole.r > 0.5) {
+      g.save(); g.globalAlpha = ea; g.beginPath(); g.arc(hole.x, hole.y, hole.r, 0, TAU);
+      g.lineWidth = Math.max(4, 10 * k); g.strokeStyle = C.gold; g.stroke(); g.restore();
+    }
   }
-  const ir = clamp(rs.iris || (sh.iris || 0), 0, 1);
-  if (ir > 0.001) {
-    let c = potC;
-    if (!c && w && w.pot) { const p = worldToScreen(w.pot.x, w.pot.z); if (p) c = { x: p.x, y: p.y }; }
-    if (!c) c = { x: cssW / 2, y: cssH / 2 };
-    const R = Math.hypot(Math.max(c.x, cssW - c.x), Math.max(c.y, cssH - c.y)) * (1 - ease(ir));
-    g.save(); g.beginPath(); g.rect(0, 0, cssW, cssH); g.arc(c.x, c.y, Math.max(0, R), 0, TAU, true);
-    g.fillStyle = C.ink; g.fill('evenodd'); g.restore();
-  }
+  if (hole) cap(rs.hook, sh.hook);
 }
 // ---- og 1200x630 (§12.3): teal left 46 % panel, wordmark + tagline; the right 54 % is the live render ----
 function drawOg(st, w) {
@@ -2081,14 +2175,21 @@ function potBox(w) {
   const pr = (RD && RD.pxPerU ? RD.pxPerU() : 40 * L.u) * (w.pot.r || 0.3);
   return { top: q.y - pr, bot: q.y + pr };
 }
-function drawBossBanner(w) {
-  if (!hud.big) return;
+// DECISION (11-07 Sat, r4 kid13): while the BOSS ORDER banner is up the callout queue waits (tip pills, booster tooltips), so the top third
+//   is not stacked with ticket + banner + pill. The pill keeps its place in the queue and shows once the banner is gone.
+function bossBannerOut(w) {
+  if (!hud.big) return 1;
   const since = T - hud.t0, moved = hud.started != null || w.tStart != null;
   if (hud.bannerOff == null && (moved || since >= 2)) hud.bannerOff = T;
   // U9: the fade runs on the UI clock, and a slow frame or a stepped sim left it hanging faint over play: once the first bite
   //   has landed or the sim is half a second in, it is gone whatever the clock says.
-  if ((hud.bites | 0) > 0 || (w.tStart != null && (w.t || 0) - w.tStart > 0.5)) return;
-  const out = hud.bannerOff == null ? 0 : (T - hud.bannerOff) / 0.14;
+  if ((hud.bites | 0) > 0 || (w.tStart != null && (w.t || 0) - w.tStart > 0.5)) return 1;
+  return hud.bannerOff == null ? 0 : (T - hud.bannerOff) / 0.14;
+}
+function drawBossBanner(w) {
+  if (!hud.big) return;
+  const since = T - hud.t0;
+  const out = bossBannerOut(w);
   if (out >= 1) return;
   const u = L.u, band = L.hud.callout, P0 = L.play, t = w.tickets && w.tickets[w.tickets.length - 1], kind = bossKind(w, t);
   const rh = Math.max(40, 50 * u), fsz = Math.max(20, 27 * u), rw = Math.min(P0.w - rh * 1.4, Math.max(210, 290 * u));
@@ -2237,7 +2338,10 @@ function drawWin(st, w) {
   const ns = !d.nextSkin ? null : (safe(() => (M.nextSkin ? M.nextSkin(100) || false : d.nextSkin), d.nextSkin) || null);
   const canBuy = !!ns && typeof ns === 'object' && !(ns.need > 0);
   const strip = winStrip(d), next = canBuy ? null : nextUp(d, ns);
-  const CL = cardLayout(L, 'win', { nextSkin: !!next, buySkin: canBuy, goal: !!goal, strip: strip.length > 0 });
+  // DECISION (11-07 Sat, r4, G): on L1-5 the hint row also previews tomorrow's Daily reward (what meta.js says the ladder pays next),
+  //   alternating with the chest / gift line every 2.5 s. It is the same row, so the card is not taller and NEXT stays where it is pinned.
+  const tmr = !canBuy && (d.kind || 'level') === 'level' && (d.n | 0) >= 1 && (d.n | 0) <= 5 ? tomorrowPill() : null;
+  const CL = cardLayout(L, 'win', { nextSkin: !!(next || tmr), buySkin: canBuy, goal: !!goal, strip: strip.length > 0 });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2368,11 +2472,23 @@ function drawWin(st, w) {
   // 11-07 Sat (U6): rewards as chips. They pop in once the coins have counted, and they are already in the save.
   if (B.strip && strip.length) drawStrip(B.strip, strip, cu);
   // Friday fix 2 (U3): never "0 coins". A pot the player can pay for is a button to the Shop; Back from there comes home to this card.
-  if (B.hint && !canBuy && next) txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
+  if (B.hint && !canBuy && (next || tmr)) {
+    const both = !!(next && tmr), ph = cardT % 5, showTmr = !!tmr && (!next || ph >= 2.5), tp = ph % 2.5;
+    g.save(); if (both) g.globalAlpha = Math.min(1, tp / 0.25, (2.5 - tp) / 0.25);
+    if (showTmr) {
+      const is = Math.min(B.hint.h * 1.1, 30 * cu + 6), room = B.hint.w - is - 6;
+      const s1 = measure(tmr.txt, fs.small, FB, '800') <= room ? tmr.txt : tmr.short, tw = Math.min(room, measure(s1, fs.small, FB, '800'));
+      const x0 = B.hint.x + (B.hint.w - (is + 4 + tw)) / 2, cyh = B.hint.y + B.hint.h / 2;
+      rewardIcon(tmr.rw, x0 + is / 2, cyh, is);
+      txt(s1, x0 + is + 4, cyh + 1, fs.small, { f: FB, align: 'left', col: C.goldS, maxW: room });
+    } else txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
+    g.restore();
+  }
   if (B.hint && canBuy) {
     const skin = (typeof ns === 'object' && (STR['sk_' + ns.id] || ns.name || ns.id)) || '';
-    paperBtn(reg('buySkin', B.hint, () => { shopWin = d; act('screen', { screen: 'shop' }); shopSel = ns.id; }), fmt(STR.canBuy, { skin }),
-      { u: cu, fs: Math.max(fs.small * 1.1, 15 * cu), f: FB, alts: [STR.canBuyShort], fill: '#FFE9A8', icon: (x, y, q) => coin(x, y, q * 0.42) });
+    // 11-07 (mobile r5): meta.nextSkin names the priciest pot the bank pays for, or a pot to gild once every pot is owned.
+    paperBtn(reg('buySkin', B.hint, () => { shopWin = d; act('screen', { screen: 'shop' }); shopSel = ns.id; }), fmt(ns.gild ? STR.canGild : STR.canBuy, { skin }),
+      { u: cu, fs: Math.max(fs.small * 1.1, 15 * cu), f: FB, alts: [ns.gild ? STR.canGildShort : STR.canBuyShort], fill: '#FFE9A8', icon: (x, y, q) => coin(x, y, q * 0.42) });
   }
   // NEXT (auto-highlight after 0.9 s) · Replay · Map
   const last = (d.n | 0) >= LEVELS && (d.kind || 'level') === 'level';
@@ -2691,6 +2807,15 @@ const skinArt = id => (id && id !== 'sunny' && ART.has('skin-' + id) ? 'skin-' +
 const skinName = id => STR['sk_' + id] || (id ? id.charAt(0).toUpperCase() + id.slice(1) : '');
 const curLv = () => safe(() => M.cur(), ((M && M.get && M.get()) || {}).cur || 1);
 let dsCache = { t: -9, v: null };
+// DECISION (11-07 Sat, r4 grandparent, kid13): a return hook before the Daily opens. One line with the reward icon says what the
+//   Daily ladder pays next, from meta's own dailyStatus().tomorrow (no new reward). Once the Daily is open it reads "Tomorrow: ...";
+//   before that it says which ladder day it is ("Daily day 2: ...") so it never promises a claim the player cannot make yet.
+function tomorrowPill() {
+  const ds = dailyStat(); if (!ds || !ds.tomorrow || !ds.tomorrow.reward) return null;
+  const rw = ds.tomorrow.reward, r = rewardShort(rw), open = curLv() > DAILY_UNLOCK;
+  return open ? { rw, txt: fmt(STR.tmrLine, { r }), short: fmt(STR.tmrLineShort, { r }) }
+    : { rw, txt: fmt(STR.tmrLocked, { d: ds.tomorrow.day, r }), short: fmt(STR.tmrLockedShort, { d: ds.tomorrow.day, r }) };
+}
 function dailyStat() {
   if (!dsCache.v || T - dsCache.t > 0.5 || T < dsCache.t) dsCache = { t: T, v: safe(() => M.dailyStatus(), null) };
   return dsCache.v;
@@ -2824,12 +2949,26 @@ function drawMap(st, dt) {
   const cur = Math.max(1, curLv() | 0), here = Math.min(cur, LEVELS), allDone = cur > LEVELS;
   const starsOf = n => safe(() => M.stars(n) | 0, Array.isArray(sv.stars) ? sv.stars[n - 1] | 0 : 0);
   const CL = cardLayout(L, 'map', {});
-  const B = CL.blocks, fs = CL.fs, mp = CL.map, V = B.view, u = L.u, col = mp.col;
-  MAP.view = V; MAP.max = Math.max(0, mp.contentH - V.h);
+  const B = CL.blocks, fs = CL.fs, mp = CL.map, u = L.u, col = mp.col;
+  // DECISION (11-07 Sat, r4 curator): the "Win 1 more for a chest" pill rode on top of the scrolling map and touched whichever node
+  //   passed under it. It now has its own band at the top of the view: the band is painted in the table's wood and the map scrolls
+  //   (and taps register) below it, so the pill can never touch a node. The band costs the map one pill height.
+  const up = allDone ? null : nextUp({}, null), tmrP = allDone ? null : tomorrowPill();
+  // DECISION (11-07 Sat, viral r6 "map pills very small on a phone"): the pill text is 15u with a 14 px floor (was 13.5u, 12.5 floor),
+  //   about 15 % bigger; the narrow-phone fallback below (short tomorrow text, then the order pill alone) keeps the row inside the band.
+  const pts = Math.max(14, 15 * u), pth = Math.max(22, pts * 1.65), bandH = up || tmrP ? pth + 10 : 0;
+  const V = { ...B.view, y: B.view.y + bandH, h: B.view.h - bandH };
+  MAP.view = V;
+  // DECISION (11-07 Sat, r4 curator): on a desktop-shaped viewport the first town sits at the very bottom of the content, so the old
+  //   "node at 60 %" clamp opened on L1-6 with the next node low in the corner. The view may now scroll a little past the bottom
+  //   (onto the table's wood) so the next node can open centred; phones keep the 60 % framing.
+  const wide = L.aspect === 'landscape', want = wide ? 0.5 : 0.6, cn0 = mp.nodes[here - 1];
+  const extra = wide && cn0 ? Math.max(0, cn0.y - V.h * want - Math.max(0, mp.contentH - V.h)) : 0;
+  MAP.max = Math.max(0, mp.contentH - V.h) + extra;
   const key = `${Math.round(V.w)}x${Math.round(V.h)}:${here}`;
   if (MAP.init !== key) {
     const cn = mp.nodes[here - 1];
-    MAP.s = clamp(cn.y - V.h * 0.6, 0, MAP.max); MAP.v = 0; MAP.glide = null; MAP.drag = null; MAP.init = key;
+    MAP.s = clamp(cn.y - V.h * want, 0, MAP.max); MAP.v = 0; MAP.glide = null; MAP.drag = null; MAP.init = key;
   }
   mapPhysics(dt);
   const s0 = MAP.s, sy = cy => V.y + cy - s0, X = x => col.x + x;
@@ -2915,7 +3054,7 @@ function drawMap(st, dt) {
     if (got) tick(cx + cs * 0.34, cy - cs * 0.2, Math.max(18, cs * 0.3));
   }
   // nodes (the current one last, on top)
-  const wear = sv.wear || 'sunny';
+  const wear = sv.wear || 'sunny', gildedWorn = !!(sv.gilded && sv.gilded.includes(wear));
   let curNode = null;
   for (const nd of vis) {
     const n = nd.n, x = X(nd.x), y = sy(nd.y);
@@ -2974,6 +3113,7 @@ function drawMap(st, dt) {
     g.restore();
     const ps = mp.nodeD * 1.2, bob = Math.sin(T * 3) * ps * 0.04;
     potArt(skinArt(wear), x, y - R * 0.45 + bob + dn, ps);
+    if (gildedWorn) gildMark(x, y - R * 0.45 + bob + dn, ps);
     badge(x, y + R * 0.78 + dn, Math.max(11, 12 * u), String(here), C.ink);
   }
   // soft edges where the map scrolls under the bars
@@ -2999,12 +3139,30 @@ function drawMap(st, dt) {
     glyph('gift', r.x + r.w - h * 0.55, y + h / 2, h * 0.86);
     txt(`${ms.have} / ${ms.need}`, r.x + r.w / 2, y + h / 2 + 1, fs.pill, { col: C.ink, maxW: r.w - h * 2.3 });
     // U15: what the next win is working towards, hung under the star bar
-    const up = allDone ? null : nextUp({}, null);
-    if (up) {
-      const ts = Math.max(12.5, 13.5 * u), th = Math.max(22, ts * 1.65), tw2 = Math.min(measure(up[0], ts, FB, '800') + th, V.w - 16), tx = V.x + V.w / 2 - tw2 / 2, ty = V.y + 6;
-      rr(tx, ty + 2, tw2, th, th / 2); g.fillStyle = 'rgba(58,36,24,0.3)'; g.fill();
-      rr(tx, ty, tw2, th, th / 2); g.fillStyle = '#FFE9A8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
-      txt(up[0], tx + tw2 / 2, ty + th / 2 + 0.5, ts, { f: FB, col: C.ink, maxW: tw2 - th * 0.7 });
+    if (bandH) {
+      // the band: table wood over the top of the view (a soft edge below it), then the pill(s) centred in it
+      const bx = B.view.x, by0 = B.view.y, bw = B.view.w;
+      g.fillStyle = '#B97A45'; g.fillRect(bx, by0, bw, bandH);
+      const eg = g.createLinearGradient(0, by0 + bandH, 0, by0 + bandH + Math.max(8, 10 * u)); eg.addColorStop(0, 'rgba(58,36,24,0.35)'); eg.addColorStop(1, 'rgba(58,36,24,0)');
+      g.fillStyle = eg; g.fillRect(bx, by0 + bandH, bw, Math.max(8, 10 * u));
+      const pills = [];
+      if (up) pills.push({ txt: up[0], rw: null });
+      if (tmrP) pills.push(tmrP);
+      const gap = Math.max(6, 8 * u), ty = by0 + 5;
+      const wOf = p => Math.min(measure(p.txt, pts, FB, '800') + pth * (p.rw ? 1.45 : 0.9), bw - 12);
+      let ws = pills.map(wOf), tot = ws.reduce((a, b) => a + b, 0) + gap * (pills.length - 1);
+      // two pills do not fit side by side on a narrow phone: the order pill wins, the tomorrow pill keeps its short text
+      if (tot > bw - 12 && pills.length > 1) { pills[1] = { ...pills[1], txt: pills[1].short }; ws = pills.map(wOf); tot = ws.reduce((a, b) => a + b, 0) + gap * (pills.length - 1); }
+      if (tot > bw - 12 && pills.length > 1) { pills.length = 1; ws = [ws[0]]; tot = ws[0]; }
+      let px = bx + bw / 2 - tot / 2;
+      pills.forEach((p, i) => {
+        const tw2 = ws[i];
+        rr(px, ty + 2, tw2, pth, pth / 2); g.fillStyle = 'rgba(58,36,24,0.3)'; g.fill();
+        rr(px, ty, tw2, pth, pth / 2); g.fillStyle = p.rw ? '#FFF3D6' : '#FFE9A8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+        if (p.rw) { rewardIcon(p.rw, px + pth * 0.62, ty + pth / 2, pth * 0.85); txt(p.txt, px + pth * 1.18 + (tw2 - pth * 1.45) / 2, ty + pth / 2 + 0.5, pts, { f: FB, col: C.ink, maxW: tw2 - pth * 1.45 }); }
+        else txt(p.txt, px + tw2 / 2, ty + pth / 2 + 0.5, pts, { f: FB, col: C.ink, maxW: tw2 - pth * 0.7 });
+        px += tw2 + gap;
+      });
     }
   }
   pill(B.coins, 'coin', String(safe(() => M.coins(), sv.coins | 0)), fs.pill);
@@ -3035,6 +3193,16 @@ function shopBack() {
   if (!d) { act('back'); return; }
   shopWin = null; act('screen', { ...d, name: 'win', screen: 'win' }); cardT = 2;
 }
+/** Gild: a gold rim band, studs and a slow glint over a pot art drawn at (x, y, s), so a gilded pot reads gold in the Shop and on the map. */
+function gildMark(x, y, s) {
+  g.save();
+  g.beginPath(); g.ellipse(x, y + s * 0.1, s * 0.4, s * 0.2, 0, 0, TAU);
+  g.lineWidth = Math.max(2, s * 0.06); g.strokeStyle = '#E8A81E'; g.stroke();
+  g.lineWidth = Math.max(1, s * 0.02); g.strokeStyle = '#FFE88A'; g.stroke();
+  const a = T * 1.4 % TAU;
+  g.fillStyle = '#FFF6C8'; g.beginPath(); g.arc(x + Math.cos(a) * s * 0.4, y + s * 0.1 + Math.sin(a) * s * 0.2, Math.max(1.5, s * 0.035), 0, TAU); g.fill();
+  g.restore();
+}
 function drawShop(st) {
   // DECISION: a skin is bought with two taps: Buy arms the button for 3 s ("Tap again to buy"), the second tap buys
   //   (buySkin, which also wears it). Too few coins: the button shakes and reads "Needs N coins" (sfx nope). The Star
@@ -3059,16 +3227,23 @@ function drawShop(st) {
     g.fillStyle = gl; g.fillRect(cx - s * 0.6, cy - s * 0.6, s * 1.2, s * 1.2);
     g.beginPath(); g.ellipse(cx, cy + s * 0.4, s * 0.32, s * 0.06, 0, 0, TAU); g.fillStyle = 'rgba(58,36,24,0.22)'; g.fill();
     potArt(skinArt(sel.id), cx, cy + bob, s);
+    if (sel.gilded) gildMark(cx, cy + bob, s);
     if (sel.worn) tick(cx + s * 0.38, cy - s * 0.34, Math.max(20, s * 0.2));
   }
   if (B.name) txt(skinName(sel.id), B.name.x + B.name.w / 2, B.name.y + B.name.h / 2, fs.body * 1.2, { col: C.ink, maxW: B.name.w });
-  // Wear / Buy
+  // Wear / Buy (an owned pot shares the row with Gild)
   const armed = !!(armBuy && armBuy.id === sel.id && !armBuy.poor && T - armBuy.t < 3);
   const poorK = armBuy && armBuy.poor && armBuy.id === sel.id ? T - armBuy.t : 9;
+  // DECISION (11-07 Sat, r4, Gild): an owned pot splits the Wear row in two, Wear / Wearing on the left and Gild on the right
+  //   (GILD_PRICE coins, once per pot, two taps like a skin: arm, then buy). The layout keeps its single Buy row, so nothing moves.
+  // 11-07 (curator r5): in the two-column landscape shop the split row stays inside the left column (CL.colL), off the shelf.
+  const split = !!sel.owned, gp = Math.max(6, 8 * cu), rw = split ? Math.min(CL.panel.w * 0.94, B.buy.w * 1.75, CL.colL ? CL.colL.w : 1e9) : B.buy.w;
+  const rowX = B.buy.x + (B.buy.w - rw) / 2, halfW = (rw - gp) / 2;
+  const bR = split ? { ...B.buy, x: rowX, w: halfW } : B.buy;
   if (sel.worn) {
-    paperBtn(reg('buy', B.buy, () => {}, { disabled: true }), STR.wearing, { u: cu, fs: fs.btn2, fill: C.paperS, icon: (x, y, s) => tick(x, y, s * 0.8) });
+    paperBtn(reg('buy', bR, () => {}, { disabled: true }), STR.wearing, { u: cu, fs: fs.btn2, fill: C.paperS, icon: (x, y, s) => tick(x, y, s * 0.8) });
   } else if (sel.owned) {
-    goldBtn(reg('buy', B.buy, () => act('wear', { id: sel.id }), { primary: true }), STR.wear, { u: cu, fs: fs.btn });
+    goldBtn(reg('buy', bR, () => act('wear', { id: sel.id }), { primary: true }), STR.wear, { u: cu, fs: fs.btn });
   } else if (!(sel.price > 0)) {
     paperBtn(reg('buy', B.buy, () => sfx('nope'), {}), STR.streak7, { u: cu, fs: fs.btn2, fill: C.paperS, icon: (x, y, s) => glyph('daily', x, y, s) });
   } else {
@@ -3084,6 +3259,25 @@ function drawShop(st) {
     else goldBtn(b, armed ? STR.tapToBuy : `${STR.buy} ${price}`, { u: cu, fs: fs.btn, glow: armed ? 0.5 + 0.5 * Math.sin(T * 8) : 0, icon: armed ? null : (x, y, s) => coin(x, y, s * 0.34) });
     g.restore();
   }
+  if (split) {
+    const gR = { ...B.buy, x: rowX + halfW + gp, w: halfW }, gid = 'gild:' + sel.id;
+    const gArmed = !!(armBuy && armBuy.id === gid && !armBuy.poor && T - armBuy.t < 3);
+    const gPoorK = armBuy && armBuy.poor && armBuy.id === gid ? T - armBuy.t : 9;
+    if (sel.gilded) {
+      paperBtn(reg('gild', gR, () => {}, { disabled: true }), STR.gilded, { u: cu, fs: fs.btn2, fill: C.paperS, icon: (x, y, s) => tick(x, y, s * 0.8) });
+    } else {
+      const b = reg('gild', gR, () => {
+        if (coins < GILD_PRICE) { sfx('nope'); armBuy = { id: gid, t: T, poor: true }; return; }
+        if (gArmed) { armBuy = null; sfx('buy'); act('gild', { id: sel.id }); }
+        else armBuy = { id: gid, t: T };
+      });
+      const shake = gPoorK < 0.4 ? Math.sin(gPoorK * 60) * 4 : 0;
+      g.save(); g.translate(shake, 0);
+      if (gPoorK < 2) paperBtn(b, fmt(STR.needCoins, { n: GILD_PRICE }), { u: cu, fs: fs.btn2, fill: '#FFD9D4' });
+      else goldBtn(b, gArmed ? STR.tapToBuy : `${STR.gild} ${GILD_PRICE}`, { u: cu, fs: fs.btn, glow: gArmed ? 0.5 + 0.5 * Math.sin(T * 8) : 0, icon: gArmed ? null : (x, y, s) => coin(x, y, s * 0.34) });
+      g.restore();
+    }
+  }
   // skin grid
   list.slice(0, 10).forEach((sk, i) => {
     const r = B.skins[i]; if (!r) return;
@@ -3095,6 +3289,7 @@ function drawShop(st) {
     g.lineWidth = on ? Math.max(3, 3.5 * cu) : 2; g.strokeStyle = C.ink; g.stroke();
     g.save(); if (!sk.owned) g.globalAlpha = 0.6;
     potArt(skinArt(sk.id), r.x + r.w / 2, r.y + dn + r.h * (sk.owned ? 0.5 : 0.42), r.w * (sk.owned ? 0.84 : 0.72));
+    if (sk.gilded) gildMark(r.x + r.w / 2, r.y + dn + r.h * 0.5, r.w * 0.84);
     g.restore();
     if (sk.worn) tick(r.x + r.w * 0.82, r.y + r.h * 0.18 + dn, Math.max(14, r.w * 0.3));
     else if (!sk.owned) {
@@ -3337,7 +3532,7 @@ function ladderTitle(r, fs, ds) {
 function drawDaily(st) {
   // DECISION: the Daily screen is a receipt (the 3 star lines, ticked from today's mask), the 7-stamp ladder with
   //   tomorrow's reward bobbing, and the next locked town as a silhouette. Done today: the Cook button becomes a
-  //   countdown pill (not a button) and Back is the primary. The once-only intro (data.intro) is Cook / Later.
+  //   countdown pill (not a button) and Back is the primary. The once-only intro (data.intro) is NEXT / Cook (11-07).
   const d = cardData.daily || {}, ds = dailyStat();
   if (!ds || !ds.unlocked) { drawInfo(st, 'daily'); return; }
   const intro = !!d.intro, done = !!ds.done && !intro;
@@ -3353,7 +3548,11 @@ function drawDaily(st) {
   ladderTitle(B.ladderT, fs, ds);
   drawSteps(B, fs, cu, ds.ladder, ds.tomorrow ? ds.tomorrow.day - 1 : -1, -1, 1);
   if (B.town) drawNextTown(B.town, fs, cu);
-  if (!done) goldBtn(reg('primary', B.primary, () => act('daily'), { primary: true }), STR.cookToday, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4) });
+  // DECISION (11-07 Sat, grandparent r5): the once-only intro rides the L6+ win chain, so its gold button is NEXT (the
+  //   campaign goes on) and Cook is the paper button under it; a first-timer who taps the big button is never pulled into
+  //   a 60 s Daily. The map and title keep the Daily's "!" badge, and the plain Daily card (from the map) still leads with Cook.
+  if (intro) goldBtn(reg('primary', B.primary, () => act('later'), { primary: true }), STR.next, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4) });
+  else if (!done) goldBtn(reg('primary', B.primary, () => act('daily'), { primary: true }), STR.cookToday, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4) });
   else {
     const r = B.primary, left = (ds.msToNext || 0) - (T - dsCache.t) * 1000;
     rr(r.x, r.y, r.w, r.h - 4, (r.h - 4) / 2); g.fillStyle = C.paperS; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
@@ -3362,7 +3561,7 @@ function drawDaily(st) {
     glyph('clock', x0 + is / 2, r.y + (r.h - 4) / 2, is);
     txt(s, x0 + is + 8, r.y + (r.h - 4) / 2 + 1, fs.btn2, { f: FB, align: 'left', col: C.ink, maxW: r.w - is - 30 });
   }
-  if (B.back) paperBtn(reg('back', B.back, () => act(intro ? 'later' : 'back'), { primary: done }), intro ? STR.later : STR.back, { u: cu, fs: fs.btn2, icon: intro ? null : (x, y, s) => glyph('back', x, y, s) });
+  if (B.back) paperBtn(reg('back', B.back, () => act(intro ? 'daily' : 'back'), { primary: done }), intro ? STR.cookToday : STR.back, { u: cu, fs: fs.btn2, icon: intro ? (x, y, s) => glyph('daily', x, y, s) : (x, y, s) => glyph('back', x, y, s) });
   g.restore();
 }
 function drawLadder(st) {
@@ -3586,6 +3785,9 @@ function drawInfo(st, name) {
   const CL = cardLayout(L, 'info', { primary: !!pr, second: !!sc, noBack: name === 'gift', ending: name === 'alldone', locked: d.locked && (name === 'daily' || name === 'feast') ? name : false });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
+  const lockedCard = d.locked && (name === 'daily' || name === 'feast');
+  // DECISION (11-07 Sat, r4, E): a locked Daily or Feast dims what is behind it, so the card reads as a door, not a menu.
+  if (lockedCard) dimBg(0.7);
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
   const hero = (name === 'feast' || name === 'alldone') && img('win-feast');
@@ -3611,6 +3813,15 @@ function drawInfo(st, name) {
   }
   else if (name === 'daily' && d.locked && B.icon.h > 30 && ladderPreview(B.icon, cu)) { /* reward ladder preview drawn */ }
   else if (B.icon.h > 30) { const s = Math.min(B.icon.h, B.icon.w * 0.5, 140 * cu); const bob = Math.sin(T * 2.4) * s * 0.03; glyph(typeof spec.icon === 'function' ? spec.icon(d) : spec.icon, B.icon.x + B.icon.w / 2, B.icon.y + B.icon.h / 2 + bob, s); }
+  if (lockedCard && B.icon.h > 30) {
+    // lock badge with a progress pip (wins so far out of the wins that open it), as a tab on the panel's top-right edge
+    const need = name === 'daily' ? DAILY_UNLOCK : FEAST_UNLOCK, have = clamp(cur - 1, 0, need), ph = Math.max(26, 28 * cu), pf = Math.max(12.5, 14 * cu);
+    const pw = ph + measure(`${have}/${need}`, pf) + 14, px = CL.panel.x + CL.panel.w - pw - 12 * cu, py = CL.panel.y - ph * 0.5;   // straddles the panel's top edge, clear of the ladder
+    rr(px, py + 3, pw, ph, ph / 2); g.fillStyle = 'rgba(58,36,24,0.3)'; g.fill();
+    rr(px, py, pw, ph, ph / 2); g.fillStyle = C.paper; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+    padlock(px + ph * 0.56, py + ph / 2, ph * 0.9);
+    txt(`${have}/${need}`, px + ph + (pw - ph - 6) / 2, py + ph / 2 + 1, pf, { col: C.ink, maxW: pw - ph - 8 });
+  }
   if (B.sub) txtMin([STR.dailyWhat, STR.dailyWhatShort], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.body, { f: FB, col: C.goldS, maxW: B.sub.w });
   txt2(d.locked && name === 'daily' ? STR.dailyOrder : spec.title(d), B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
   txt2(spec.body(d), B.body.x + B.body.w / 2, B.body.y + B.body.h / 2, fs.body, { f: FB, col: C.ink, maxW: B.body.w });

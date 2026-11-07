@@ -103,7 +103,11 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
 
   // DECISION (Friday fix 2, U10): from 820 wide on anything taller than a landscape phone, the ticket's level name, counters
   //   and goal icons run 1.3x (hu). Phones never meet the test (a landscape phone is 820+ wide but under 600 tall).
-  const hs = W >= 820 && Math.min(W, H) >= 600 && !record ? 1.3 : 1, hu = u * hs;
+  // DECISION (11-07 Sat, curator r5 "landscape HUD tiny"): a landscape phone (u about 0.75 at 844x390) left the ticket text on
+  //   the 12.5 px floor, a quarter smaller than portrait. Its ticket runs 1.25x (hu about 0.94): the ticket owns its own left
+  //   column (the play rect starts right of it), so the bigger text costs about 30 px of width and no play space.
+  const lphone = aspect === 'landscape' && Math.min(W, H) < 600 && !record;
+  const hs = W >= 820 && Math.min(W, H) >= 600 && !record ? 1.3 : lphone ? 1.25 : 1, hu = u * hs;
   // font sizes (CSS px), all floored at 12.5 (Wednesday brief: 12.5 px text floor)
   const fs = {
     hdr: Math.max(12.5, hu * 16), count: Math.max(12.5, hu * 14), serve: Math.max(13, U(16)), callout: Math.max(12.5, U(16)),
@@ -111,6 +115,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     caption: Math.max(20, U(27)), bump: Math.max(13, U(15)),
   };
   const btn = Math.max(44, U(44)), bst = Math.max(44, U(52)), tmr = Math.max(46, U(64));
+  const bstTag = Math.max(19, U(21)) * 0.45;   // the coin tag's overhang below a booster tin (ui.js drawBoosters: ph = max(19, 21u), 0.45 below)
   const inset = U(10), top = safe.y + U(8);
   const cm = chipMetrics(hu, fs.count);
   const sr = safe.x + SW, sb = safe.y + SH;
@@ -147,7 +152,9 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
     // DECISION (Friday fix U5): the booster column used to sit at 40 % of the screen height, on live play space; it now
     //   rides the lowest right corner just above the safe area (thumb reach, off the pot's usual line), like landscape.
-    let y0 = sb - U(12) - colH;
+    // DECISION (11-07 Sat, viral r6 "lowest booster label cut by the screen edge"): the coin tag hangs 0.45 of its height
+    //   below each tin (ui.js drawBoosters), so the column also clears that overhang (bstTag); the last tag sat 1 px off the edge.
+    let y0 = sb - U(12) - bstTag - colH;
     y0 = Math.max(y0, hud.callout.y + ch + U(8));
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
     const py = hud.callout.y + ch;
@@ -173,7 +180,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     const cy = below + Math.max(4, U(6));
     hud.callout = R(mx0, cy, mx1 - mx0, ch);
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
-    let y0 = sb - U(12) - colH;
+    let y0 = sb - U(12) - bstTag - colH;
     y0 = Math.max(y0, hud.callout.y + ch + U(8));
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
     const px = col.x + colW + U(10), py = below + Math.max(4, U(6));
@@ -417,7 +424,9 @@ export function cardLayout(L, name, opts = {}) {
       }
       A = all; Bk = all;
       const used = all._end - inner.y;
-      if (used < inner.h) { const d = (inner.h - used) / 2; for (const k in all) if (k !== '_end') all[k].y += d; }
+      // DECISION (11-07 Sat, r4 mobile-designer): a win card sits on the bottom of the column instead of its centre, so NEXT is at the same
+      //   height on every win card and a thumb that learned it on L1 still lands on it when a goal, strip or Buy row makes the card taller.
+      if (used < inner.h) { const d = (inner.h - used) / (fail ? 2 : 1); for (const k in all) if (k !== '_end') all[k].y += d; }
     }
     for (const k in A) if (k !== '_end') B[k] = A[k];
     for (const k in Bk) if (k !== '_end') B[k] = Bk[k];
@@ -587,6 +596,9 @@ export function cardLayout(L, name, opts = {}) {
       B.tins.push({ icon, price }); btn('tin' + i, icon);
     }
     out.containers = ['grid', 'shelf'];
+    // 11-07 (curator r5, 844x390): ui.js splits the Buy row into Wear + Gild at up to 1.75x its width; in two columns that ran
+    // into the booster shelf. The left column is the row's limit there.
+    if (wide) out.colL = colL;
     return out;
   }
 

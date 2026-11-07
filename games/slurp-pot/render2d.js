@@ -15,7 +15,7 @@ import { KINDS, KIND_ID } from './catalog.js';
 import { edible, createWorld } from './logic.js';
 import { DPR_MIN, DPR_STEP, ITEM_MAX, isMilestone } from './consts.js';
 import { dressLayout, RUGS } from './dress.js';
-import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, finSlow, bossBoost, camOpenW, CAM_OPEN_S, FIREWORKS, FIREWORK_COLS } from './camw.js';
+import { camW, camWRec, camTitle, CAM_EDGE, CAM_SLACK, CAM_POT_FLOOR, FIN_BEAT, FIN_BIG, finQ, finSlow, bossBoost, camOpenW, CAM_OPEN_S, camViewK, camLand, FIREWORKS, FIREWORK_COLS } from './camw.js';
 
 const PI = Math.PI, TAU = 2 * PI;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -84,7 +84,7 @@ let canvas = null, ctx = null, REC = false, dpr = 1, cssW = 1, cssH = 1;
 let play = { x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.6 };
 let time = 0, ppu = 50, ops = 0, fpsEma = 0, lastNow = 0, winStart = 0, alphaNow = 1;
 const win = [];
-let LV = null, BB = null, town = 'picnic', skin = 'sunny', titleOn = false;
+let LV = null, BB = null, town = 'picnic', skin = 'sunny', gild = false, titleOn = false;
 let ground = null;                         // { cv, x0, z0, w, h, upx }: the loaded level's baked bitmap
 let potCv = null, shadowCv = null, haloCv = null, rimCv = null, padArt = null;
 let lostFn = null, ctxH = null;
@@ -169,7 +169,7 @@ export function loadLevel(L, skinId) {
   town = GROUND[L.town] ? L.town : 'picnic';
   const hw = (+L.W || 16) / 2, hd = (+L.D || 26) / 2;
   BB = { x0: isFinite(L.x0) ? +L.x0 : -hw, x1: isFinite(L.x1) ? +L.x1 : hw, z0: isFinite(L.z0) ? +L.z0 : -hd, z1: isFinite(L.z1) ? +L.z1 : hd };
-  setSkin(skinId || skin);
+  setSkin(skinId || (gild ? skin + '+g' : skin));
   const sp = L.spawn || { x: 0, z: 0 }, r0 = +L.r0 || 0.3;
   pot.x = +sp.x || 0; pot.z = +sp.z || 0; pot.r = pot.rVis = r0; cam.rCam = r0;
   cam.x = view.x = pot.x; cam.z = view.z = pot.z; cam.vx = cam.vz = 0; cam.ax = play.cx; cam.ay = play.cy;
@@ -182,8 +182,10 @@ export function loadLevel(L, skinId) {
 }
 
 export function setSkin(id) {
+  gild = typeof id === 'string' && id.endsWith('+g');   // Gild: game.js sends 'skin+g' for a gilded pot
+  if (gild) id = id.slice(0, -2);
   skin = LID[id] ? id : 'sunny';
-  if (ctx) potCv = makePot(LID[skin]);
+  if (ctx) potCv = makePot(LID[skin], gild);
 }
 
 export function resize(w, h, playRect) {
@@ -277,10 +279,10 @@ function makeSprites() {
   g = rimCv.getContext('2d'); gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,158,16,0.74)'); gr.addColorStop(0.6, 'rgba(255,158,16,0.68)'); gr.addColorStop(1, 'rgba(255,158,16,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-  potCv = makePot(LID[skin]);
+  potCv = makePot(LID[skin], gild);
 }
 
-function makePot(col) {
+function makePot(col, gilded = false) {
   // DECISION (11-04): the pot is a hole in the board seen from above: a rim ring in the skin's lid colour (outer
   // radius 1.15 r), a dark lip, then the stew (0.9 r) — one sprite per skin, scaled each frame.
   // FIX-LIST-3 R7: two loop handles, so it is the 3D pot from above. The sprite spans 1.45 r for them (drawPot).
@@ -302,6 +304,11 @@ function makePot(col) {
   g.fillStyle = gr; disc(g, C, C, 0.9 * u); g.fill();
   g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 0.06 * u; g.lineCap = 'round';
   g.beginPath(); g.arc(C, C, 1.085 * u, PI * 1.08, PI * 1.45); g.stroke();
+  if (gilded) {   // Gild (11-07 r4): a gold rim band and eight studs, as the 3D pot's gold trim
+    g.lineWidth = 0.17 * u; g.strokeStyle = '#E8A81E'; disc(g, C, C, 1.07 * u); g.stroke();
+    g.lineWidth = 0.06 * u; g.strokeStyle = '#FFE88A'; disc(g, C, C, 1.1 * u); g.stroke();
+    g.fillStyle = '#FFE88A'; for (let i = 0; i < 8; i++) { const a = i * PI / 4; disc(g, C + Math.cos(a) * 1.07 * u, C + Math.sin(a) * 1.07 * u, 0.06 * u); g.fill(); }
+  }
   return c;
 }
 
@@ -792,10 +799,11 @@ function updateCamera(dt) {
   // two-course glance are render3d's; the title centres the board with a slow drift (no orbit in 2D).
   const land = cssW > cssH;
   cam.rCam += (pot.r - cam.rCam) * ek(dt, 0.45);
-  let wv = (REC ? camWRec : camW)(cam.rCam) * (land ? 1.35 : 1), ax = play.cx, ay = play.cy;
+  let wv = (REC ? camWRec : camW)(cam.rCam) * (land ? camLand(cssW, cssH) : 1), ax = play.cx, ay = play.cy;
   if (!REC && BB) {   // R2, render3d's boardCapWv in top-down terms: the board keeps filling the view, the pot grows in frame
     const ph = play.h > 1 ? play.h : cssH, minPpu = Math.max(ph / ((BB.z1 - BB.z0 + CAM_EDGE) * CAM_SLACK), cssW / (BB.x1 - BB.x0 + 4));
     wv = Math.min(wv, Math.max(Math.min(cssW, ph / 0.8) / minPpu, cam.rCam * CAM_POT_FLOOR));
+    wv *= camViewK(cssW, cssH, LV && LV.n);
   }
   if (openK > 0 && !titleOn) {   // R1: close on the pot until the first touch, then out to the follow width
     if (openT < 0 && W && W.tStart != null) openT = 0;

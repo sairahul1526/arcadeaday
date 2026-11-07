@@ -515,7 +515,7 @@ function startLevel(n, opt = {}) {
   S.run = { eaten: {}, big: 0, boosts: 0 };
   S.retry = !!opt.retry && sameLevel;
   acc = 0; slowT = 0; S.finBite = false;
-  if (render3d) safe(render3d.loadLevel, lvl, save().wear || 'sunny');
+  if (render3d) safe(render3d.loadLevel, lvl, wornSkin());
   if (audio) { safe(audio.setTown, town); if (has(audio, 'setFeast')) safe(audio.setFeast, kind === 'feast'); }
   S.bot = (S.botOn && bots && safe(bots.createBot, S.botKind, (lvl.seed | 0) + 1)) || null;
   S.qaBot = (M.qa && bots && !S.bot && qaSteerBot((lvl.seed | 0) + 7)) || null;
@@ -602,12 +602,12 @@ bus.on('fail', ev => onFail(ev || {}));
 function onFeastCourse(ev) {
   if (S.kind !== 'feast' || !ev.level) return;
   S.lvl = ev.level;
-  if (render3d) safe(render3d.loadLevel, ev.level, save().wear || 'sunny');
+  if (render3d) safe(render3d.loadLevel, ev.level, wornSkin());
 }
 
 function onWin(ev, now) {
   // DECISION (Meta request 11:07): a REC win shows no win card; play stays under modes' end card, and the win
-  //   event carries 3 stars (drain sets them) for the ORDER UP stamp beat (§12.2 19.5-21.5).
+  //   event carries 3 stars (drain sets them) for the ORDER UP stamp beat (about 17.1-18.0 s; end card at 18.0 s since viral r6).
   if (S.resultDone) return;
   if (S.kind === 'feast') return; // Sim 12:32: the Feast never wins; feastStep rolls courses and the clock ends it
   S.resultDone = true; S.live = false;
@@ -845,9 +845,11 @@ function toScreen(name, data) {
   go(name, data);
   return true;
 }
+/** The worn pot's render id: its skin, plus '+g' when it is gilded (render3d / render2d setSkin split it again). */
+function wornSkin() { const d = save(), w = d.wear || 'sunny'; return d.gilded && d.gilded.includes(w) ? w + '+g' : w; }
 /** Applies the worn skin to the pot when it changed outside a level load (Shop wear/buy, Settings reset). */
 function syncSkin() {
-  const id = save().wear || 'sunny';
+  const id = wornSkin();
   if (id === S.skin) return;
   S.skin = id;
   if (render3d && has(render3d, 'setSkin')) safe(render3d.setSkin, id);
@@ -859,7 +861,7 @@ function afterReset() {
     S.kind = 'level'; S.n = 1; S.fs = null;
     S.lvl = levels.getLevel(1);
     S.w = logic.createWorld(S.lvl, { mode: 'level', boosters: boostersFor(1) });
-    if (render3d) safe(render3d.loadLevel, S.lvl, save().wear || 'sunny');
+    if (render3d) safe(render3d.loadLevel, S.lvl, wornSkin());
   } catch (e) { report(e); }
   safe(P.best, safe(meta.score) | 0);
   safe(P.flush);
@@ -918,8 +920,8 @@ function command(name, d) {
     case 'startDaily': return startDaily();
     case 'feast': return ((S.screen === 'feast' || d.go || d.town) && feastOpen() && startFeast(d.town)) || (S.screen === 'feast' ? false : toScreen('feast', d));
     case 'startFeast': return startFeast(d.town);
-    case 'wear': case 'buySkin': {
-      const ok = !!safe(name === 'wear' ? meta.wear : meta.buySkin, d.id);
+    case 'wear': case 'buySkin': case 'gild': {
+      const ok = !!safe(name === 'wear' ? meta.wear : name === 'gild' ? meta.buyGild : meta.buySkin, d.id);
       if (ok) { syncSkin(); safe(P.flush); }
       return ok;
     }
@@ -1136,7 +1138,7 @@ $c3d.addEventListener('webglcontextrestored', () => {
     if (S.fatal || S.gfx !== '3d') return;
     S.glLost = false;
     // render3d rebuilds its GPU objects from its own restore handler (onContextLost); refill the current level.
-    if (render3d && S.lvl) safe(render3d.loadLevel, S.lvl, save().wear || 'sunny');
+    if (render3d && S.lvl) safe(render3d.loadLevel, S.lvl, wornSkin());
     paint(0, true);
   }, 0);
 }, false);
@@ -1174,7 +1176,7 @@ async function giveUpGL() {
   try { if (prev && typeof prev.dispose === 'function') prev.dispose(); } catch {} // best effort on a dead context
   S.glLost = false; S.glLostAt.length = 0;
   safe(render3d.resize, S.W, S.H, S.L && S.L.play ? S.L.play : { x: 0, y: 0, w: S.W, h: S.H, cx: S.W / 2, cy: S.H / 2 });
-  if (S.lvl) safe(render3d.loadLevel, S.lvl, save().wear || 'sunny');
+  if (S.lvl) safe(render3d.loadLevel, S.lvl, wornSkin());
   if (has(render3d, 'title')) safe(render3d.title, S.screen === 'title');
   paint(0, true);
 }
@@ -1238,7 +1240,7 @@ async function boot() {
   try {
     S.lvl = levels.getLevel(cur);
     S.w = logic.createWorld(S.lvl, { mode: 'level', boosters: boostersFor(cur) });
-    render3d.loadLevel(S.lvl, save().wear || 'sunny');
+    render3d.loadLevel(S.lvl, wornSkin());
   } catch (e) { return fatal('boot', e); }
 
   // step 4: warm-up raced against 2.5 s (keeps compiling behind the title if it loses)
@@ -1260,7 +1262,7 @@ async function boot() {
   }
   bus.on('*', (d, ev) => { if (has(render3d, 'onFx')) render3d.onFx(ev, d); }); // the active renderer at emit time
   S.ready = true;
-  S.skin = save().wear || 'sunny';
+  S.skin = wornSkin();
   fit();
   go('title');
   // §9.4 "Saved by a lid!": the first visit after a missed day that used a Streak Lid (never in capture runs).

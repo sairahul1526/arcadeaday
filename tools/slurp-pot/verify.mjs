@@ -125,7 +125,9 @@ export function greedyWindow(spec) {
 export function casualWindow(spec) {
   const c = spec.goal && spec.goal.casual;
   if (c == null) return null;
-  if (onPiles(spec) && !isPeak(spec.n)) return BREATHERS.includes(spec.n) ? [85, 100] : [60, 92];
+  // DECISION (11-07 Sat, r4 critics): the town openers L21-24 and L41-44 carry grace so a slow hand is not dropped off a step at a new town. Same rule as the
+  // L1 grace below: grace lifts the slow hand and costs the pace nothing, so a grace level has no ceiling.
+  if (onPiles(spec) && !isPeak(spec.n)) return BREATHERS.includes(spec.n) ? [85, 100] : [60, spec.grace > 0 ? 100 : 92];
   let lo = c - 7;
   if (BREATHERS.includes(spec.n) || TWIST_FIRST.includes(spec.n)) lo = Math.max(lo, Math.min(80, c));
   // DECISION (11-06 Fri, L1 grace): grace exists to lift a slow hand over the table's casual goal, so a grace level has no ceiling.

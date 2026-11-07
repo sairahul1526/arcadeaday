@@ -21,7 +21,7 @@
 //   save     progress survives a reload; the old-version save migrates to progress 2; a corrupt save gives progress 0
 //   modes    Daily + Feast smoke on an unlocked save (L1..L14 beaten): the Daily runs to its card with the expert bot, NEXT
 //            shows the Ladder, the day is marked done and paid; the Feast runs to its end card and pays; ?record=1 reaches
-//            __recReady, steps 25.0 s (frames at 2/8/15/20/24 s), loops at 24.5 s; ?og=1 reaches __ogReady (og-1200x630.jpg)
+//            __recReady, steps 20.5 s (frames at 2/8/15/17.5/19.5 s), loops at 20.0 s; ?og=1 reaches __ogReady (og-1200x630.jpg)
 //   shots    PNGs at 7 sizes (360x640 390x844 820x1180 1024x768 1440x900 1920x1080 667x375) of every screen: title, map,
 //            daily, feast, shop, cookbook, settings, gift, chest, ladder, lid, alldone, play, pause, win, fail, daily-play,
 //            feast-play, feastend, + a live-resize rotation check, + contact-<size>.png (all screens of a size on one sheet).
@@ -546,14 +546,14 @@ async function secModes(browser, bname) {
     rec('modes', bname, 'feast', end && paid >= 0 && !s.errors.length,
       `${q ? 'screen ' + q.screen : 'no state'}, town ${q1.state && q1.state.town}, courses ${course}, sim ${(ticks / 60).toFixed(0)} s, wall ${wall.toFixed(1)} s, coins +${paid}, then ${a && a.screen}${errs(s) ? '; ' + errs(s) : ''}`);
   });
-  // ?record=1: the __rec contract (GDD §12.1) - ready, deterministic steps, frames at the shot list, the 24.5 s loop
+  // ?record=1: the __rec contract (GDD §12.1) - ready, deterministic steps, frames at the shot list, the 20.0 s loop
   await withTab(browser, bname, { name: 'rec', width: 1080, height: 1920, dpr: 1, touch: false },
     { query: 'record=1', wait: () => window.__recReady === true }, async s => {
       if (!s.ready) { rec('modes', bname, 'record', false, `no __recReady after ${BOOT_MS / 1000} s; ${errs(s)}`); return; }
       const fb = await s.page.evaluate(() => window.__spFallbacks || []).catch(() => []);
       const out = [];
       let t = 0;
-      for (const sec of [2, 8, 15, 20, 24]) {
+      for (const sec of [2, 8, 15, 17.5, 19.5]) {
         const st = await s.page.evaluate(n => window.__rec.step(n), Math.max(1, Math.round((sec - t) * 60)));
         t = sec;
         const rs = await s.page.evaluate(() => { const r = window.__recState || {}; return { show: r.show, step: r.step, looped: !!r.looped }; });
@@ -562,7 +562,7 @@ async function secModes(browser, bname) {
         out.push(`${sec}s t ${st && st.t != null ? (+st.t).toFixed(2) : '?'} ${st && st.mode} step ${rs.step} show ${rs.show ? ['hook', 'cap2', 'end'].map(k => k[0] + (+rs.show[k] || 0).toFixed(1)).join('/') : '-'}`);
       }
       const jpg = await s.page.evaluate(() => { const f = window.__rec.frame(0.8); return typeof f === 'string' ? f.slice(0, 23) : String(f); });
-      const st = await s.page.evaluate(() => window.__rec.step(60)); // 24 -> 25 s: the loop restarts at 24.5 s (frame 1470)
+      const st = await s.page.evaluate(() => window.__rec.step(60)); // 19.5 -> 20.5 s: the loop restarts at 20.0 s (frame 1200)
       const lp = await s.page.evaluate(() => { const r = window.__recState || {}; return { looped: !!r.looped, iris: r.iris }; });
       const ok = jpg.startsWith('data:image/jpeg') && lp.looped && !s.errors.length;
       rec('modes', bname, 'record', ok, `ready ${s.bootMs} ms${fb.length ? ', fallbacks ' + fb.join('+') : ''}; ${out.join('; ')}; frame ${jpg.slice(0, 15)}; at 25 s t ${st && st.t}, looped ${lp.looped}, iris ${lp.iris}${errs(s) ? '; ' + errs(s) : ''}`);

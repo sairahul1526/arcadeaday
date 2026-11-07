@@ -48,11 +48,14 @@
 // DECISION: a Streak Lid reward (ladder day 3) while already holding LID_MAX converts to PRICES.lid coins.
 // DECISION: dailyStatus().ladder is an array of 7 { day, reward, state:'done'|'today'|'next'|'future' }; `tomorrow` is
 //   { day, reward } of the next stamp; `day` is the ladder day (1..7) of today's stamp (or the one just paid).
-// DECISION: feastResult(r): pb only when tickets > feast.best (strict). Pays 2 per ticket + 25 on a PB; the PB run's ticket
+// DECISION: feastResult(r): pb only when tickets > feast.best (strict). Pays FEAST.coins (5) per ticket + FEAST.pbCoins (50) on a PB (11-07, was 2 + 25); the PB run's ticket
 //   finish times become feast.ghost (<= 99 entries). Needs r = { tickets, times, bites, chainBest }.
 // DECISION: buySkin also wears the new skin (like Knot Kitty). The Star Ladle Pot (price -1) is never buyable.
 // DECISION: nextSkin(within) = the cheapest unowned buyable skin as { id, price, need } when need = price - coins <= within
 //   (default Infinity); the win card asks for 100 (need 0 = affordable now).
+// DECISION (11-07 Sat, mobile-designer r5: "You can buy the Cauldron!" still showed at L60 with 1,387 coins): when one or more
+//   pots are affordable it names the priciest of them, so the nudge climbs with the bank. With every pot owned, and coins for
+//   GILD_PRICE, it names a pot to gild ({ ..., gild: true }: the worn pot first); a gild it cannot pay for is not shown.
 // DECISION: buyBooster('lid') needs the daily unlocked (cur > DAILY_UNLOCK) and lids < LID_MAX; in-level boosters need
 //   their unlock level reached (or an earlier gift) and are capped at 99 held.
 // DECISION (v2, Wed): the save gains three TOP-LEVEL keys: seen (string flags: 'alldone', UI 'stuck:<id>' callouts, ...),
@@ -63,7 +66,7 @@
 // DECISION: a town chest pays when its chapter is COMPLETE (all 20 levels >= 1 star, GDD §3.12), checked for every town
 //   on every level win, so a migrated or merged save that already completed a chapter gets its chest on the next win.
 
-import { PRICES, LID_MAX, BOOST_UNLOCK, BOOST_GIFT, DAILY_UNLOCK, FEAST_UNLOCK, DAILY_START, FEAST, LADDER, SKINS, TOWNS, LEVELS } from './consts.js';
+import { PRICES, GILD_PRICE, LID_MAX, BOOST_UNLOCK, BOOST_GIFT, DAILY_UNLOCK, FEAST_UNLOCK, DAILY_START, FEAST, LADDER, SKINS, TOWNS, LEVELS } from './consts.js';
 
 let P = null; // the platform layer, set by initMeta(P)
 
@@ -119,7 +122,7 @@ function defaults() {
     coins: 50,
     boost: { magnet: 0, freeze: 0, mega: 0 },
     gifted: [],
-    skins: ['sunny'], wear: 'sunny',
+    skins: ['sunny'], wear: 'sunny', gilded: [],
     daily: { won: {}, streak: 0, last: '', ladder: 0, bestStreak: 0, starPot: false, lids: 0, lidCard: false },
     feast: { best: 0, bestBites: 0, plays: 0, ghost: [] },
     giftsClaimed: 0,
@@ -157,6 +160,7 @@ function sanitize(src) {
   if (Array.isArray(s.skins)) o.skins = SKIN_IDS.filter(id => id === 'sunny' || s.skins.includes(id));
   if (dSrc.starPot === true && !o.skins.includes('starladle')) o.skins.push('starladle');
   o.wear = o.skins.includes(s.wear) ? s.wear : 'sunny';
+  o.gilded = Array.isArray(s.gilded) ? SKIN_IDS.filter(id => s.gilded.includes(id) && o.skins.includes(id)) : [];   // old saves: none; only owned pots
   // daily
   const dl = o.daily;
   if (isObj(dSrc.won)) {
@@ -248,6 +252,7 @@ export function merge(a, b) {
   m.stars = A.stars.map((v, i) => Math.max(v, B.stars[i]));
   m.gifted = BOOSTS.filter(k => A.gifted.includes(k) || B.gifted.includes(k));
   m.skins = SKIN_IDS.filter(id => id === 'sunny' || A.skins.includes(id) || B.skins.includes(id));
+  m.gilded = SKIN_IDS.filter(id => m.skins.includes(id) && (A.gilded.includes(id) || B.gilded.includes(id)));
   m.chests = TOWNS.filter(t => A.chests.includes(t) || B.chests.includes(t));
   m.giftsClaimed = Math.max(A.giftsClaimed, B.giftsClaimed);
   m.tut = A.tut | B.tut;
@@ -480,7 +485,7 @@ function unlockGifts() {
 const addBoost = (d, k, n) => { d.boost[k] = Math.min(MAX_BOOST, d.boost[k] + n); };
 
 // ---------- skins ----------
-export const skins = () => SKINS.map(([id, price]) => ({ id, price, owned: !!D() && D().skins.includes(id), worn: !!D() && D().wear === id, buyable: price > 0 }));
+export const skins = () => SKINS.map(([id, price]) => ({ id, price, owned: !!D() && D().skins.includes(id), gilded: !!D() && D().gilded.includes(id), worn: !!D() && D().wear === id, buyable: price > 0 }));
 export const owns = id => !!D() && D().skins.includes(id);
 export function wear(id) {
   const d = D();
@@ -498,13 +503,26 @@ export function buySkin(id) {
   save(true);
   return true;
 }
+export const gilded = id => !!D() && D().gilded.includes(id);
+/** Gilds an owned pot for GILD_PRICE coins, once per pot. false when unknown, not owned, already gilded or too poor. */
+export function buyGild(id) {
+  const d = D();
+  if (!d || !SKIN_IDS.includes(id) || !d.skins.includes(id) || d.gilded.includes(id) || !spend(GILD_PRICE)) return false;
+  d.gilded = SKIN_IDS.filter(x => x === id || d.gilded.includes(x));
+  save(true);
+  return true;
+}
 /** Cheapest unowned buyable skin as { id, price, need } when need = price - coins <= within; else null. */
 export function nextSkin(within = Infinity) {
   const d = D();
   if (!d) return null;
   const left = SKINS.filter(([id, price]) => price > 0 && !d.skins.includes(id)).sort((a, b) => a[1] - b[1]);
-  if (!left.length) return null;
-  const [id, price] = left[0];
+  if (!left.length) {
+    const g = [d.wear, ...SKIN_IDS].find(id => d.skins.includes(id) && !d.gilded.includes(id));
+    return g && d.coins >= GILD_PRICE ? { id: g, price: GILD_PRICE, need: 0, gild: true } : null;
+  }
+  const can = left.filter(([, p]) => p <= d.coins);
+  const [id, price] = can.length ? can[can.length - 1] : left[0];
   const need = Math.max(0, price - d.coins);
   return need <= within ? { id, price, need } : null;
 }

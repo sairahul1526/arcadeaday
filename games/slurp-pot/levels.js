@@ -2064,6 +2064,7 @@ export function genLevel(spec, seed) {
   c.piles = [];
   if (spec.n === 1) firstTrail(c);
   if (spec.starter) starterPatch(c);
+  if (spec.n >= 1 && spec.n <= 3) fillGaps(c);
   addDecor(c);
   if (spec.n >= PILE_FROM) snackPiles(c, spec, seed);
   hotChilis(c, spec, seed);
@@ -2166,6 +2167,28 @@ function firstTrail(c) {
         const k = KIND[ids[(n + j) % ids.length]];
         if (contrastOK(c, k, x, z) && canPlace(c, x, z, k.a, k.tier, { zone: 0 })) { addItem(c, k.id, x, z, { zone: 0, rot: 0 }); break place; }
       }
+    }
+  }
+}
+// DECISION (11-07 Sat, r4 critics): the grandparent and the curator both sat 10 s on bare blanket in L1 with the clutter elsewhere, the window a first
+// session is won or lost. L1 to L3 get a dab of the smallest food in any gap, so wherever a new player wanders the pot keeps biting and the chain ticks.
+// No rng and appended last, so every tuned item stays where it was. Daily and Feast (n 0) never get here.
+const GAP_STEP = 1, GAP_R = 0.6, GAP_MAX = 70;
+function fillGaps(c) {
+  const sp = c.spawn, pals = [0, 1, 2].map(t => (c.pal[t] || []).filter(k => !t || canFit(c.r0, k.a) || k.tier === t).map(k => k.id).sort());
+  const food = c.items.filter(o => o.role !== 'wall' && o.role !== 'gate').map(o => ({ x: o.x, z: o.z, a: o.a }));
+  let n = 0;
+  // a fixed stride over the slots spreads the cap over the whole board instead of filling it from the middle out
+  const slots = hexSlots((c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2, hyp(c.x1 - c.x0, c.z1 - c.z0) / 2, GAP_STEP), S = slots.length;
+  for (let i = 0; i < S; i++) {
+    const q = slots[(i * 97) % S];
+    if (n >= GAP_MAX || q.x < c.x0 + 0.5 || q.x > c.x1 - 0.5 || q.z < c.z0 + 0.5 || q.z > c.z1 - 0.5) continue;
+    if (food.some(o => hyp(o.x - q.x, o.z - q.z) < GAP_R + o.a)) continue;
+    // the food grows with the walk from spawn, so a dab is still a bite the pot feels when it gets there
+    const d = hyp(q.x - sp.x, q.z - sp.z), zone = zoneAt(c, q.x, q.z);
+    place: for (let t = d < 5 ? 0 : d < 10 ? 1 : 2; t >= 0; t--) for (let j = 0; j < pals[t].length; j++) {
+      const k = KIND[pals[t][(n + j) % pals[t].length]];
+      if (contrastOK(c, k, q.x, q.z) && canPlace(c, q.x, q.z, k.a, k.tier, { zone })) { addItem(c, k.id, q.x, q.z, { zone, rot: 0 }); food.push({ x: q.x, z: q.z, a: k.a }); n++; break place; }
     }
   }
 }

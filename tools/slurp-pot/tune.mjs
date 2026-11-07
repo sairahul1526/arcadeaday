@@ -80,8 +80,8 @@ const winAt = (r, T, timed, g = 0) => r.win && (!timed || r.t <= T + Math.min(r.
 const starsAt = (r, T, timed, g = 0) => {
   if (!winAt(r, T, timed, g)) return 0;
   if (!timed) return 3;
-  const left = (T + Math.min(r.sz, SIZZLE_CAP * (T - g)) - r.t - g) / (T - g);
-  return left >= STAR3 ? 3 : left >= STAR2 ? 2 : 1;
+  const sp = T + Math.min(r.sz, SIZZLE_CAP * (T - g)) - r.t, left = (sp - g) / (T - g);
+  return left >= STAR3 ? 3 : sp / T >= STAR2 ? 2 : 1;            // 11-07: 2★ reads the full clock, as logic.starsFor
 };
 /** Average bot's spare time at T, % of T − grace, median, a loss counting 0 (verify gate 2 on pile levels). */
 const spareAt = (arr, T, timed, g = 0) => {
