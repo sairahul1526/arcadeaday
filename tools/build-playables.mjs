@@ -11,7 +11,9 @@
 //   - Exactly one <!-- yt:body --> ... <!-- /yt:body --> block marks the game markup
 //     (the canvas plus any overlay DOM such as a shop panel). It is copied as the yt <body>.
 //     It must not contain links (<a href>), build markers or SEO/site chrome.
-//   - <link rel="stylesheet"> tags pointing at ../shared/*.css or fonts.googleapis.com are kept.
+//   - <link rel="stylesheet"> tags pointing at ../shared/*.css or fonts.googleapis.com are kept,
+//     except that a page linking ../shared/fonts.css loses its fonts.googleapis.com link: the
+//     bundle already has those fonts, and a pack must not call another origin for them.
 //   - The entry is always game.js (an ES module); everything else is reached by relative imports.
 // The generated index.html puts the Playables SDK first, then the CSS, the markup and ./game.js.
 // All game files except index.html and og.jpg are copied, plus games/shared/* (platform.js,
@@ -73,8 +75,10 @@ try { await stat(join(SRC, 'game.js')); } catch { fail(`${SRC}/game.js not found
 if (fails.length) done();
 
 const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1].trim());
-const links = [...html.matchAll(/<link\b[^>]*>/gi)].map(m => m[0])
+const allLinks = [...html.matchAll(/<link\b[^>]*>/gi)].map(m => m[0])
   .filter(l => /rel=["']?stylesheet/i.test(l) && /href=["'](\.\.\/shared\/[^"']+\.css|https:\/\/fonts\.googleapis\.com\/[^"']+)["']/i.test(l));
+const selfHosted = allLinks.some(l => /\.\.\/shared\/fonts\.css/.test(l));
+const links = allLinks.filter(l => !(selfHosted && /fonts\.googleapis\.com/.test(l)));
 const bodies = [...html.matchAll(/<!--\s*yt:body\s*-->([\s\S]*?)<!--\s*\/yt:body\s*-->/g)];
 if (bodies.length !== 1) fail(`index.html needs exactly one <!-- yt:body --> ... <!-- /yt:body --> block (found ${bodies.length})`);
 const body = (bodies[0]?.[1] || '').trim();
