@@ -12,7 +12,7 @@
 import {
   DT, R0, R_MAX, SIZEUP_MUL, G, K_ING, BLOCK_K, TIP_T, CHAIN_WIN, SIZZLE_AT, SIZZLE_EVERY, SIZZLE_CAP,
   STAR3, STAR2, V_BASE, V_PER_R, V_CAP, A_ACC, A_BRAKE, BUMP_V, BUMP_CD, DOOM_EVERY, DOOM_GRACE, LOW_TIME,
-  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS,
+  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS, BOSS_WALK,
 } from './consts.js';
 
 // ------------------------------------------------------------------ the fit rule (§3.2; the only definition)
@@ -757,7 +757,15 @@ export function step(w, inp, dt) {
       for (let li = 0; li < tk.lines.length; li++) if (tk.lines[li].got < tk.lines[li].need) { all = false; break; }
       if (all) { tk.done = true; ev.push({ type: 'ticketDone', ti: w.ti }); }
     }
-    if (tk.done && !tk.open && tk.boss >= 0 && canFit(P.r, ia[tk.boss])) { tk.open = true; ev.push({ type: 'padlock', i: tk.boss }); }
+    if (tk.done && !tk.open && tk.boss >= 0 && canFit(P.r, ia[tk.boss])) {
+      tk.open = true; ev.push({ type: 'padlock', i: tk.boss });
+      // BOSS_WALK: the final boss's padlock floors the clock at the walk to it (consts.js DECISION r7d).
+      if (w.timed && w.tStart !== null && w.mode !== 'feast' && w.ti >= w.tickets.length - 1) {
+        const bx = ix[tk.boss] - P.x, bz = iz[tk.boss] - P.z;
+        const need = Math.sqrt(bx * bx + bz * bz) / speedOf(P.r) * BOSS_WALK.k + BOSS_WALK.pad;
+        if (w.tLeft < need) { const add = Math.ceil(need - w.tLeft); w.tLeft += add; ev.push({ type: 'bossTime', add }); }
+      }
+    }
     // DECISION: a ticket without a boss item is served the moment its lines are done (same win/courseDone path).
     if (tk.done && tk.boss < 0 && bossDone < 0 && !_.courseEnd) {
       if (w.ti >= w.tickets.length - 1) {

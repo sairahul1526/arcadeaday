@@ -13,6 +13,10 @@ export const TAU_ACC = 0.060, TAU_BRAKE = 0.045, V_BASE = 2.5, V_PER_R = 1.2, V_
 // Precomputed at module load so logic.step uses only + − × ÷ sqrt floor min max abs (no exp/log/pow in step):
 export const A_ACC = 1 - Math.exp(-DT / TAU_ACC), A_BRAKE = 1 - Math.exp(-DT / TAU_BRAKE);
 export const BUMP_V = 1.2, BUMP_CD = 0.35, DOOM_EVERY = 0.25, DOOM_GRACE = 0.6, LOW_TIME = 10;
+// DECISION (11-07 Sat r7d, kid13 r7 "SO CLOSE with every ticket done"): when the LAST ticket's padlock pops, the clock is
+// floored at the time to reach the boss: straight-line distance / pot speed * k + pad seconds. A player who has done every
+// line never loses on the walk. It only lifts a clock that is already low, so stars barely move (a late finish stays 1 star).
+export const BOSS_WALK = { k: 1.3, pad: 4 };
 export const CRACK_V = 2.0, WOBBLE_V = 0.9, WOBBLE_D = 0.8;   // fragile: crack above 2.0 u/s; wobble+bounce 0.9–2.0; near warning within a + r + 0.8
 export const SIMMER = { shoveA: 0.5, shoveMax: 0.8, boilT: 0.3, boilV: 0.6 };   // shove junk with a < 0.5r up to 0.8 u; boil 0.3 s at vMax × 0.6
 export const GULL = { warn: 1.6, missCoins: 1 };        // telegraph s; target radius = SEE_R(w.pot.r) (logic.js); gullEvery is level data
