@@ -116,6 +116,9 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   };
   const btn = Math.max(44, U(44)), bst = Math.max(44, U(52)), tmr = Math.max(46, U(64));
   const bstTag = Math.max(19, U(21)) * 0.45;   // the coin tag's overhang below a booster tin (ui.js drawBoosters: ph = max(19, 21u), 0.45 below)
+  // the live "3 stars: 0:35" tag under the clock (ui.js drawStarChip): text max(12.5, 13.5u), pill 1.5x that, 2u under the ring;
+  //   about 7.2 em wide at 13.5 px (97 px measured at 390x844), 7.4 em reserved
+  const starFs = Math.max(12.5, U(13.5)), starH = Math.max(19, starFs * 1.5), starGap = Math.max(1, U(2)), starW = starFs * 7.4;
   const inset = U(10), top = safe.y + U(8);
   const cm = chipMetrics(hu, fs.count);
   const sr = safe.x + SW, sb = safe.y + SH;
@@ -142,7 +145,13 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     hud.ticket = R(tx, top, tw, th);
     hud.ticket.rows = rows; hud.ticket.perRow = perRow; hud.ticket.pad = pad;
     hud.rail = R(tx, top, hud.timer.x + tmr / 2 - tx, railH);
-    const rowB = top + Math.max(th, tmr, btn);
+    // DECISION (11-07 Sat, grandparent + kid13 r6 "the 3 stars pill sits on the ticket corner and the progress bar, and hides the
+    //   L60 boss pips"): the pill starts right of the ticket (never on its corner) and the meter row starts below the pill, so
+    //   the row is max(ticket, clock + pill, pause). About 7 px lower at 390x844 with a one-row ticket, nothing on two rows.
+    const sy = top + tmr + starGap, sLo = tx + tw + 4, sHi = sr - 6;
+    hud.star = R(Math.min(Math.max(hud.timer.x + tmr / 2 - starW / 2, sLo), sHi - starW), sy, starW, starH);
+    hud.star.lo = sLo; hud.star.hi = sHi;
+    const rowB = top + Math.max(th, tmr + starGap + starH, btn);
     const mh = Math.max(26, U(30));
     hud.meter = R(safe.x + U(10), rowB + U(8), SW - U(20), mh);
     const ch = Math.max(34, U(40));
@@ -170,6 +179,11 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     hud.ticket.rows = lines; hud.ticket.perRow = 1; hud.ticket.pad = Math.max(6, U(8)); hud.ticket.lineH = lineH;
     hud.rail = R(col.x, top, hud.timer.x + tmr / 2 - col.x, railH);
     hud.pause = R(sr - inset - btn, top, btn, btn);
+    // landscape: the pill hangs under the ticket, right-aligned in the HUD column (the column is empty below the ticket, the
+    //   play rect starts right of it); under the clock it ran into the callout band and the Feast strip (layout-test r6)
+    { const sLo = col.x, sHi = col.x + colW;
+      hud.star = R(Math.min(Math.max(hud.timer.x + tmr / 2 - starW / 2, sLo), sHi - starW), hud.ticket.y + th + Math.max(4, U(6)), starW, starH);
+      hud.star.lo = sLo; hud.star.hi = sHi; }
     const mh = Math.max(24, U(26));
     const mx0 = Math.max(safe.x + U(240), col.x + colW + U(12));
     const mx1 = Math.min(sr - U(70), hud.pause.x - U(10));
@@ -202,7 +216,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   // Edge arrows live inside the play rect (never over the HUD rows), 10u from its edges.
   hud.arrowZone = R(play.x + inset, play.y + inset, play.w - 2 * inset, play.h - 2 * inset);
   hud.arrow = Math.max(30, U(34));
-  hud.btn = btn; hud.bst = bst; hud.tmr = tmr; hud.chip = cm;
+  hud.btn = btn; hud.bst = bst; hud.tmr = tmr; hud.chip = cm; hud.starTag = starGap + starH;
 
   // ---- card frame ----
   const cmg = Math.max(10, U(16)), MH = menu.h;
@@ -672,7 +686,9 @@ export function cardLayout(L, name, opts = {}) {
       place(colL, [head, sub, receipt, ...(prim ? [prim] : [])]);
       place(colR, [ladderT, ladder, ...(extra ? [extra] : []), ...(back ? [back] : [])], end ? null : 'town', 1, 240);
     } else {
-      place(inner, [head, sub, receipt, ladderT, ladder, ...(extra ? [extra] : []), ...(prim ? [prim] : []), ...(back ? [back] : [])], end ? null : 'town', 1, 200);
+      // DECISION (11-07 Sat, grandparent r6 "dead space between the ladder and Next town"): the town row grows only to its medal
+      //   (ui.js drawNextTown: 96u + 10), U(90) + 24u, and the panel hugs the rest; it took up to +200u and floated the medal.
+      place(inner, [head, sub, receipt, ladderT, ladder, ...(extra ? [extra] : []), ...(prim ? [prim] : []), ...(back ? [back] : [])], end ? null : 'town', 1, 24);
       hug();
     }
     if (B.primary) { B.primary = centreW(B.primary, bwP(B.primary.w)); btn('primary', B.primary, true); }

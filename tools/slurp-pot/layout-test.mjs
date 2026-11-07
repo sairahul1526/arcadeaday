@@ -30,7 +30,7 @@ for (const [W, H] of SIZES) for (const [iname, ins] of Object.entries(INSETS)) {
     const ctx = `${W}x${H}/${iname}/L${lines}/${mode}`;
     const h = L.hud, S = L.safe;
     const named = { timer: h.timer, ticket: h.ticket, pause: h.pause, meter: h.meter, callout: h.callout,
-      b0: h.boosters[0], b1: h.boosters[1], b2: h.boosters[2] };
+      b0: h.boosters[0], b1: h.boosters[1], b2: h.boosters[2], star: h.star };
     if (mode === 'feast') named.strip = h.strip;
     if (mode === 'daily') named.bump = h.bump;
     if (mode === 'og') { named.caption = h.caption; delete named.callout; delete named.pause; }

@@ -1048,5 +1048,83 @@
     ],
     "bytes": 2576,
     "at": "2026-11-03T08:25:33.666Z"
+  },
+  "ing-blueberry": {
+    "prompt": "Three round dusty blue blueberries toy in a small cluster, each with a little star-shaped crown on top, one tiny green leaf, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "cabc0d47859bb2946477c15657d564fa",
+      "78062dc3fe3764873764a0a9b16e8246"
+    ],
+    "bytes": 2488,
+    "at": "2026-11-07T11:57:16.240Z"
+  },
+  "ing-cherry": {
+    "prompt": "A pair of two glossy deep red cherries toy joined by long green stems with one small green leaf at the top, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "998e88c12263d9360d96795427e1117c",
+      "07b4c3241731ce94a74f442ef1facad9"
+    ],
+    "bytes": 3422,
+    "at": "2026-11-07T11:57:16.424Z"
+  },
+  "ing-juicebox": {
+    "prompt": "A single small rectangular sky blue juice box toy with a round orange fruit label on its side and a thin white bendy straw with a pink tip on top, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "09ee142b33dc8933c96e0282f77acee4",
+      "99f164cb1422798fcf693fe7c751f613"
+    ],
+    "bytes": 2368,
+    "at": "2026-11-07T11:58:44.736Z"
+  },
+  "ing-grape": {
+    "prompt": "A small bunch of round purple grapes toy, about eight grapes, with a short brown stem and one green leaf, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "3b76b1dfe4a6adf12baf2173888e7534",
+      "9b33c88e914471f555d6f7a7649d44ac"
+    ],
+    "bytes": 2748,
+    "at": "2026-11-07T11:57:19.197Z"
+  },
+  "ing-candy": {
+    "prompt": "A single round pink and white striped wrapped candy toy with twisted wrapper ends on both sides, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "6968f98ab7fa2935bbd1d70239750c96",
+      "243d07552d92fe0afe9c1a17a5ab4042"
+    ],
+    "bytes": 2962,
+    "at": "2026-11-07T11:57:38.204Z"
+  },
+  "ing-bread": {
+    "prompt": "A single golden brown bread loaf toy with three diagonal score cuts on top, plain white background, centered, full object Inanimate toy object: no face, no eyes, no mouth.",
+    "aspect": "1:1",
+    "model": "nano-banana-2",
+    "cutout": true,
+    "max": 160,
+    "tasks": [
+      "158ff919e6c6cd48ded8897e4706fc67",
+      "ebc179329e32b2826c71e31b4e471221"
+    ],
+    "bytes": 2658,
+    "at": "2026-11-07T11:57:40.612Z"
   }
 }

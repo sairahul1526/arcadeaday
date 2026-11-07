@@ -76,14 +76,14 @@ export const STR = {
   replay: 'Replay', map: 'Map', resume: 'Resume', restart: 'Restart', settings: 'Settings', paused: 'Paused',
   orderUp: 'ORDER UP!', serveIt: 'Serve it!', recEaten: '{n} eaten', soClose: 'SO CLOSE!', almost: 'Almost!', outOfTime: 'Out of time!',
   spoiled: 'Spoiled!', spoilLeft: 'Not enough {name} left', spoilLeftShort: 'Ran out of food', spoilGrow: 'Not enough food left to grow', spoilGrowShort: 'Ran out of food', nMore: '{n} more', freeze: '+10 s, keep cooking', freezeShort: '+10 s', freezeLeft: '{n} left', timeLeft: '{t} left',
-  bestChain: '{n} in a row!', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} more coins', nextSkinShort: 'Next pot: {n} more coins', nextSkin1: 'Next pot: {skin}, 1 more coin', nextSkinShort1: 'Next pot: 1 more coin',
+  bestChain: 'Chain ×{n}!', chainShort: '×{n}', coinsPlus: '+{n}', nextSkin: 'Next pot: {skin}, {n} more coins', nextSkinShort: 'Next pot: {n} more coins', nextSkin1: 'Next pot: {skin}, 1 more coin', nextSkinShort1: 'Next pot: 1 more coin',
   backIn: 'Back in {t}', chestIn: 'Win {n} more for a chest', chestIn1: 'Win 1 more for a chest', giftIn: '{n} more stars for a gift', giftIn1: '1 more star for a gift',
   dragToMove: 'Drag to move', growToOpen: 'Grow to open', lidOn: 'Lid on! Go around',
   daily: 'Daily', feast: 'Feast', cookbook: 'Cookbook', cookbookShort: 'Book', shop: 'Shop', back: 'Back', done: 'Done',
   music: 'Music', sound: 'Sound', showStick: 'Show joystick', reset: 'Reset progress', resetSure: 'Tap again to reset',
   credits: 'Slurp Pot · Arcade a Day', on: 'On', off: 'Off', unlocksAt: 'Unlocks at Level {n}', dailyOrder: 'Daily Order', dailyWhat: 'A new order every day. Cook 7 days in a row for the top prize!', dailyWhatShort: 'A new order every day', winMore1: 'Win 1 more level to unlock', winMoreN: 'Win {n} more levels to unlock', winMoreShort: 'Win {n} more',
   cookToday: "Cook today's order", startFeast: 'Start Feast', allDone: 'All 60 orders served!',
-  dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', dailyDone: 'Order served! Come back tomorrow.',
+  dailyBody: 'A fresh order every day. Cook 7 days in a row to win the Star Ladle pot!', dailyBodyShort: '7 days in a row wins the Star Ladle!', keepStreak: 'Streak {n} · cook in {t} to keep it', keepStreakShort: 'Streak {n} · {t} left', dailyDone: 'Order served! Come back tomorrow.',
   feastBody: 'Serve as many orders as you can!', shopBody: 'New pots are on the way. Save your coins!',
   cookbookBody: 'Every order you serve gets a recipe card.', allDoneBody: 'Harbour is done. You ate the lighthouse!', allDoneStamp: 'HEAD CHEF!', allDoneLeft: 'The Daily Order and the Feast stay open.', allDoneLeft2: 'Feast is open. A new Daily tomorrow.',
   picnic: 'Picnic Park', market: 'Market Street', harbour: 'Harbour', collect: 'Collect', gift: 'A gift!',
@@ -120,11 +120,11 @@ const ART = new Set(('boss-bakerycart boss-bakeryvan boss-bigsandwich boss-birth
   'boss-snackboat boss-table boss-watermelon boss-weddingcake icon-chefhat icon-chest icon-clock icon-coin ' +
   'icon-cookbook icon-freeze icon-gift icon-ladle icon-lid icon-magnet icon-megarim icon-padlock icon-settings ' +
   'icon-star ing-apple ing-baguette ing-banana ing-broccoli ing-burger ing-cheese ing-cheesewheel ing-coconut ' +
-  'ing-corn ing-cottoncandy ing-croissant ing-cupcake ing-donut ing-eggplant ing-fries ing-hotdog ing-icecream ' +
-  'ing-jamjar ing-lemon ing-lollipop ing-orange ing-pineapple ing-pizzaslice ing-popcorn ing-pretzel ing-pumpkin ' +
+  'ing-blueberry ing-bread ing-candy ing-cherry ing-corn ing-cottoncandy ing-croissant ing-cupcake ing-donut ing-eggplant ing-fries ing-grape ing-hotdog ing-icecream ' +
+  'ing-jamjar ing-juicebox ing-lemon ing-lollipop ing-orange ing-pineapple ing-pizzaslice ing-popcorn ing-pretzel ing-pumpkin ' +
   'ing-sandwich ing-strawberry ing-taco ing-tomato ing-waffle ing-watermelon map-harbour map-market map-picnic ' +
   'pot-happy pot-hero pot-sad pot-wide skin-cauldron skin-dutch skin-ricecooker skin-royal skin-starladle ' +
-  'skin-steamer skin-teapot skin-ufo skin-wok ui-stamp ui-ticket win-feast').split(' '));
+  'skin-steamer skin-teapot skin-ufo skin-wok ui-stamp ui-ticket win-feast end-cover').split(' '));
 const IMGS = new Map();
 function img(id) {
   if (!id || !ART.has(id)) return null;
@@ -1007,8 +1007,8 @@ function compactBase() {
 function compactGeo() {
   const H = L.hud, u = L.u, b = compactBase(), railH = H.rail.h;
   const rowC = Math.max(28, H.chip.h * 0.85), thC = railH + Math.max(3, 4 * u) + rowC + Math.max(8, 10 * u);
-  const starH = Math.max(22, 24 * u);   // the "3 stars: 0:20" tag hangs under the clock, the meter must stay clear of it
-  const rowB = Math.max(b.th, H.tmr, H.btn), rowB2 = Math.max(thC, H.tmr + starH, H.btn);
+  const starH = H.starTag;   // the "3 stars: 0:20" tag hangs under the clock, the meter stays clear of it (layout.js hud.star)
+  const rowB = Math.max(b.th, H.tmr + starH, H.btn), rowB2 = Math.max(thC, H.tmr + starH, H.btn);
   return { rowC, thC, dy: Math.max(0, rowB - rowB2), b };
 }
 function applyCompact(k) {
@@ -1223,9 +1223,10 @@ function drawStarChip(w, r) {
   if (left <= 0) return;
   const u = L.u, fsz = Math.max(12.5, 13.5 * u), label = fmt(STR.starsLive, { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` });
   const h = Math.max(19, fsz * 1.5), tw2 = measure(label, fsz, FB, '800'), w2 = tw2 + h * 0.9;
-  // landscape: the ticket runs beside the clock with its counts on the right edge, so the chip starts clear of it
-  const tk = L.aspect === 'landscape' ? L.hud.ticket : null;
-  const x = Math.min(Math.max(r.x + r.w / 2 - w2 / 2, tk ? tk.x + tk.w + 4 : -1e9), cssW - 6 - w2), y = r.y + r.w + Math.max(1, 2 * u);
+  // the chip starts right of the ticket (its counts sit on the right edge) and ends inside the safe right edge; the meter row
+  //   below already clears it (layout.js hud.star, r6 fix)
+  const S = L.hud.star;
+  const x = Math.min(Math.max(r.x + r.w / 2 - w2 / 2, S.lo), S.hi - w2), y = S.y;
   g.save();
   rr(x, y, w2, h, h / 2); g.fillStyle = left <= 5 ? '#FFE3B0' : C.paper; g.fill(); g.lineWidth = Math.max(1.5, 1.6 * u); g.strokeStyle = C.ink; g.stroke();
   txt(label, x + w2 / 2, y + h / 2 + 0.5, fsz, { f: FB, col: left <= 5 ? C.stamp : C.ink });
@@ -1534,7 +1535,10 @@ function drawArrows(w) {
   if (t.boss >= 0 && !isHid(w, t.boss) && (!w.st || w.st[t.boss] === 0 || w.st[t.boss] === 1)) {
     const p = worldToScreen(w.ix[t.boss], w.iz[t.boss]);
     if (p && !onPlay(p)) arrows.push({ p, ic: iconFor(bossKind(w, t)), boss: true });
-    else if (p && T - hud.bossPoint < 3) bouncePointer(p.x, p.y - L.hud.arrow * 0.9);
+    // DECISION (11-07 Sat, grandparent r6 "serving the boss is the last step and easy to miss"): once the order is done the boss is
+    //   the only goal left, so the gold pointer stays on it while it is on screen (was 3 s after the unlock), and the edge arrow
+    //   above takes over when it is off screen.
+    else if (p && (t.done || T - hud.bossPoint < 3)) bouncePointer(p.x, p.y - L.hud.arrow * 0.9);
   }
   if (!t.done && w.n) {
     // DECISION (Friday fix U3): one arrow per open order line that has nothing of its kind on screen (before: one arrow, and only
@@ -2020,7 +2024,7 @@ function drawBumpChip(w) {
 //   so the clip's last frame is its first (it used to close to a teal dot, then cut).
 function drawRecord(st, w) {
   const rs = recState(); if (!rs) return;
-  const sh = rs.show || {}, u = L.u, k = u / 3;
+  const sh = rs.show || {}, u = L.u, k = u / 3, cov = img('end-cover');   // asked from frame 0, so it is decoded long before 18 s
   const capR = L.hud.caption || { x: 16 * u, y: cssH * 0.22 - 39 * u, w: cssW - 32 * u, h: 78 * u };
   const cap = (text, a) => {
     if (!text || !(a > 0.01)) return;
@@ -2056,11 +2060,26 @@ function drawRecord(st, w) {
     const vg = g.createRadialGradient(cssW / 2, cssH * 0.45, Math.min(cssW, cssH) * 0.2, cssW / 2, cssH * 0.45, Math.max(cssW, cssH) * 0.75);
     vg.addColorStop(0, 'rgba(255,255,255,0.06)'); vg.addColorStop(1, 'rgba(0,0,0,0.35)'); g.fillStyle = vg; g.fillRect(0, 0, cssW, cssH);
     const ls = Math.min(cssW * 0.17, 150 * k * 1.2), bob = Math.sin(T * 2.2) * 6 * k;
-    g.save(); g.translate(cssW / 2, cssH * 0.27); g.rotate(-0.04);
+    // DECISION (11-07 Sat, art-director r6 "the end card is flat teal with a small pot, reuse the cover art"): the card's top
+    //   two thirds is the store cover (art/end-cover.webp = dist/portals/slurp-pot/media/cover-800x1200.jpg), so the last thing
+    //   a viewer sees is the thumbnail they will tap on a portal. It fades into the teal above "Play free", which stays at
+    //   70 % height, clear of the TikTok caption band. No cover (still loading, or no art) keeps the old wordmark-and-pot card.
+    const coverOn = cov && cssH > cssW;
+    if (coverOn) {
+      const cw = cssW, ch = cw * cov.naturalHeight / cov.naturalWidth, cy0 = Math.min(0, cssH * 0.66 - ch * 0.84);
+      g.drawImage(cov, 0, cy0 + bob * 0.3, cw, ch);
+      const fd = g.createLinearGradient(0, cssH * 0.58, 0, cssH * 0.67);
+      fd.addColorStop(0, 'rgba(15,76,92,0)'); fd.addColorStop(1, '#0F4C5C');
+      g.fillStyle = fd; g.fillRect(0, cssH * 0.58, cssW, cssH * 0.42);
+      const tg = g.createLinearGradient(0, 0, 0, cssH * 0.2);
+      tg.addColorStop(0, 'rgba(15,76,92,0.35)'); tg.addColorStop(1, 'rgba(15,76,92,0)');
+      g.fillStyle = tg; g.fillRect(0, 0, cssW, cssH * 0.2);
+    }
+    g.save(); g.translate(cssW / 2, cssH * (coverOn ? 0.12 : 0.27)); g.rotate(-0.04);
     txt(STR.title, 0, 0, ls, { col: C.gold, stroke: C.ink, sk: Math.max(5, ls * 0.14), shadow: C.ink, maxW: cssW * 0.9, min: 24 });
     g.restore();
     const ps = Math.min(cssW * 0.6, cssH * 0.3);
-    potArt('pot-happy', cssW / 2, cssH * 0.5 + bob, ps);
+    if (!coverOn) potArt('pot-happy', cssW / 2, cssH * 0.5 + bob, ps);
     // DECISION (11-07 Sat, viral r6 "Play free is small"): the call to action is the biggest text after the wordmark,
     //   "Play free →" at about 10 % of the width, "no download" under it, then the ?end text in gold (the clip passes
     //   "link in bio · arcadeaday.com", matching the caption). Was one 6 %-wide line.
@@ -2652,7 +2671,9 @@ function drawFail(st, w) {
       txtMin(levelLine(w, d.n, d.kind), B.sub.x + B.sub.w / 2, cy, fs.body, { f: FB, col: C.ink, maxW: B.sub.w });
     }
   }
-  if (B.hero.h > 40) potArt('pot-sad', B.hero.x + B.hero.w / 2, B.hero.y + B.hero.h / 2, Math.min(B.hero.w * 0.6, B.hero.h * 1.05));
+  // DECISION (11-07 Sat, kid13 r6): pot-sad.webp is 74 % wide and 60 % tall inside its square, so the old min(0.6 w, 1.05 h) drew a
+  //   118 px pot in a 230 px hero at 390x844 with paper above and below it. Sized on what is visible now (about 61 % of the hero width).
+  if (B.hero.h > 40) potArt('pot-sad', B.hero.x + B.hero.w / 2, B.hero.y + B.hero.h / 2, Math.min(B.hero.w * 0.78, B.hero.h * 1.45));
   // size bar: start rim -> boss silhouette, flag at progress (size only)
   if (B.bar) {
     const r = B.bar, p = clamp(+d.progress || 0, 0, 1), th = Math.max(14, Math.min(r.h * 0.34, 18 * cu));
@@ -2677,9 +2698,11 @@ function drawFail(st, w) {
   // ticket lines with rings (missing ones pulse)
   {
     const r = B.lines, lines = (w && w.tickets && w.tickets[w.ti || 0] ? w.tickets[w.ti || 0].lines : null) || d.missing || [];
-    const n = lines.length || 1, cnt = Math.max(12.5, fs.count);
+    // DECISION (11-07 Sat, kid13 r6 "the chips are small for the key info"): one or two lines get a 64u ring and a 1.35x count
+    //   (63 px ring, 19 px count at 390x844, was 44 and 14); three or four keep the old sizes, the cell width caps them anyway.
+    const n = lines.length || 1, cnt = Math.max(12.5, fs.count * (n <= 2 ? 1.35 : 1));
     // DECISION: with 4 lines the ring shrinks so every "got/need" count fits its cell (it was clipped at the card edge).
-    const d0 = Math.max(26, Math.min(r.h * 0.9, Math.max(34, 44 * cu), (r.w / n - cnt * 3.4 - 22) / 1.04));
+    const d0 = Math.max(26, Math.min(r.h * 0.9, Math.max(34, (n <= 2 ? 64 : 44) * cu), (r.w / n - cnt * 3.4 - 22) / 1.04));
     const cellW = Math.min(r.w / n, d0 * 1.04 + cnt * 3.4 + 22);
     const x0 = r.x + (r.w - cellW * n) / 2;
     lines.forEach((l, i) => {
@@ -3481,9 +3504,11 @@ function drawReceipt(B, fs, cu, lines, mask, head, stampK) {
     const l = lines && lines[i], met = mask != null && ((mask >> i) & 1) === 1;
     const cy = lr.y + lr.h / 2, ss = Math.min(lr.h * 0.34, 12 * cu + 3);
     drawStar(lr.x + pad + ss, cy, ss, met);
-    const is = lr.h * 0.86, hasIc = l && l.type === 'eat' && !resv;
-    txt(lineText(l) || '—', lr.x + pad + ss * 2 + 8, cy + 1, lfs, { f: FB, align: 'left', col: met ? '#2E8A45' : C.ink, maxW: lineW(lr, l), min: 12.5 });
-    if (hasIc) ingIcon(l.kind, lr.x + lr.w - pad - is * 0.4, cy, is * 1.2);
+    const is = lr.h * 0.86, hasIc = l && l.type === 'eat' && !resv, tx = lr.x + pad + ss * 2 + 8;
+    txt(lineText(l) || '—', tx, cy + 1, lfs, { f: FB, align: 'left', col: met ? '#2E8A45' : C.ink, maxW: lineW(lr, l), min: 12.5 });
+    // DECISION (11-07 Sat, grandparent r6 "an unexplained red ball"): the food sits right after "Eat 20 cherries", not at the far
+    //   edge, and the six Daily foods that had no art (cherry, grape, blueberry, juice box, bread, candy) have kie icons now.
+    if (hasIc) ingIcon(l.kind, Math.min(tx + Math.min(measure(lineText(l), lfs, FB, '800'), lineW(lr, l)) + is * 0.62, lr.x + lr.w - pad - is * 0.4), cy, is * 1.2);
   });
   if (stampK > 0) {
     const l1 = B.lines[Math.min(1, B.lines.length - 1)];
@@ -3542,7 +3567,11 @@ function drawDaily(st) {
   g.save(); g.translate(0, oy);
   panel(CL.panel, { u: cu });
   txt(intro ? STR.dailyNew : STR.todayOrder, B.title.x + B.title.w / 2, B.title.y + B.title.h / 2, fs.title, { col: C.ink, maxW: B.title.w });
-  if (B.sub) txtMin(intro ? [STR.dailyBody, STR.dailyBodyShort] : [`${fmt(STR.dayN, { n: ds.day })} · ${fmt(STR.streakN, { n: ds.streak || 0 })}`], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.sub.w });
+  // DECISION (11-07 Sat, mobile-designer r6 "nothing says you lose the streak"): a live streak not yet cooked today names the
+  //   clock it runs out on (IST midnight, meta.msToNext), "Streak 3 · cook in 5h 12m to keep it"; lids still save a missed day.
+  const keep = !intro && !done && (ds.streak | 0) > 0 ? msShort((ds.msToNext || 0) - (T - dsCache.t) * 1000) : null;
+  if (B.sub) txtMin(intro ? [STR.dailyBody, STR.dailyBodyShort] : keep ? [fmt(STR.keepStreak, { n: ds.streak, t: keep }), fmt(STR.keepStreakShort, { n: ds.streak, t: keep })]
+    : [`${fmt(STR.dayN, { n: ds.day })} · ${fmt(STR.streakN, { n: ds.streak || 0 })}`], B.sub.x + B.sub.w / 2, B.sub.y + B.sub.h / 2, fs.small, { f: FB, col: keep ? C.stamp : C.goldS, maxW: B.sub.w });
   const lines = dailyLines(ds.key, curLv());
   drawReceipt(B, fs, cu, lines, ds.mask, `${STR.daily} · ${String(ds.key || '').slice(5).replace('-', '/')}`, ds.done ? 1 : null);
   ladderTitle(B.ladderT, fs, ds);
