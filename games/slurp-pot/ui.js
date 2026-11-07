@@ -63,12 +63,12 @@ const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const back = t => { t = clamp(t, 0, 1); const s = 1.7; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); };
 
 export const STR = {
-  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', allDoneBtn: 'FINISH', retry: 'RETRY', retryMore: 'RETRY +{n} s',
+  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', nextN: 'NEXT · Level {n}', allDoneBtn: 'FINISH', retry: 'RETRY', retryMore: 'RETRY +{n} s',
   mercyLine: '{n} s extra this try', mercyBoth: '{n} s extra this try. Pot {p}% bigger!', mercyBothShort: '+{n} s. Pot {p}% bigger!',
   mercyRetry: 'Extra time to help you! +{n}s', mercyRetryGrow: 'Extra time and a bigger pot to help you!',
   mercyGift: 'A little gift: +{n}s on the clock!', mercyGiftGrow: 'A little gift: extra time and a bigger pot!',
   tipArrows: 'Follow the arrows to the food you still need.', tipSmall: 'Eat small things first to grow.', tipBig: "Big things have to wait until you're bigger.",
-  goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n}s left for 3 stars', goal3LeftShort: '{n}s left for 3 stars',
+  goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars',
   starFinish: 'Finish', starLeft: '{n}s left',
   bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossEaten: 'BOSS EATEN!',
   canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', canGild: 'Gild your {skin}!', canGildShort: 'You can gild a pot!', replayBonus: 'Replay bonus',
@@ -2594,9 +2594,13 @@ function starGoal(d, w) {
   const st = w && LG && LG.starTimes ? safe(() => LG.starTimes(w), null) : null, t3 = st ? st.t3 : 0;
   let need = +d.t3Left || 0;
   if (!(need > 0) && d.t3Left == null && t3 > 0 && d.tLeft != null) need = Math.max(0, Math.ceil(t3 - d.tLeft));
-  if (need > 0) return { text: fmt(STR.goal3, { n: need }), short: fmt(STR.goal3Short, { n: need }), fill: t3 > 0 ? clamp(1 - need / t3, 0.04, 0.96) : 0.5 };
+  // DECISION (11-07 Sat r7, grandparent r7 #1): "Finish 54s faster for 3 stars" sat beside "0:11 left", two clocks for one
+  //   target. The goal now reads the way the stat beside it and the HUD tag read: "Finish with 0:44 left for 3 stars", in m:ss.
+  const ms = n => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+  if (need > 0 && t3 > 0) { const n = ms(Math.ceil(t3)); return { text: fmt(STR.goal3Left, { n }), short: fmt(STR.goal3LeftShort, { n }), fill: clamp(1 - need / t3, 0.04, 0.96) }; }
+  if (need > 0) return { text: fmt(STR.goal3, { n: need }), short: fmt(STR.goal3Short, { n: need }), fill: 0.5 };
   // quick enough on time, but a Freeze from the card holds the stars back: name the target instead
-  if (t3 > 0) { const n = Math.ceil(t3); return { text: fmt(STR.goal3Left, { n }), short: fmt(STR.goal3LeftShort, { n }), fill: 0.5 }; }
+  if (t3 > 0) { const n = ms(Math.ceil(t3)); return { text: fmt(STR.goal3Left, { n }), short: fmt(STR.goal3LeftShort, { n }), fill: 0.5 }; }
   return null;
 }
 /** Friday fix 2 (U9): one short line from the second loss in a row, only what is true on this board right now. */
@@ -3593,7 +3597,10 @@ function drawDaily(st) {
   // DECISION (11-07 Sat, grandparent r5): the once-only intro rides the L6+ win chain, so its gold button is NEXT (the
   //   campaign goes on) and Cook is the paper button under it; a first-timer who taps the big button is never pulled into
   //   a 60 s Daily. The map and title keep the Daily's "!" badge, and the plain Daily card (from the map) still leads with Cook.
-  if (intro) goldBtn(reg('primary', B.primary, () => act('later'), { primary: true }), STR.next, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4) });
+  // DECISION (11-07 Sat r7, grandparent r7 #5): beside "Cook today's order" a bare NEXT did not say where it goes. It names the
+  //   level it starts, like the title's "PLAY · Level n"; plain NEXT where the label does not fit or the level is unknown.
+  const nx = d.next | 0, nxL = nx > 0 && nx <= LEVELS ? fmt(STR.nextN, { n: nx }) : STR.next;
+  if (intro) goldBtn(reg('primary', B.primary, () => act('later'), { primary: true }), nxL, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4), alts: nxL === STR.next ? undefined : [STR.next] });
   else if (!done) goldBtn(reg('primary', B.primary, () => act('daily'), { primary: true }), STR.cookToday, { u: cu, fs: fs.btn, glow: 0.5 + 0.5 * Math.sin(T * 4) });
   else {
     const r = B.primary, left = (ds.msToNext || 0) - (T - dsCache.t) * 1000;

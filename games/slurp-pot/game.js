@@ -797,7 +797,7 @@ function next() {
   }
   // DECISION: a player who is struggling is not pushed into a Daily at L6. The card waits for a calm win, L10 at the latest.
   const calm = !(save().help > 0) || S.n >= 10;
-  if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus() }]);
+  if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus(), next: S.n + 1 }]);
   S.queue = { list: q, n: S.n + 1 };
   return advance();
 }
