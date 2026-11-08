@@ -44,6 +44,16 @@ for (const [W, H] of SIZES) for (const [iname, ins] of Object.entries(INSETS)) {
       checks++;
       if (overlap(named[ks[i]], named[ks[j]])) fail(ctx, `${ks[i]} ${fmt(named[ks[i]])} overlaps ${ks[j]} ${fmt(named[ks[j]])}`);
     }
+    // 11-08 Sun: the ticket's brass rail ends >= 8 px before the clock, and the 3-stars pill is clear of the clock, ticket and bar
+    //   (named-rect overlaps above) and, in portrait, sits under the progress bar's right end.
+    checks++;
+    if (h.timer.x - (h.rail.x + h.rail.w) < 8 - EPS) fail(ctx, `rail-to-clock gap ${(h.timer.x - (h.rail.x + h.rail.w)).toFixed(1)} < 8`);
+    checks++;
+    if (overlap(h.rail, h.timer)) fail(ctx, 'brass rail overlaps the clock');
+    if (L.aspect !== 'landscape' && mode !== 'og') {
+      checks++;
+      if (h.star.y < h.meter.y + h.meter.h - EPS || h.star.x + h.star.w > h.meter.x + h.meter.w + EPS) fail(ctx, `star pill not under the bar's right end ${fmt(h.star)}`);
+    }
     for (const k of ['pause', 'b0', 'b1', 'b2']) { if (!named[k]) continue; checks++; if (named[k].w < 44 - EPS || named[k].h < 44 - EPS) fail(ctx, `${k} < 44 px`); }
     checkFonts(ctx, L.fs);
     // play rect: inside safe, under the HUD rows, reaching the safe bottom/right (no bars), pot point clear

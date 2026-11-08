@@ -124,6 +124,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   const cm = chipMetrics(hu, fs.count);
   const sr = safe.x + SW, sb = safe.y + SH;
   const hud = {};
+  const clkGap = Math.max(9, U(10));
   let play;
 
   // ticket body height for n chip rows / list lines
@@ -138,25 +139,34 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
       if (unitR - unitL > maxUnit) { const c = (unitL + unitR) / 2; unitL = c - maxUnit / 2; unitR = c + maxUnit / 2; }
     }
     hud.timer = R(unitR - tmr, top, tmr, tmr);
-    const tx = unitL, tw = hud.timer.x - U(4) - unitL;
+    // DECISION (11-08 Sun, art director + grandparent + mobile designer r7c): the clock sat 4 px off the ticket and the rail ran
+    //   under it. The rail now ends with the ticket and the clock stands clear of it by clkGap (>= 9 px).
+    const tx = unitL, tw = hud.timer.x - clkGap - unitL;
     const pad = Math.max(6, U(8));
     const perRow = Math.max(1, Math.floor((tw - 2 * pad + cm.gap) / (cm.w + cm.gap)));
     const rows = Math.max(1, Math.ceil(lines / perRow));
     const th = railH + Math.max(3, U(4)) + hdrH + Math.max(2, U(3)) + rows * cm.h + (rows - 1) * Math.max(2, U(3)) + Math.max(8, U(10));
     hud.ticket = R(tx, top, tw, th);
     hud.ticket.rows = rows; hud.ticket.perRow = perRow; hud.ticket.pad = pad;
-    hud.rail = R(tx, top, hud.timer.x + tmr / 2 - tx, railH);
-    // DECISION (11-07 Sat, grandparent + kid13 r6 "the 3 stars pill sits on the ticket corner and the progress bar, and hides the
-    //   L60 boss pips"): the pill starts right of the ticket (never on its corner) and the meter row starts below the pill, so
-    //   the row is max(ticket, clock + pill, pause). About 7 px lower at 390x844 with a one-row ticket, nothing on two rows.
-    const sy = top + tmr + starGap, sLo = tx + tw + 4, sHi = sr - 6;
-    hud.star = R(Math.min(Math.max(hud.timer.x + tmr / 2 - starW / 2, sLo), sHi - starW), sy, starW, starH);
-    hud.star.lo = sLo; hud.star.hi = sHi;
-    const rowB = top + Math.max(th, tmr + starGap + starH, btn);
+    hud.rail = R(tx, top, tw, railH);
+    // DECISION (11-08 Sun, art director/mobile designer r7c "star pill crowds the clock"): the pill hangs under the progress bar's
+    //   right end (the clock row is only max(ticket, clock, pause) again), in a row of its own between the bar and the Feast
+    //   strip / callout band. Net height is about what the pill used to cost under the clock.
+    //   Record / og frames never show the pill and keep it where it was (under the clock), so their caption band is unchanged.
+    const oldStar = !!(record || opts.caption);
+    const rowB = top + Math.max(th, tmr, btn) + (oldStar ? Math.max(0, tmr + starGap + starH - Math.max(th, tmr, btn)) : 0);
     const mh = Math.max(26, U(30));
     hud.meter = R(safe.x + U(10), rowB + U(8), SW - U(20), mh);
+    if (oldStar) {
+      const sLo = tx + tw + 4, sHi = sr - 6;
+      hud.star = R(Math.min(Math.max(hud.timer.x + tmr / 2 - starW / 2, sLo), sHi - starW), top + tmr + starGap, starW, starH);
+      hud.star.lo = sLo; hud.star.hi = sHi;
+    } else {
+      hud.star = R(Math.min(hud.meter.x + hud.meter.w, sr - 6) - starW, hud.meter.y + mh + Math.max(2, U(3)), starW, starH);
+      hud.star.lo = hud.meter.x; hud.star.hi = Math.min(hud.meter.x + hud.meter.w, sr - 6);
+    }
     const ch = Math.max(34, U(40));
-    let below = hud.meter.y + mh;
+    let below = oldStar ? hud.meter.y + mh : hud.star.y + starH;
     if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(hud.meter.x, below + Math.max(3, U(4)), hud.meter.w, sh); below = hud.strip.y + sh; }
     hud.callout = R(safe.x + U(10), below + Math.max(4, U(6)), SW - U(20), ch);
     const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
@@ -173,12 +183,12 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   } else {
     const colW = Math.max(U(220) * (1 + (hs - 1) * 0.8), 168), col = R(safe.x + inset, top, colW, 0);
     hud.timer = R(col.x + colW - tmr, top, tmr, tmr);
-    const tw = hud.timer.x - U(4) - col.x;
+    const tw = hud.timer.x - clkGap - col.x;
     const lineH = Math.max(28, hu * 34);
     const th = railH + Math.max(3, U(4)) + hdrH + Math.max(2, U(4)) + lines * lineH + Math.max(8, U(10));
     hud.ticket = R(col.x, top, tw, th);
     hud.ticket.rows = lines; hud.ticket.perRow = 1; hud.ticket.pad = Math.max(6, U(8)); hud.ticket.lineH = lineH;
-    hud.rail = R(col.x, top, hud.timer.x + tmr / 2 - col.x, railH);
+    hud.rail = R(col.x, top, tw, railH);
     hud.pause = R(sr - inset - btn, top, btn, btn);
     // landscape: the pill hangs under the ticket, right-aligned in the HUD column (the column is empty below the ticket, the
     //   play rect starts right of it); under the clock it ran into the callout band and the Feast strip (layout-test r6)
@@ -220,7 +230,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   // Edge arrows live inside the play rect (never over the HUD rows), 10u from its edges.
   hud.arrowZone = R(play.x + inset, play.y + inset, play.w - 2 * inset, play.h - 2 * inset);
   hud.arrow = Math.max(30, U(34));
-  hud.btn = btn; hud.bst = bst; hud.tmr = tmr; hud.chip = cm; hud.starTag = starGap + starH;
+  hud.btn = btn; hud.bst = bst; hud.tmr = tmr; hud.chip = cm; hud.starTag = aspect === 'landscape' || record || opts.caption ? starGap + starH : 0;
 
   // ---- card frame ----
   const cmg = Math.max(10, U(16)), MH = menu.h;

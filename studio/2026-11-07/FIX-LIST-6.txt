@@ -1,0 +1,308 @@
+SLURP POT, FIX LIST 6 (r6 panel, Sat 2026-11-07). Status of each critic note: FIXED / REJECTED (with evidence) / OPEN.
+Build: the r6 critics after viral-marketer played the 16:48 IST refreeze (clip re-cut 16:42, booster column lifted, bigger map pills).
+
+VIRAL MARKETER r6: 8.3 (Q1-Q3 YES, no blockers, 0 console errors)
+  1. Clip frame 0: tiny pot on an empty cloth, lower half of the 9:16 frame blank. FIXED: modes.js recPlan adds REC_BACK = 20
+     small foods (blueberry, cherry, pea) in two columns either side of the wake the preroll leaves behind the pot (0.44-0.96 out,
+     0.2-1.2 behind its frame-0 point, which is where the close camera looks), so frame 0 opens on a full picnic with the pot
+     mid-chain (x3 on frame 0). They sit 0.38+ off the first leg and the pot never comes back, so they stay uneaten and the
+     plan, timings and the 135 count do not move (modes-test 78/0: "back items never eaten", "win by 17.4 s").
+     REJECTED: fast-forwarding the pea phase or starting the clip at 4 s. The pea-to-cake growth arc is the content
+     ("Can a pea-sized pot eat the WHOLE park?"), and the critic listed that arc as best thing 2.
+  2. Tail: 3 s of static ORDER UP, a 1.4 s end card, a 0.5 s dark iris. FIXED: the end card comes in at 18.0 s (was 19.0),
+     ORDER UP fades over 17.8-18.0 s, the camera pull runs 0.15 s after the win over 0.75 s (was 0.3 + 1.1 s, render3d.js), so
+     about 0.8 s of payoff sits between the cake bite (16.6 s) and the card. The loop iris now OPENS on the restarted frame-0
+     scene instead of closing to a teal dot (ui.js drawRecord), so the last frame matches the first.
+     REJECTED: a 14-15 s total. The bite lands at 16.6 s after the full growth arc; cutting 5 s means cutting the arc.
+  3. End card on screen ~1.5 s, small text, a URL nobody can tap. FIXED: 2.0 s solid plus the 0.5 s iris; "Play free ->" at
+     min(10 % width, 5.6 % height) with "no download" under it, then "link in bio · arcadeaday.com" in gold (record query
+     end=...). Re-recorded videos/2026-11-08-slurp-pot.mp4 at 16:42 IST (20.5 s, 1080x1920, audio); frames checked at 0, 17.5,
+     18.5, 20.2 and 20.45 s (scratchpad clip4/sheet.png).
+  4. Caption asks about the biggest thing swallowed, the clip counts items. FIXED: TikTok line ends "mine hit 135 eaten, what's
+     your count?" and the pinned comment asks for a screenshot of the ticket count (videos/2026-11-08-slurp-pot.md).
+  5a. Lowest booster price tag cut by the screen edge at 390x844. FIXED: the coin tag hangs 0.45 of its height below each tin
+     (ui.js drawBoosters), which the layout did not reserve. layout.js now lifts both booster columns by that overhang (bstTag);
+     shots with empty stock at 390x844 and 360x640 show the 80-coin tag about 11 px above the bottom (scratchpad bst/tags.png).
+     layout-test 160235/0.
+  5b. Map pills "Win 1 more for a chest" / "Daily day 2: Chest!" very small. FIXED: pill text 15u with a 14 px floor (was 13.5u,
+     12.5 px), about 15 % bigger; at 320x568 the tomorrow pill falls back to its short text "Day 2: Chest!" (scratchpad
+     pills/stack.png at 390x844, 360x640, 320x568, 0 console errors).
+
+GRANDPARENT r6: 7.6 (Q1-Q3 YES, no blockers; lost L6 once, could not reach L8-L12 by hand in the cap)
+  1. L6 lost with every food line done: the "serve it" boss step was easy to miss. FIXED: once a ticket's lines are done the
+     bounce pointer to the boss stays on (ui.js, shows on t.done) and L6 got +4 s (T 84 -> 88).
+  2. "3 stars: 0:xx" pill over the ticket and bar. FIXED: layout.js hud.star puts it under the clock in portrait and under the
+     ticket in landscape; layout-test now checks it as a named rect (164073/0).
+  3. L3-L5 run about 90 s. FIXED in part: more grace on L3-L12 (T and grace up together, 3-star pace unchanged): L3 82->90,
+     L4 93->99, L6 84->88, L7 78->86, L8 99->115, L10 90->99, L11 100->110, L12 98->106. Slow-hand first-timer model
+     (tools/slurp-pot/slow-hand.mjs, lag 0.7 s, 35 deg aim) now wins L3-L12 27-30 of 30.
+     REJECTED: cutting L3-L5 to 45-60 s. The 3-star pace is already 49-70 s; a shorter clock only takes slack from slow hands.
+  4. Soft rendering. REJECTED: headless SwiftShader is detected as the 'low' tier (render3d.js detectTier), whose 3D scale is
+     capped at 1.25 and drops to 0.75 when fps is low. Phone GPUs run 'mid' (scale up to 2). The HUD canvas uses the device
+     pixel ratio (game.js, up to 3).
+  5a. Daily card dead space between the ladder and Next town. FIXED: the town row grows only to its medal (U(90) + 24u) and
+     the panel hugs the rest (layout.js); at 390x844 the panel is 636 px tall (was 680), the town row 113 (was 157).
+  5b. Unexplained red ball next to the cherries line. FIXED: six Daily foods had no icon art and fell back to a coloured ball.
+     New kie.ai icons: ing-cherry, ing-grape, ing-blueberry, ing-juicebox (sky blue, as in play), ing-bread, ing-candy. The icon
+     now sits right after "Eat 20 cherries", not at the far edge (scratchpad cards/sheet-port.png, sheet-land.png, 0 errors).
+  5c. Daily popped up right after the L6 win. REJECTED: that is the one-time intro, and its big button is NEXT (the campaign
+     goes on); Cook is the small button under it (r5 fix).
+
+KID13 r6: 8.0 (Q1-Q3 YES, no blockers; L1-L7 won, L8 lost once)
+  1. L3 and L7 won with 4-5 s left, L8 lost. FIXED: the grace table in GRANDPARENT 3 (L3 +8 s, L7 +8, L8 +16). Slow-hand
+     wins: L7 29/30, L8 28/30 (2-star bar reads the full clock).
+  2. "37 in a row!" ribbon next to 1 star, unexplained. FIXED: the ribbon reads "Chain x37!" (STR.bestChain), the same word
+     as the in-play chain counter.
+  3. HUD stack crowded, pill on the bar. FIXED: GRANDPARENT 2.
+  4. Fail card chips small, gap above them. FIXED: the sad pot is sized on its visible part (0.78 of the hero width, was a
+     118 px pot in a 230 px hero); one or two lines get a 64u ring and a 1.35x count (63 px ring and 19 px count at 390x844,
+     were 44 and 14). Shots at 390x844, 360x640, 844x390, 1440x900: 0 console errors.
+  5. Sent through the Daily before L7. REJECTED: GRANDPARENT 5c.
+
+ART DIRECTOR r6: 8.3 (Q1-Q3 YES, no blockers)
+  1. Store art shows a glossy 3/4 pot, the game a top-down ring. REJECTED: portal thumbnails are key art. The cover was painted
+     from an in-game frame (same pot, picnic and the L1 cake boss), the title screen pot matches it, and og.jpg is a literal
+     live render (ui.js drawOg). The clip now ends on that cover (item 2), so clip and store thumbnail match.
+  2a. Clip end card flat teal with a small pot. FIXED: the top two thirds of the end card is the store cover
+     (art/end-cover.webp from cover-800x1200.jpg, 65 KB, loaded only in record runs), fading into the teal above "Play free",
+     which stays at 70 % height, clear of the TikTok caption band. Without the image the old card draws.
+     Re-recorded videos/2026-11-08-slurp-pot.mp4 at 17:42 IST (20.5 s, 1080x1920, audio); frames 0, 16.8, 18.3, 19.6, 20.1
+     and 20.45 s checked (scratchpad clip5/sheet.png): the iris opens onto frame 0 and the last frame matches the first.
+  2b. Frame 0 slow, HUD not the real one. REJECTED: frame 0 opens on a full picnic (REC_BACK, 20 foods) with the pot mid-chain
+     (x3). The record HUD ("Picnic Park, N eaten") is on purpose: the caption asks viewers for their count.
+  3a. Stars pill over the ticket. FIXED: GRANDPARENT 2.
+  3b. Boosters over the play area. REJECTED: they sit in the edge column the layout reserves, and the tags are lifted clear of
+     the screen edge (viral r6 5a).
+  3c. Ticket goes blank during BOSS UNLOCKED. REJECTED: that is the ticket's 0.3 s flip from its food lines to the boss line
+     (ui.js hud.flip, squash to zero at 0.15 s), caught mid-frame.
+  4. Pot hard to read at a town start. REJECTED: the pot has a ground halo (render3d type-11 decal, gold band 16-40 px past the
+     rim with an ink edge, never under 46 px), the near rim shows through props (rimXray), and a small pot already sits
+     closer (camw.js, about 20 % of the width at r 0.3, r5). L41 opens small on purpose: the growth arc starts again per town.
+  5a. Occluder fade shows as crawling cross-hatch. REJECTED: the 4x4 ordered dither reads as see-through at phone scale (a
+     cell is 2 CSS px at the 'mid' tier's scale 2). Headless SwiftShader runs the 'low' tier at 0.75-1.25, so each cell is
+     3-5 CSS px. A true alpha fade would mean sorting instanced props one by one (one draw per kind today).
+  5b. Pink band under the title on the 800x800 and 800x1200 covers; the 200x120 thumb title is unreadable. OPEN (minor): the
+     un-titled covers ship to the portals that take them; check on Sunday which upload forms still ask for 200x120.
+
+MOBILE DESIGNER r6: 7.6 (Q1-Q3 YES, no blockers)
+  1. Difficulty flat and soft until L23 (casual bot loses first on L24); wants the first real loss on L10-L14 and an L30 wall.
+     REJECTED with data: the slow-hand first-timer model (17:45 IST run, current tree) wins L3-L12 27-30 of 30, then
+     L13 4/30, L14 5/30, L15 1/30, L18 0/30, L24-L30 0/30. So a slow first-timer's first wall is L13, inside the window asked
+     for, and L24-L30 is a wall for them (the mercy clock adds time on retries). The bot is a faster hand than the two critics
+     who played by hand this round (grandparent lost L6, kid13 lost L8) and asked for more time, not less. The designer's own
+     touch run got 2 stars on L1-L3 where the bot gets 3.
+  2a. Nothing says you lose the streak, no expiry pressure. FIXED: when a streak is alive and today's order is not cooked, the
+     Daily card's subtitle reads "Streak 3 · cook in 6h 15m to keep it" in red (IST midnight, meta.msToNext; short form
+     "Streak 3 · 6h 15m left"). Shots at 390x844, 360x640, 844x390: fits, 0 errors (scratchpad cards2/).
+  2b. Day 1 pays 40. REJECTED: the Daily run pays its own 40 + 10 per star on top of the ladder, so day 1 pays 110 at 3 stars,
+     a level's worth (meta-test "dc: 70 + 40").
+  3. Coins inflate after L30. REJECTED: Gild is per pot (600 x 9 pots = 5,400) on top of skins; sinks total about 10.2k against
+     about 7.2k earned by L60.
+  4. Feast card has no best. REJECTED: drawFeast shows "Best: N" once a Feast run exists (M.feastBest); the critic's save had
+     none. The best run's ghost rides the Feast strip in play.
+  5. 3-star chest every 15 stars. REJECTED: three reward clocks already run (a win chest every few wins, the 45-star gift,
+     the Daily ladder), and every 2-star card says "Finish N s faster for 3 stars".
+
+MOBILE DESIGNER r6b: 7.6 (Q1-Q3 YES, no blockers; played the 17:48 refreeze)
+  1. Flat curve, average bot 60/60 on try 1; wants 1-in-3 spikes at L15/24/29/36/45/54. REJECTED with data: the curve already
+     has eleven peaks (verify.mjs PEAKS 29 30 33 37 40 44 49 50 54 57 60, set where the greedy bot spends 80-95 % of the clock) and breathers after them
+     (35 45 52 55); its own bot nearly lost L29 (1.4-1.9 s) and L54 and lost L24 and L60 once. The bots are fast hands: the
+     slow-hand first-timer model loses L13 26/30, L15 29/30, L18 and L24-L30 30/30, and every hand critic this round lost
+     early (grandparent L6, kid13 L8, this critic L4). Harder spikes would land on the players who already lose.
+  2. Hand loses L4 where the bot gets 3 stars: check the fail card is gentle and the retry free. NO CHANGE NEEDED: the L4
+     card is the r6 fail card (sad pot, chips for what was left, RETRY as the big button, no coin cost); the button reads
+     "RETRY +N s" once the mercy clock adds seconds on a retry (the critic's own try 2 won).
+  3. No late sink, "Gild 600 flat on one pot". FIXED (clarity): Gild is once PER POT, 10 pots x 600 = 6,000 on top of
+     5,000 in pots and the 120-coin Streak Lids, about 11,000 of sinks against 7,298 coins at L60 on its own bot. The shop
+     did not say so: an owned pot's name line now reads "Sunny Pot · 0/10 gilded" (ui.js drawShop, STR.gildSet, falls back
+     to the name when it does not fit). Shots at 844x390, 640x360, 390x844, 1440x900, 360x640, idle and armed: no overlap,
+     0 errors (scratchpad shop2/port.png, land.png). layout-test 164073/0, meta-test 68/0.
+     REJECTED: lowering income after L25. Coins are the reward for a win on every card; a smaller number there reads as a nerf.
+  4. Thin return hook after day 7, no streak shield. REJECTED: the Streak Lid is that shield (ladder day 3 gives one, the
+     shop sells them at 120, two at most; a lid covers a missed day, meta.js aliveStreak), the map pill names tomorrow's reward,
+     and the Daily card now counts down "Streak N · cook in 6h 15m to keep it" (r6 2a). Day 7 after the Star Ladle pays 200
+     coins plus every booster, and the ladder loops.
+  5. Gate towns on stars. REJECTED: a star gate stops the slow hands the r4-r6 grandparent and kid panels asked us to carry;
+     every 2-star card already says "Finish N s faster for 3 stars" for the replay loop.
+
+GRANDPARENT r6b: 6.8 (Q2 NO = BLOCKER; played the 17:48 refreeze, __qaSteer casual, CDP touch + __qaAdvance 0.1)
+  ROOT CAUSE FOUND FOR MOST OF THIS ROUND (harness, not game): headless Chromium hands a dispatched touchmove to the page on
+     its next animation frame, and a headless frame is ~0.2 s, so every scripted critic steered one loop (0.2-0.4 s) late.
+     Proof: the greedy bot used 37.4 s of the L3 clock in the browser vs 19 s in node; a node model of 0.2 s updates plus a
+     one-loop delay (scratchpad quant.mjs) reproduces the browser numbers (greedy loses, casual median ~57 s). FIXED (QA only,
+     ?qa=1): input.js qaMove + modes.js __qaAdvance apply the last move __qaInput handed out before stepping. After: greedy L3
+     24.5 s, casual L3 58.2 / 41.8 / 43.6 s, in line with node. The r7 brief tells critics to keep that loop order.
+  B1. L3 try 1: "Serve it!" on the sandwich, the pot sat by it ~30 s and never ate it. NOT A GAME BUG: once the order is served
+     a non-cake boss is open at any pot size (logic.js bossOpen returns true when the ticket is open), so the pot never
+     overlapped it: the late stick orbits a target. Replays of the same driver (scratchpad gp3.mjs) won L3 2/2, the node
+     slow-hand model stalls 0/40. The gold boss pointer stays on the boss once the order is done (r6) and the guide trail
+     leads to it after 4 s without progress on L1-L20 (gp4 log: need/food/boss targets show).
+  B2 / P1. L8-L12 too tight for slow hands, +15-20 % time. REJECTED with data: the node slow-hand model (casual, 20 seeds) loses
+     L8 2/20 (wins in 86-114 s of 115), L9 0, L10 0, L11 1, L12 2; the critic's 2-5 s margins came with 0.2-0.4 s of extra
+     input lag. Every retry already adds clock (the critic saw "RETRY +29 s"). Re-measured by the r7 panel on the fixed driver.
+  P2. "Grow a bit more" hint when the boss is under the pot. REJECTED: no size gate exists on a served boss (B1); the cake's
+     tiers are the one size case and "Too big! Eat smaller food" covers early levels.
+  P3. Stars drop to 1 from L7. REJECTED for now: the 2-star rule for slow hands (r6) gives 2 stars at the casual pace; the
+     1-star wins came with the lag. Re-check on r7 numbers.
+  P4. Map pills tight at 390x844. NO CHANGE: layout-test 164073/0, nothing overlaps.
+  P5. Auto-Daily card after L6 shows "Streak 0" with Day 1 lit. FIXED: with no streak the ladder line reads "Start a streak!"
+     (falls back to "Streak 0" only where it does not fit) and the subtitle reads "Day 1" (ui.js ladderTitle, STR.streakStart).
+     Shots 390x844, 360x640, 844x390: fits, 0 errors (scratchpad streak0/).
+
+PLAYABLES CURATOR r6b: 8.4 (Q1-Q3 YES, no blockers; packs clean)
+  1. L4 first try: ~40 s in empty cloth, no "next food" pull. PARTLY HARNESS (same driver lag, the critic flagged it as a
+     driver-lag sample). The nudge exists: on L1-L20 (and after any loss) the gold guide trail draws a dotted route to the next
+     order food after 4 s without order progress, and after 6 s without bites when stuck. FIXED (visibility): while that trail
+     is up, the edge arrows pulse big on every level, not only on L1-10 / L21-24 / L41-44 (ui.js drawArrows).
+  2. L1 tutorial hand covers the pot rim. FIXED: the hand starts 40 px right / 52 px below the pot centre (was 26 / 34) and
+     swipes up beside it. Frames at 390x844 and 844x390: clear of the rim and eyes (scratchpad ghost/sheet2.jpg).
+  3. Day-2 pull for a player who stops at L3. ALREADY THERE: L1-L5 win cards alternate the chest line with "Daily day 2: ..."
+     (r4 G, ui.js tomorrowPill), and the map pill says the same.
+  4. L60 finale card is the boss template. DEFERRED (polish): the alldone "HEAD CHEF!" screen follows it.
+  5. The served tree on 8806 asks Google Fonts. NO CHANGE: only the dev page does; packs ship local fonts (static check and
+     playables-check PASS).
+
+R7 BUILD (frozen 19:09 IST, served on 8807): driver-lag fix, guide-trail arrow pulse, L1 hand offset. After the freeze, not in
+  the r7 build: "Start a streak!" (P5 above). Gates on the working tree: layout-test 164073/0, sim-test 91/0, meta-test 68/0,
+  qa-run boot+l1+modes 16/0 (chromium, firefox, webkit), packs rebuilt (playables then portal, today's ui.js in all 7 zips),
+  playables-check ALL MUST PASS, pg-test ALL PASS (qa/pg-test-r7.txt).
+
+GRANDPARENT r7 (7.5, Q1-Q3 YES, 0 blockers; with the r7 driver fix L1-L12 all won first try, L8 10.8 s, L12 1.4 s left)
+  1. Star wording, two clocks for one target ("Finish 54s faster for 3 stars" beside "0:11 left"). FIXED (ui.js starGoal): the
+     card reads "Finish with 0:53 left for 3 stars" in m:ss, the same clock as the "0:44 left" stat under it. Old "Ns faster"
+     only when the level has no star times. HUD chip "3 stars: m:ss" stays a live countdown (it hits 0 when the third star goes,
+     and the ring notch marks the target on the clock). Shots: scratchpad star3/sheet.jpg (L9 2-star card, 390x844, 360x640, 844x390).
+  2. +15-20 % clock on L8-L12. PARTLY: slow-hand table (30 runs) L8 28/30, L9 30/30, L10 30/30, L11 27/30, L12 27/30. Grace up
+     to 29/30 where it was short: L8 37->43 (T 115->121), L11 43->48 (110->115), L12 37->42 (106->111). slow-hand --set confirms
+     29/30 on each. Grace buys no 3rd star (pace T same); 2-star reads the full clock (r5 rule), so slow-hand 2-stars rose
+     (L12 11 -> 18 of 30). Not +15-20 % across the board: L9/L10 already win 30/30, and the retry clock (mercy) adds time after a loss.
+  3. "You can buy the Rice Cooker!" banner on the win card. NO CHANGE: one line under the rewards, NEXT stays the big button;
+     the curator called it the economy pull in r6b.
+  4. L1 pot hidden by dithered beach balls, "Too big!" over the ticket. NO CHANGE: L1-try1-t1/t11 show the pot clear with its
+     gold rim and eyes; the dithered item in t11 is a pie mid-swallow. No "Too big!" in the saved frames.
+  5. Daily intro after L6: "Streak 0" (fixed after the freeze: "Start a streak!") and NEXT did not say where it goes. FIXED:
+     the intro's gold button reads "NEXT · Level 7" (the level the queue starts; game.js passes next: S.n + 1), plain NEXT as
+     the fallback. Shots: scratchpad nextn/sheet.jpg (real L6 win -> Enter -> intro, 3 sizes).
+  Gates after these: layout-test 164073/0, sim-test 91/0, meta-test 68/0 (re-run after the NEXT label below).
+
+R7B BUILD (a714926, frozen ~19:40 IST, served on 8808): the grandparent r7 fixes above. The curator ran on it.
+
+MOBILE-DESIGNER r7 (7.6, Q1 YES, Q2 YES, Q3 weak; 0 blockers)
+  1. L13-L25 spare-time step: the clock gets tight in Market town. FIXED (levels-data.js): grace up on L13-L25 with the 3-star
+     pace kept (T - grace unchanged). T/grace: L13 96/24, L14 67/17, L15 116/38, L16 94/26, L17 72/23, L18 133/41, L19 108/33,
+     L20 123/38, L21 80/22, L22 100/32, L23 79/27, L24 86/26, L25 123/33. Slow-hand first-try wins (30 runs): 13-16 of 30 on each
+     (were 0-11); slow-hand 3-stars stay 0, so the 3-star pace did not move. verify --write on L13-L25 (qa/verify-r7c-13-25.txt).
+  2. 3rd star feels out of reach. FIXED: the r7b card says "Finish with m:ss left for 3 stars"; a 1-star win off the clock (not a
+     card Freeze) now names the next star instead: "Finish with m:ss left for 2 stars" (game.js data.t2Left, ui.js starGoal).
+  3. Nothing mid-game pulls me to the shop. NO CHANGE: "You can buy the X!" on the win card is a button that opens the shop on
+     that skin; the map pill says the same.
+  4. Week-scale reason to return. DEFERRED (content): Daily streak ladder, Feast and the cookbook are the current return loops.
+  5. Feast does not say what it pays. FIXED: the Feast start card has a payout row, "+5 coins an order · +50 for a new best"
+     with a coin (short form on narrow cards; layout.js feast 'pay' row, ui.js drawFeast).
+
+KID13 r7 (8.4, Q1-Q3 YES, 0 blockers)
+  1. L8 boss far away after the tickets. PARTLY: the r7b L8 grace (T 121) and the pulsing edge arrows while the guide trail is
+     up (00bac1e) were not in the frozen r7 tree. No speed boost: it would move the avg3 bands on all 60 levels.
+  2. Stars stingy. HARNESS: every critic's __qaSteer played the slow hand (the 'average' kind used SLOW_HAND too), while the sim's
+     average bot 3-stars L4-L10 in 87-100 % of runs. __qaSteer(kind, hand) now takes 'normal' (the bot's own hand) or 'slow'
+     (default). Plus the 2-star line on 1-star wins (mobile #2).
+  3. Cold on L21/L30/L41. PARTLY: L21-L25 grace up (mobile #1).
+  4. L8-L12 feel long. HARNESS (slow hand). No change.
+  5. Small things. The chain ribbon tails ran off the win card: FIXED (the ribbon clamps inside the hero, ui.js). "Streak 0":
+     already fixed in 00bac1e. Shop push: exists (#3 above).
+
+PLAYABLES-CURATOR r7b (8.6, Q1-Q3 YES, 0 blockers; "fix landscape and I give 9.0")
+  1. Landscape 844x390: pot at the bottom edge, eyes cut. FIXED: a short landscape phone anchors the pot at 52 % of the play
+     rect (was 60 %, layout.js) and shows 0.85 of the portrait depth (was 0.75, camw.js camLand), so the pot is ~30 % of the height.
+     Ticket panel size NO CHANGE (curator r5 asked for it bigger).
+  2. Landscape map shows only L1-3. FIXED: a view under 400 px of trail opens with the current node at 76 % of its height, so
+     three levels ahead show (ui.js map 'want'). The side buttons stay beside the column.
+  3. "more games" chip tight under the Shop label at 360x640. FIXED: the menu keeps 10 px of air over the web chips (was 2,
+     layout.js webInset). Web build only.
+  4. A fast tap on NEXT skips the star count. FIXED: a tap (or Enter) on NEXT in the card's first 0.5 s finishes the count; the
+     next tap goes on (ui.js). qa-run's tapPrimary taps once more if the card is still up.
+  5. YouTube SDK only. NO CHANGE (needed for Playables; packs ship local fonts).
+
+R7C BUILD: commit 8d08078 (wip/slurp-pot), frozen 20:07 IST on 8809. Gates: layout-test 164617/0, sim-test 91/0, meta-test 68/0,
+  verify L13-L25 13/13 PASS, qa-run boot,l1,modes 16 PASS / 0 FAIL (chromium, firefox, webkit), packs rebuilt 20:08 (7 zips, r7c ui.js
+  in all), playables-check ALL MUST PASS, pg-test ALL PASS (21 ok). Preview: https://slurp-pot-preview.onemoretry-games.pages.dev
+
+VIRAL-MARKETER r7c (8.0, was 8.3 on r6; Q1-Q3 YES, 0 blockers; "re-cut to 15 s + a share button and I give 8.7")
+  1. Clip 20.5 s, payoff thin (cake bite ~2 s, 2.5 s static end card). NEXT WEEK: re-cut to ~15 s (trim 8-14 s by ~5 s), hold the
+     cake bite slowed 1 s with a "135 EATEN" stamp, end card 1.5 s, keep the loop seam. modes.js record timeline + ffmpeg cut.
+  2. Nothing after the hook asks the viewer to react. NEXT WEEK: "Beat 135?" ghost count over the last 3 s of play.
+  3. End card bottom third empty. NEXT WEEK: a 2-line score challenge there.
+  4. No share loop in the game, the caption asks for a ticket screenshot. NEXT WEEK (feature): "Share my count" on the win card
+     (web build only: navigator.share with a ticket image, download fallback; Playables and portal packs hide it). Also
+     answers mobile r7 Q3 (social pull).
+  5. L1-L6 gentle on the normal hand. NO CHANGE: the slow-hand critics lose there; the first town is the on-ramp.
+
+ART-DIRECTOR r7c (8.0; Q1-Q3 YES; claimed 1 blocker, landscape title/map; "rework the HUD ticket and I give 8.6")
+  1. HUD top-left crowded at 360x640 on 3-4 food orders (s58-01, t4-05), clock over the ticket rail, star pill against the clock.
+     PARTLY (r7d): the folded 4-food strip's counts never go under 14 px (ui.js drawCompactRow, was 12.5). SUNDAY: keep the
+     ticket's brass rail clear of the clock (8-10 px air, the grandparent r7c #4 asks the same) and try the star pill under the
+     progress bar's right end; re-run layout-test and the 360x640 / 390x844 / 844x390 frames.
+  2. Landscape 844x390 title and map. Title: NOT A BLOCKER, the r7c title is whole (logo and PLAY in view; the critic's frame
+     was the pre-fix tree). Map: FIXED (r7d): a town ribbon at least half in view slides fully inside it (sticky edge), so the
+     Picnic Park banner is never cut; the view still opens three levels ahead (r7c).
+  3. Pot ~15 % of width mid-zoom. NO CHANGE tonight: the r6 closer early camera and the gold ring are the answer so far; NEXT
+     WEEK try a stronger rim glow on 360x640 only.
+  4. Locked boosters read as debris. NEXT WEEK: a docked tray with a backing plate, or hide boosters until affordable.
+  5. Store cover is a close-up hero the game never shows; desktop map margins empty. NEXT WEEK: one in-game high-angle cover
+     (big pot, chain counter); fill the desktop map margins with town art.
+
+GRANDPARENT r7c (7.0 PROVISIONAL, covered L1-L4 only; Q1-Q3 YES, Q3 tentative; 0 blockers; "3 stars reachable on L2-L5 -> 8.0")
+  1. 3 stars out of reach for a slow hand on L2-L5. FIXED on L2-L3 (r7d, levels-data.js): grace lowered with the clock kept
+     (L2 30 -> 16, L3 41 -> 18; T 75 and 90 unchanged), so the win odds do not move and only the 3-star line comes closer.
+     Slow-hand model (30 runs): L2 3-stars 0 -> 10 of 30, L3 0 -> 6 of 30, wins 30/30 both. Normal hand already 3-stars both.
+     L4-L5 NO CHANGE: verify holds casual 3-stars at 50 % or less there (r3 band), and casual is already 41 % on L4.
+  2. L1 has no clock but gives 3 stars; "Chain x35!" unexplained. NO CHANGE: L1 is the untimed welcome (r4); the L2 card's
+     "Finish with m:ss left for 3 stars" teaches the clock. NEXT WEEK: a one-line chain label on the first win card.
+  3. L4 at the edge for a slow hand. NO CHANGE with data: slow-hand model L4 30/30 wins (20/20 in the A/B); the critic's own
+     L4 run won with 43 s left.
+  4. Clock tight against the order card at 390x844. SUNDAY with art director #1.
+  5. Title icon labels 12-13 px; locked Daily/Feast say only "L6"/"L12". NEXT WEEK: bigger labels, "Daily at level 6" in words.
+
+R7D WORKING TREE (after the r7c freeze; not yet played by a critic)
+  a. Boss walk (consts.js BOSS_WALK, logic.js step 13): when the LAST ticket's boss padlock pops, the clock is floored at
+     the walk to the boss (distance / pot speed x 1.3 + 4 s). The unlock ribbon names it: "BOSS UNLOCKED! +5 s" (ui.js).
+     Answers kid13 r7 "SO CLOSE with every ticket done". A/B, 20 seeds (scratchpad bw.mjs, floor off vs on):
+     L2-L30 slow hand wins 925 -> 972 of the runs, done-but-lost 88 -> 41 (L13-L25 slow +1 to +6 wins each, L15 9 -> 15);
+     normal hand identical (no floor fired). L31-L59 slow hand wins 1 -> 9, done-but-lost 36 -> 28 (capped at L59).
+     Stars move only on the slow hand (L15 0.55 -> 0.85 average), so the 3-star pace is untouched.
+     Checked in the browser: L8 padlock at 1.15 s -> 6.15 s, ribbon "+5 s" drawn (r7d/p360-bosstime6.png).
+  b. L26-L30 grace (the r7c method, pace kept): slow-hand first-try wins were 0 of 30 on each. Grace from slow-hand --need 14:
+     L26 T 60 -> 89 (g 29), L27 77 -> 121 (44), L28 87 -> 129 (42), L29 72 -> 111 (39), L30 68 -> 117 (49).
+     Slow-hand wins now 20, 22, 16, 17, 22 of 30; 3-stars stay 0 (pace unchanged). Verify notes below.
+     NEXT WEEK: L31-L60 still 0 of 20 slow-hand wins on nearly every level (bw/b.txt); same method, one town at a time.
+  c. Map town ribbon sticky edge (art director r7c #2).
+  d. Strip counts 14 px minimum (art director r7c #1, partly).
+  e. L2-L3 3-star line (grandparent r7c #1).
+
+MOBILE-DESIGNER r7c (8.1, was 7.6; Q1-Q3 YES, Q3 narrow; 0 blockers; normal hand L1-L25 twice, slow hand L12-L23;
+  "tighten L14-L25 for the average hand -> 8.9, plus economy and a second return pull -> 9.2")
+  1. L12-L25 flat for the average hand: 0 losses in 28 tries, 2 stars on 12 of 14, 30-70 s left. NOT FOR SUNDAY (design
+     call for next week): one clock cannot give the average hand a 1-in-4 loss and the slow hand a first-try win (the slow
+     hand is 20-40 s behind; the grandparent and mobile r7 panels asked for the opposite). NEXT WEEK: marked HARD levels
+     (L16, L19, L22, L25 and the existing peaks) with a red badge on the map and the start card, a pace cut for every hand
+     and a bigger payout; the mercy clock (+N s on retry) carries the slow hand on try 2. Measure average-hand first-try
+     losses (target ~25 % on HARD only) and slow-hand try-2 wins before shipping.
+  2. Coins pile up after L20 (about 2,000 at L23), boosters are gifted so their prices never matter, Gild is paint only.
+     NEXT WEEK: a pre-level booster pick (40 coins), 2-3 pots behind a star gate as well as coins, a small Gild perk.
+  3. One return pull (the streak). NEXT WEEK: a free map chest that fills in 4 h with a ring countdown; a weekly star race
+     or limited pot with days left on the map.
+  4. Feast pays half a level per run after the first best, end card has no Map button. NEXT WEEK: payout that scales with
+     the order count, a ghost best line, and Map beside Again/Title.
+  5. Daily win is two cards; the order card does not say which star was missed. SUNDAY (small): name the missed star line
+     on the Daily order card ("missed: eat 20 cherries"). NEXT WEEK: merge the order and ladder cards.
+  Best things it named: the star line in seconds and the "so close" gap (1 s short on L20), the win/fail cards, the return
+  scaffolding (streak expiry, ladder preview, map pills).
+
+PANEL AFTER r7c (latest per critic): curator 8.6 (r7b), kid13 8.4 (r7), mobile 8.1, viral 8.0, art 8.0, grandparent 7.0
+  (provisional, L1-L4). Mean 8.02. Every critic Q1-Q3 YES, 0 open blockers. GATE NOT MET (needs every critic >= 8 and mean
+  >= 9). Sunday: the one last fix round (SUNDAY items above: HUD rail and star pill, Daily missed-star line), r7d + Sunday
+  build to a full panel; the predicted after-one-change scores average about 8.7, so plan for one more week on wip.
+
+SUNDAY 11-08
+- FIXED ART-DIRECTOR r7c #1 / MOBILE-DESIGNER r7c #5 (HUD clock vs ticket rail, star pill): the brass rail now ends with the ticket and the clock stands clear of it. Rail-to-clock gap: 9.0 px at 360x640, 10.0 px at 390x844, 9.0 px at 844x390 and 667x375, 16.0 px at 1440x900. The "3 stars" pill hangs under the progress bar's right end in portrait (landscape keeps it under the ticket). layout-test has the new rail gap (>= 8) and pill-under-bar checks: 0 failures. Evidence: studio/2026-11-08/fix7/L20-hud-{360x640,390x844,844x390,1440x900}.png (4-food order), L19-hud-*.png (3-food).
+- FIXED GRANDPARENT r7c #4 (Daily card names the missed star): a Daily win short of 3 stars reads "missed: eat 20 cherries" (STR.dMissed, goal row, same size as the other goal lines). Evidence: studio/2026-11-08/fix7/L20-daily-win-missed-{390x844,360x640}.png.

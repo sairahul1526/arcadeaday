@@ -97,7 +97,7 @@ export const STR = {
   later: 'Later', gild: 'Gild', gildSet: '{skin} · {n}/{of} gilded', gilded: 'Gilded', wear: 'Wear', wearing: 'Wearing', tapToBuy: 'Tap again to buy', streak7: '7-day streak',
   lidName: 'Streak Lid', full: 'Full', boosters: 'Boosters', pots: 'Pots', buy: 'Buy', locked: 'Locked',
   playFreeA: 'Play free →', playFreeB: 'no download', ogTag: 'Slurp it all. Fill the order.',
-  dServe: 'Serve the order', dEat: 'Eat {n} {name}', dChain: 'Chain ×{n}', dBig: '{n} big bites',
+  dServe: 'Serve the order', dMissed: 'missed: {t}', dEat: 'Eat {n} {name}', dChain: 'Chain ×{n}', dBig: '{n} big bites',
   dLeft: 'Finish with {p}% time', dNoBumps: 'No bumps', dNoBoost: 'No boosters', dSizzle: '{n} sizzles',
   stCake: 'Top tier first!', stTruck: 'Chase the truck!', stGulls: 'Beat the gulls!', stTwo: 'Two orders today!',
   stBelt: 'Ride the belts', stStack: 'Easy on stacks!', stRoll: 'Catch the rollers', stSimmer: 'Lid on! Go around',
@@ -1002,7 +1002,7 @@ function compactK(w, t) {
 }
 function compactBase() {
   const H = L.hud;
-  if (!H._cb) H._cb = { th: H.ticket.h, my: H.meter.y, cy: H.callout.y, sy: H.strip ? H.strip.y : 0 };
+  if (!H._cb) H._cb = { th: H.ticket.h, my: H.meter.y, cy: H.callout.y, sy: H.strip ? H.strip.y : 0, sty: H.star ? H.star.y : 0 };
   return H._cb;
 }
 /** Folded ticket height and how far everything below it moves up. */
@@ -1016,10 +1016,11 @@ function compactGeo() {
 function applyCompact(k) {
   const H = L.hud; if (!H.ticket) return;
   const b = compactBase();
-  if (k <= 0) { H.ticket.h = b.th; H.meter.y = b.my; H.callout.y = b.cy; if (H.strip) H.strip.y = b.sy; return; }
+  if (k <= 0) { H.ticket.h = b.th; H.meter.y = b.my; H.callout.y = b.cy; if (H.strip) H.strip.y = b.sy; if (H.star) H.star.y = b.sty; return; }
   const gm = compactGeo();
   H.ticket.h = b.th + (gm.thC - b.th) * k;
   H.meter.y = b.my - gm.dy * k; H.callout.y = b.cy - gm.dy * k; if (H.strip) H.strip.y = b.sy - gm.dy * k;
+  if (H.star && L.aspect !== 'landscape') H.star.y = b.sty - gm.dy * k;
 }
 /** The one-row strip: icon ring + "got/need" per line. A line that just ticked pops big for 0.6 s and wears the green count + tick. */
 function drawCompactRow(w, t, r, cy) {
@@ -1229,7 +1230,8 @@ function drawStarChip(w, r) {
   // the chip starts right of the ticket (its counts sit on the right edge) and ends inside the safe right edge; the meter row
   //   below already clears it (layout.js hud.star, r6 fix)
   const S = L.hud.star;
-  const x = Math.min(Math.max(r.x + r.w / 2 - w2 / 2, S.lo), S.hi - w2), y = S.y;
+  //   11-08 Sun: portrait pins it to the right end of the progress bar (under it); landscape keeps hanging under the clock
+  const x = L.aspect !== 'landscape' ? S.hi - w2 : Math.min(Math.max(r.x + r.w / 2 - w2 / 2, S.lo), S.hi - w2), y = S.y;
   g.save();
   rr(x, y, w2, h, h / 2); g.fillStyle = left <= 5 ? '#FFE3B0' : C.paper; g.fill(); g.lineWidth = Math.max(1.5, 1.6 * u); g.strokeStyle = C.ink; g.stroke();
   txt(label, x + w2 / 2, y + h / 2 + 0.5, fsz, { f: FB, col: left <= 5 ? C.stamp : C.ink });
@@ -2598,6 +2600,13 @@ function nextUp(d, ns) {
 }
 /** What the third star wants, or null on a card it does not apply to: L1 always pays 3, Daily stars come from its star lines, Feast has none. */
 function starGoal(d, w) {
+  // 11-08 Sun (art director / grandparent r7c): a Daily win short of 3 stars names the first star line it missed, "missed: eat 20 cherries".
+  if (d.kind === 'daily' && (d.stars | 0) < 3 && Array.isArray(d.lines) && d.mask != null) {
+    const i = d.lines.findIndex((l, k) => l && ((d.mask >> k) & 1) === 0), tx = i >= 0 ? lineText(d.lines[i]) : '';
+    if (!tx) return null;
+    const t = tx.charAt(0).toLowerCase() + tx.slice(1), s = fmt(STR.dMissed, { t });
+    return { text: s, short: s, fill: clamp((d.stars | 0) / 3, 0.04, 0.96) };
+  }
   if ((d.stars | 0) >= 3 || (d.kind || 'level') !== 'level' || (d.n | 0) === 1) return null;
   const st = w && LG && LG.starTimes ? safe(() => LG.starTimes(w), null) : null, t3 = st ? st.t3 : 0;
   let need = +d.t3Left || 0;
