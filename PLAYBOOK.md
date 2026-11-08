@@ -52,7 +52,7 @@ Every game must have all of these:
   - One palette and style from an art bible.
   - No flat empty backgrounds. Every screen should look like a store screenshot, and the game should read at thumbnail size.
 - **Feel:**
-  - Juice on every action: anticipation, squash/stretch, particles, hit-stop, sound, and screen shake used sparingly.
+  - Juice on every action: anticipation, squash/stretch, particles, hit-stop, sound, and screen shake used sparingly. Sized by the tiers in §6 **Juice rules**.
   - 60 fps.
 - **Audio:** a music loop per world/theme plus layered SFX. Use procedural Web Audio, or small local audio files.
 - **UI:**
@@ -195,6 +195,25 @@ Commands:
 - `gen --prompt … --out x.webp [--cutout] [--ref a.png] [--aspect 16:9] [--max 512]`: one-offs.
 - `cutout in.png out.png`: removes the background (Recraft).
 - `optimize in.png out.webp --max 256`: sips plus cwebp, keeping alpha.
+- `python3 tools/art/check.py tools/<slug>/art.json [--only a,b] [--dark]`: the art QA (added 2026-11-08). Run it after every batch, before any art is wired in.
+  - It reads the spec the way kie.mjs does and checks each shipped webp.
+  - **FAIL** (exit 1; regenerate with `batch --force --only <id>`):
+    - `missing`
+    - `blank`: a flat image, meaning the generation failed
+    - `no-alpha`: a cutout with nothing transparent, so the background got baked in
+    - `bg-left`: opaque corners, so the cutout kept some background
+  - **WARN** (look at it on the sheet):
+    - `size`: long side or aspect off the spec
+    - `edge`: subject touching the image edge, so the generator cropped it
+    - `small`: subject spanning under half the canvas
+    - `halo`: a light fringe lighter than the subject's own edge, which shows on dark scenes
+    - `alpha`: transparency on a non-cutout image
+    - `heavy`: over the bytes-per-pixel budget
+    - `jump`: an `x-happy`/`x-sad`/`x-idle` state pair whose subject height or feet differ, so the swap pops
+    - the `art/` folder over 3 MB
+    - files in the folder that no spec makes (they still ship)
+  - It writes a contact sheet, `studio/art-check/<slug>.png`: every image on a checkerboard with its id, size and KB, with a red frame for FAIL and amber for WARN. Look at the sheet, not 80 files one at a time. Pass `--dark` for games with dark scenes, since halos only show there.
+  - Calibrated on Slurp Pot (88 images) and Knot Kitty (54): 0 FAIL, 1 true WARN each. Synthetic tests with a baked background, a blank image, a white fringe, a cropped subject and a mismatched state pair all fire.
 
 Defaults:
 - model `nano-banana-2` at 1K, with `--ref` image inputs for style consistency
@@ -213,7 +232,7 @@ Rules:
   - preload behind the loading screen, then call `firstFrameReady` once the first screen's art is decoded
 - **Same-origin only:** load images by relative path (`art/x.webp`). Playables' CSP allows `img-src 'self'`, so never hot-link kie URLs.
 - **Portal media** (cover, icon, banner at each portal's sizes): generate them from the same refs into `dist/portals/<slug>/media/`. The cover is the most important image we make, because it decides clicks on every portal. Make 3 options and have the viral-marketer critic pick.
-- **Review:** look at every generated image before it's wired in. Regenerate anything off-model, with extra fingers or limbs, garbled text, or the wrong style. The art-direction QA lane (G10) and the art-director critic judge the final art.
+- **Review:** run `tools/art/check.py` and clear every FAIL. Then look at every generated image on its contact sheet before it's wired in. Regenerate anything off-model, with extra fingers or limbs, garbled text, or the wrong style. The art-direction QA lane (G10) and the art-director critic judge the final art.
 - No text inside generated images. The UI renders text, so it's crisp and translatable.
 
 ## 4. The studio pipeline
@@ -282,7 +301,7 @@ The 10 QA swarm lanes (stage G):
    - input spam and multi-touch
    - rapid resize, pause/resume spam
    - corrupt or old saves
-10. **Art direction critique:** compares screenshots to the art bible and the §1 bar.
+10. **Art direction critique:** compares screenshots to the art bible and the §1 bar. Start from a fresh `tools/art/check.py` run: zero FAIL, and every WARN either fixed or explained.
 
 **Blockers.** Any one of these blocks shipping:
 - a console error
@@ -352,6 +371,50 @@ Virality and fun come first: never pick a weaker game because its keyword is big
 - **QA hooks** (`?qa=1`):
   - `window.__qa()` returns state (including `t` = game time).
   - Add level-skip and solver hooks, and `__qaAhead(sec)` for games where an object keeps moving after the player lets go.
+- **Juice rules** (added 2026-11-08, adapted from the game-feel skill in gamedev-skills/awesome-gamedev-agent-skills):
+  - **Every event gets a tier.** The GDD lists the game's events and puts each in one tier, so the whole game stays in proportion. If everything is large, nothing reads as big.
+
+    | Tier | Events | Shake (trauma) | Freeze | Particles | Extra |
+    |---|---|---|---|---|---|
+    | small | tap, pickup, coin, UI press | none | none | 0–4 | sound + a pop |
+    | medium | a match, a hit, a combo step, a goal tick | 0.3–0.5 | 40–60 ms | 6–12 | a 1–2 frame flash |
+    | large | boss down, level won, new best, big combo | 0.7–1.0 | 100–150 ms | 20–40 | flash + zoom punch + number pop |
+  - **Shake is trauma squared.** One `trauma` value from 0 to 1:
+    - events add to it and never reset it
+    - it decays about 1.2 per second
+    - the offset is `max × trauma² × smooth noise`, so small hits barely move the screen and big ones punch
+    - noise means summed sines; a fresh `Math.random()` every frame buzzes instead of shaking
+    - max offset 8–16 px at 1080 scale, so scale it by the canvas size
+    - it moves only the world's draw transform: never game positions, hitboxes, the input mapping or the HUD
+  - **Freeze frames** (hit-stop):
+    - count down on the frame `dt`, the same clock record mode drives, never `setTimeout`, so `?record=1` stays deterministic
+    - skip sim updates while frozen, but keep rendering and reading input
+    - overlapping freezes take the longer end and never cut each other short
+    - never freeze on routine or continuous actions
+  - **Pops ease, never linear:**
+    - squash on the event (about 1.25 × 0.8)
+    - spring back with easeOutBack over 150–200 ms
+    - things coming to rest use easeOutCubic
+    - juice always returns to rest; a scale or offset that stays changed stops reading as feedback
+
+    ```js
+    let trauma = 0, st = 0, freeze = 0;
+    const kick = a => { trauma = Math.min(1, trauma + a); };       // medium 0.4, large 0.8
+    const hitStop = s => { freeze = Math.max(freeze, s); };          // medium 0.05, large 0.12
+    function frame(dt) {
+      if (freeze > 0) freeze -= dt; else update(dt);                  // still draw and read input
+      trauma = Math.max(0, trauma - 1.2 * dt); st += dt;
+      const k = trauma * trauma * (reduceMotion ? 0.3 : 1) * (H / 1080);
+      const n = (a, b) => 0.6 * Math.sin(st * a) + 0.4 * Math.sin(st * b);
+      ctx.save(); ctx.translate(12 * k * n(37, 71), 8 * k * n(43, 89)); drawWorld(); ctx.restore();
+      drawHud();                                                       // the HUD never shakes
+    }
+    ```
+  - **Accessibility:**
+    - honour `prefers-reduced-motion`: shake ×0.3, no zoom punch, no roll
+    - at most 3 large flashes in any one second (WCAG 2.3.1)
+    - if the game shakes, the settings panel gets a shake on/off toggle
+  - **QA check:** fire the biggest event 5 times in one second. Shake stays bounded (trauma clamps at 1), freezes don't stack past 150 ms, nothing stays scaled or offset afterwards, and input still lands.
 
 ## 7. SEO page (games.json)
 Copy an existing entry and fill every field. The build refuses missing ones.
