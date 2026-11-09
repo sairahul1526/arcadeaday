@@ -252,7 +252,7 @@ function clear(w, x, z, a) {
 /** End-of-run summary for meta.feastResult and the Feast end card. */
 export function feastResult(fs) {
   const w = fs.w;
-  const chainBest = w ? Math.max(w.chain.best, w.chain.n) : 0;
+  const chainBest = w ? Math.max(w.chain.best, w.chain.g | 0) : 0;
   return { tickets: fs.served, times: fs.times.slice(0, 99), bites: w ? w.stats.bites : 0, chainBest, courses: fs.course };
 }
 

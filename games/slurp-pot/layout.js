@@ -415,7 +415,9 @@ export function cardLayout(L, name, opts = {}) {
       { id: 'stars', h: Math.max(44, U(66)), min: 40, gap },
       // Friday fix 2, U1: what the third star wants, in words, with a small bar.
       ...(opts.goal ? [{ id: 'goal', h: Math.max(fs.small * 2.9, U(46)), min: fs.small * 2.5, gap: gap * 0.5 }] : []),
-      { id: 'stats', h: Math.max(fs.stat * 1.6, U(34)), min: fs.stat * 1.45, gap },
+      // 11-09 Mon (FIX-LIST-7 D6, art-director r8 "a 70 px dead gap between the stars and the coin line on the L1 card"): a card with
+      //   no stat to show (L1 hides the clock, and a brag ribbon carries the chain) drops the row instead of leaving it empty.
+      ...(opts.stats === false ? [] : [{ id: 'stats', h: Math.max(fs.stat * 1.6, U(34)), min: fs.stat * 1.45, gap }]),
       { id: 'coins', h: Math.max(fs.stat * 1.7, U(40)), min: fs.stat * 1.5, gap: gap * 0.5 },
       ...(opts.strip && !twoCol ? [stripRow] : []),
       // Friday fix 2, U3: an affordable pot is a real button (44 px), a pot still out of reach is one line of text.

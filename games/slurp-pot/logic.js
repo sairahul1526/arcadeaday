@@ -10,7 +10,7 @@
 // nobody else reads it). Tickets carry three extra fields: lines[].kid (local kind id), open (padlock
 // popped, one-way) and bossKind (string id of the boss item).
 import {
-  DT, R0, R_MAX, SIZEUP_MUL, G, K_ING, BLOCK_K, TIP_T, CHAIN_WIN, SIZZLE_AT, SIZZLE_EVERY, SIZZLE_CAP,
+  DT, R0, R_MAX, SIZEUP_MUL, G, K_ING, BLOCK_K, TIP_T, CHAIN_WIN, CHAIN_GULP, SIZZLE_AT, SIZZLE_EVERY, SIZZLE_CAP,
   STAR3, STAR2, V_BASE, V_PER_R, V_CAP, A_ACC, A_BRAKE, BUMP_V, BUMP_CD, DOOM_EVERY, DOOM_GRACE, LOW_TIME,
   CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS, BOSS_WALK, DONE_HOLD,
 } from './consts.js';
@@ -255,7 +255,7 @@ export function createWorld(level, { mode = 'level', boosters = {}, recordPath =
       px: +sp.x, pz: +sp.z, pr: r0, sizeUpR },
     n, ix, iz, ia, ih, ik, ipx, ipz, kind, st, tp, flags, fits, glow,
     tickets, ti: 0,
-    chain: { n: 0, last: -9, best: 0 }, sizzle: 0,
+    chain: { n: 0, last: -9, best: 0, g: 0, gl: -9, gNew: false }, sizzle: 0,
     lanes, belts, gulls, nest: { x: L.roost ? +L.roost.x : 0, z: L.roost ? +L.roost.z : 0, slots: [] },
     truck, cake,
     boost: { magnet: false, freeze: false, mega: false }, freezeAdded: 0,
@@ -749,10 +749,7 @@ export function step(w, inp, dt) {
   // 10 fits for every alive item (+ SOLID bit and ingredient glow for render)
   markFits(w);
   // 11 swallow starts (growth, ingredients, chain, sizzle, sizeUp, Simmer refusal/shove/boil)
-  if (w.chain.n > 0 && t - w.chain.last > CHAIN_WIN + 1e-9) {
-    if (w.chain.n > w.chain.best) w.chain.best = w.chain.n;
-    ev.push({ type: 'chainEnd', n: w.chain.n }); w.chain.n = 0;
-  }
+  if (w.chain.n > 0 && t - w.chain.last > CHAIN_WIN + 1e-9) endChain(w);
   swallowPass(w);
   // 12 tip progress → despawn
   const bossDone = tipPass(w, dt);
@@ -778,7 +775,7 @@ export function step(w, inp, dt) {
       if (w.ti >= w.tickets.length - 1) {
         if (w.mode === 'feast') { _.courseEnd = true; ev.push({ type: 'courseDone', ti: w.ti }); return; }
         _.finalBite = true; _.biteT = t; _.biteTLeft = w.timed ? w.tLeft : 0; w.stars = starsFor(w);
-        if (w.chain.n > w.chain.best) w.chain.best = w.chain.n;
+        if (w.chain.g > w.chain.best) w.chain.best = w.chain.g;
         w.result = 'win';
         ev.push({ type: 'win', stars: w.stars, tLeft: _.biteTLeft, chainBest: w.chain.best });
         return;
@@ -797,7 +794,7 @@ export function step(w, inp, dt) {
       return;
     }
     if (k >= w.tickets.length - 1) {
-      if (w.chain.n > w.chain.best) w.chain.best = w.chain.n;
+      if (w.chain.g > w.chain.best) w.chain.best = w.chain.g;
       w.result = 'win';
       if (!w.stars) w.stars = starsFor(w);
       ev.push({ type: 'win', stars: w.stars, tLeft: _.biteTLeft, chainBest: w.chain.best });
@@ -878,12 +875,12 @@ function shove(w, i, dx, dz, d2, lim) {
 // mass, no bar, no recipe credit. It burns HOT_SECS off the clock and ends the chain. The clock floors at 0.1 s so a chili
 // never fails the run by itself, and it cannot touch the stars after the final bite (swallowPass stops at _.finalBite).
 function hotBite(w, i) {
-  const _ = w._, C = w.chain, ev = w.events;
+  const _ = w._, ev = w.events;
   w.st[i] = 1; w.tp[i] = 0; _.sx[i] = w.ix[i]; _.sz[i] = w.iz[i];
   w.fits[i] = 0; w.glow[i] = 0;
   w.stats.hot++;
   if (w.timed) { const t = w.tLeft - HOT_SECS; w.tLeft = t > 0.1 ? t : 0.1; }
-  if (C.n > 0) { if (C.n > C.best) C.best = C.n; ev.push({ type: 'chainEnd', n: C.n }); C.n = 0; }
+  endChain(w);
   ev.push({ type: 'hot', i, x: w.ix[i], z: w.iz[i], add: -HOT_SECS });
 }
 
@@ -928,12 +925,26 @@ function swallow(w, i, boss) {
   chainBeats(w);
 }
 
+// DECISION (11-09 Mon, FIX-LIST-7 E1, kid13 r8 "Chain x43 on L1, x56 on L7 makes the number meaningless as a brag"): the
+// chain the player sees (C.g: the badge, chainEnd, 'chain' pops, best chain, the daily chain line) counts gulps, at most
+// one per CHAIN_GULP s, so a pile swept in one pass is one gulp, not twelve. C.n stays the raw bite run and still drives
+// the sizzle (steam only, no number on screen), so the clock and every bot gate are unchanged.
 function chainBite(w, t) {
   const C = w.chain;
-  C.n = C.n > 0 && t - C.last <= CHAIN_WIN + 1e-9 ? C.n + 1 : 1;
+  if (C.n > 0 && t - C.last <= CHAIN_WIN + 1e-9) {
+    C.n++;
+    C.gNew = t - C.gl >= CHAIN_GULP - 1e-9;
+    if (C.gNew) { C.g++; C.gl = t; }
+  } else { C.n = 1; C.g = 1; C.gl = t; C.gNew = true; }
   C.last = t;
-  if (C.n > C.best) C.best = C.n;
+  if (C.g > C.best) C.best = C.g;
   return C;
+}
+
+function endChain(w) {
+  const C = w.chain;
+  if (C.n > 0) { if (C.g > C.best) C.best = C.g; w.events.push({ type: 'chainEnd', n: C.g }); }
+  C.n = 0; C.g = 0;
 }
 
 // DECISION (cake, §4.5 L53): a non-final tier bite is its own boss bite: the cake item stays (st 0), growth
@@ -970,7 +981,7 @@ function credit(w, ref, out) {
 
 function chainBeats(w) {
   const C = w.chain, ev = w.events, _ = w._;
-  if (C.n % 5 === 0) ev.push({ type: 'chain', n: C.n });
+  if (C.gNew && C.g % 5 === 0) ev.push({ type: 'chain', n: C.g });
   if (w.timed && !_.finalBite && (C.n === SIZZLE_AT || (C.n > SIZZLE_AT && (C.n - SIZZLE_AT) % SIZZLE_EVERY === 0))) {
     let add = _.sizzleCap - w.sizzle;
     if (add > 1) add = 1;
@@ -980,7 +991,7 @@ function chainBeats(w) {
 
 function fail(w, why) {
   w.result = why; w.stars = 0;
-  if (w.chain.n > w.chain.best) w.chain.best = w.chain.n;
+  if (w.chain.g > w.chain.best) w.chain.best = w.chain.g;
   w.events.push({ type: 'fail', why, progress: progress(w), missing: missing(w) });
 }
 
@@ -1139,8 +1150,7 @@ export function loadCourse(w, level) {
   q.gullEvery = nw._.gullEvery;
   for (const g of w.gulls) g.next += w.tStart === null ? 0 : w.t - w.tStart;   // gull clock restarts per course
   w._ = q; w.cracked = q.stackLost;
-  const C = w.chain;
-  if (C.n > 0) { if (C.n > C.best) C.best = C.n; w.events.push({ type: 'chainEnd', n: C.n }); C.n = 0; }
+  endChain(w);
   return w;
 }
 
@@ -1182,7 +1192,7 @@ export function snapshot(w) {
     r: P.r, rEff: P.rEff, cap: P.cap, r0: P.r0, x: P.x, z: P.z, vx: P.vx, vz: P.vz, step: P.step,
     needR: b >= 0 ? needR(w._.a[b]) : 0, bossState: b >= 0 ? bossState(w, b) : 'open',
     ti: w.ti, tickets: w.tickets.map(tk => ({ done: tk.done, open: tk.open, boss: tk.boss, lines: tk.lines.map(l => ({ kind: l.kind, need: l.need, got: l.got })) })),
-    chain: { n: w.chain.n, best: w.chain.best }, sizzle: w.sizzle, freezeAdded: w.freezeAdded,
+    chain: { n: w.chain.n, g: w.chain.g, best: w.chain.best }, sizzle: w.sizzle, freezeAdded: w.freezeAdded,
     boost: { ...w.boost }, megaT: P.megaT, magnetT: P.magnetT, boilT: P.boilT,
     items: w.n, alive, tipping, progress: progress(w), bar: sizeBar(w), doomed: doomed(w), stats: { ...w.stats },
     lid: w.cap, boil: w.boil, course: w.course,

@@ -276,7 +276,11 @@ console.log('boss nudge, sizzle, two courses');
   for (let s = 0; s < 150 && !w.result; s++) { L.step(w, goDown(), DT); ev2.push(...w.events.splice(0)); }
   const sz = ev2.filter(e => e.type === 'sizzle');
   ok(sz.length >= 1 && Math.abs(w.sizzle - 1.2) < 1e-9 && sz[sz.length - 1].add < 1, 'sizzle +1 s at chain 10, capped at 0.10·T', `adds=${sz.map(e => e.add.toFixed(2)).join(',')} chainBest=${w.chain.best}`);
-  ok(ev2.some(e => e.type === 'chain' && e.n === 10), 'chain 10 beat');
+  // E1 (11-09): the beat and best chain count gulps (one per CHAIN_GULP s), so a pea line swept in 2.5 s is a short chain
+  //   even though its 10th raw bite still pays the sizzle above.
+  const gulps = ev2.filter(e => e.type === 'chain').map(e => e.n);
+  ok(gulps.length >= 1 && gulps.every(n => n % 5 === 0) && w.chain.best >= 5 && w.chain.best < ev2.filter(e => e.type === 'bite').length,
+    'chain beat every 5 gulps, best chain counts gulps not bites', `beats=${gulps.join(',')} best=${w.chain.best} bites=${ev2.filter(e => e.type === 'bite').length}`);
   // two courses: course 1 boss → courseDone, ticket 2 → win; a course-2 ingredient eaten early is banked
   const its = [ing('corn', 0, 4.6, 0.24), ing('tomato', 0, 4.0, 0.15), boss('boss-a', 0, 2.8, 0.25), item('cheese', 0, 1.8, 0.2), item('cheese', 0, 1.2, 0.2),
     boss('boss-b', 0, -3.0, 0.33), item('cheese', 0, 0.6, 0.2), item('cheese', 0, 0, 0.2), item('cheese', 0, -0.6, 0.2)];

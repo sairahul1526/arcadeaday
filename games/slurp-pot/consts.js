@@ -7,7 +7,7 @@ export const R0_VAR = [0.30, 0.45, 0.60];               // from L11, non-boss no
 export const SIZEUP_MUL = 1.25;                         // w.pot.sizeUpR[k] = r0 × 1.25^k, built in createWorld by repeated multiplication (§3.3)
 export const G = 0.24, K_ING = 0.25, K_WALL = 0.6, BLOCK_K = 0.5;
 export const SWALLOW_IN = 0.25, TIP_T = 0.5;            // d < rEff − 0.25a ; tip duration (sim s)
-export const CHAIN_WIN = 0.7, SIZZLE_AT = 10, SIZZLE_EVERY = 5, SIZZLE_CAP = 0.10;
+export const CHAIN_WIN = 0.7, CHAIN_GULP = 0.3, SIZZLE_AT = 10, SIZZLE_EVERY = 5, SIZZLE_CAP = 0.10;
 export const STAR3 = 0.35, STAR2 = 0.15;
 export const TAU_ACC = 0.060, TAU_BRAKE = 0.045, V_BASE = 2.5, V_PER_R = 1.2, V_CAP = 6.0;
 // Precomputed at module load so logic.step uses only + − × ÷ sqrt floor min max abs (no exp/log/pow in step):

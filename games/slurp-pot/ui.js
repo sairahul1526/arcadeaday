@@ -644,7 +644,7 @@ function dimBg(a) { g.fillStyle = `rgba(58,36,24,${(0.6 * a).toFixed(3)})`; g.fi
 
 /** Gold primary pill (§7.8): radius 14u, 4u lip #B9770E, ink label; pressed = lip 1u, y + 3u. */
 function goldBtn(b, label, o = {}) {
-  const u = o.u || L.u, down = isDown(b.id), lip = Math.max(3, (down ? 1 : 4) * u), dy = down ? Math.max(2, 3 * u) : 0;
+  const u = o.u || L.u, down = o.down != null ? !!o.down : isDown(b.id), lip = Math.max(3, (down ? 1 : 4) * u), dy = down ? Math.max(2, 3 * u) : 0;
   const x = b.x, y = b.y + dy, w = b.w, h = b.h - lip - (down ? 0 : 0), rad = Math.max(12, Math.min(h / 2, 16 * u));
   g.save();
   if (o.glow) { g.shadowColor = 'rgba(255,211,77,0.95)'; g.shadowBlur = (12 + 10 * o.glow) * Math.max(1, u * 0.8); }
@@ -1249,7 +1249,7 @@ function drawBeat(w) {
   const rh = Math.max(30, 34 * u), fsz = Math.max(14, 17 * u);
   if (ask && !w.result && w.tStart != null && (w.t || 0) - w.tStart >= (hud.beatDue || BEAT_EVERY) && w.tLeft > LOW_TIME && !callNow && !calloutQ.length && !unlockOn()) {
     const pot = potBox(w), t = w.tickets && w.tickets[w.ti || 0];
-    const left = t ? t.lines.reduce((a, l) => a + Math.max(0, l.need - l.got), 0) : 0, chain = w.chain ? w.chain.n : 0;
+    const left = t ? t.lines.reduce((a, l) => a + Math.max(0, l.need - l.got), 0) : 0, chain = w.chain ? w.chain.g | 0 : 0;
     const text = chain >= 10 ? fmt(STR.bestChain, { n: chain }) : ask === 'size' ? STR.beatBig : left > 0 && ask === 'order' ? fmt(STR.beatLeft, { n: left }) : null;
     if (text && !(pot && pot.top < cy + rh && pot.bot > cy - rh)) {
       hud.beatT = T; hud.beatTxt = text; hud.beatDue = (w.t || 0) - w.tStart + BEAT_EVERY; sfx('coin');
@@ -1622,7 +1622,7 @@ function bouncePointer(x, y) {
 
 // ---- chain badge ----
 function drawChain(w) {
-  const n = w.chain ? w.chain.n : 0, drop = T - hud.chainDrop;
+  const n = w.chain ? w.chain.g | 0 : 0, drop = T - hud.chainDrop;
   let show = n >= 3 ? n : (drop >= 0 && drop < 0.35 ? hud.chainShown : 0);
   if (n >= 3) hud.chainShown = n;
   if (!show) return;
@@ -2293,11 +2293,15 @@ function drawTitle(st) {
     potArt('pot-hero', B.pot.x + B.pot.w / 2, B.pot.y + B.pot.h / 2 + bob, s);
   }
   // PLAY
+  // DECISION (11-09 Mon, FIX-LIST-7 F1, playables-curator r8): a tap anywhere on the title plays (the cold-start standard).
+  //   The whole-screen target is registered first, so hit() (last first) still gives the mute, the icons and PLAY their own
+  //   taps; PLAY stays the visual target and shows the press either way.
+  reg('tap-any', { x: 0, y: 0, w: cssW, h: cssH }, () => act('play'));
   const label = firstBoot ? STR.play : fmt(STR.playN, { n: Math.min(cur, LEVELS) });
   const pb = reg('play', B.play, () => act('play'), { primary: true });
   const pulse = 0.5 + 0.5 * Math.sin(T * 4);
-  g.save(); const s = isDown('play') ? 1 : 1 + 0.025 * pulse; g.translate(B.play.x + B.play.w / 2, B.play.y + B.play.h / 2); g.scale(s, s); g.translate(-(B.play.x + B.play.w / 2), -(B.play.y + B.play.h / 2));
-  goldBtn(pb, label, { fs: fs.play, glow: pulse, alts: [STR.play] });
+  g.save(); const s = isDown('play') || isDown('tap-any') ? 1 : 1 + 0.025 * pulse; g.translate(B.play.x + B.play.w / 2, B.play.y + B.play.h / 2); g.scale(s, s); g.translate(-(B.play.x + B.play.w / 2), -(B.play.y + B.play.h / 2));
+  goldBtn(pb, label, { fs: fs.play, glow: pulse, alts: [STR.play], down: isDown('play') || isDown('tap-any') });
   g.restore();
   // coins / stars pills
   if (B.coins) { pill(B.coins, 'coin', String(sv.coins | 0), fs.pill); pill(B.stars, 'star', String(starsTot), fs.pill); }
@@ -2373,7 +2377,12 @@ function drawWin(st, w) {
   // DECISION (11-07 Sat, r4, G): on L1-5 the hint row also previews tomorrow's Daily reward (what meta.js says the ladder pays next),
   //   alternating with the chest / gift line every 2.5 s. It is the same row, so the card is not taller and NEXT stays where it is pinned.
   const tmr = !canBuy && (d.kind || 'level') === 'level' && (d.n | 0) >= 1 && (d.n | 0) <= 5 ? tomorrowPill() : null;
-  const CL = cardLayout(L, 'win', { nextSkin: !!(next || tmr), buySkin: canBuy, goal: !!goal, strip: strip.length > 0 });
+  // D6 (11-09): the stats row exists only when a cell will fill it: the time left (not on L1 or a Feast) or the best chain
+  //   when the brag ribbon over the pot is not carrying it. The ribbon needs a hero of 70 px, so a short card lays out again.
+  const tCell = d.kind !== 'feast' && d.tLeft != null && (d.n | 0) !== 1, bragAsk = (d.chainBest | 0) >= BRAG_CHAIN;
+  const winOpts = { nextSkin: !!(next || tmr), buySkin: canBuy, goal: !!goal, strip: strip.length > 0 };
+  let CL = cardLayout(L, 'win', { ...winOpts, stats: tCell || (!!d.chainBest && !bragAsk) });
+  if (!tCell && d.chainBest && bragAsk && !(CL.blocks.hero && CL.blocks.hero.h >= 70)) CL = cardLayout(L, 'win', { ...winOpts, stats: true });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2475,11 +2484,11 @@ function drawWin(st, w) {
     drawStar(bx + bw, by, Math.max(9, bh * 0.9), true);
   }
   // stats: time left · best chain
-  const st2 = B.stats, cy = st2.y + st2.h / 2;
-  {
+  if (B.stats) {
+    const st2 = B.stats, cy = st2.y + st2.h / 2;
     const tl = Math.max(0, Math.round(d.tLeft || 0)), tStr = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
     const cells = [];
-    if (d.kind !== 'feast' && d.tLeft != null && (d.n | 0) !== 1) cells.push(['clock', fmt(STR.timeLeft, { t: tStr })]);
+    if (tCell) cells.push(['clock', fmt(STR.timeLeft, { t: tStr })]);
     if (d.chainBest && !brag) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest })]);
     const cw = st2.w / Math.max(1, cells.length);
     cells.forEach(([ic, s], i) => {
@@ -2536,7 +2545,7 @@ function drawWin(st, w) {
   g.restore();
 }
 
-const BRAG_CHAIN = 20;
+const BRAG_CHAIN = 15;   // gulps since E1 (11-09); the raw bite run made 20 a given on L1
 /** U6: what this win paid beyond its own coins, as chips. Only while game.js skips the reward cards (d.strip). */
 function winStrip(d) {
   if (!d.strip) return [];
@@ -2572,9 +2581,12 @@ function drawStrip(r, items, cu) {
   const y = r.y + (r.h - h) / 2;
   if (cardT >= 0.6) sfx1('stripGift', 'gift');
   items.forEach((it, i) => {
-    const k = back(clamp((cardT - 0.6 - i * 0.12) / 0.2, 0, 1)), w2 = ws[i], cx = x + w2 / 2, cy = y + h / 2;
-    if (k > 0.02) {
-      g.save(); g.translate(cx, cy); g.scale(k, k); g.translate(-cx, -cy);
+    // D6 (11-09, art-director r8 "a small pill that then grows reads as a layout jump"): a chip lands at its own size (fade in,
+    //   a 0.9 -> 1 settle) instead of scaling up from nothing, so no frame shows a smaller chip than the card keeps.
+    const t2 = cardT - 0.6 - i * 0.12, k = back(clamp(t2 / 0.2, 0, 1)), a2 = clamp(t2 / 0.12, 0, 1), w2 = ws[i], cx = x + w2 / 2, cy = y + h / 2;
+    if (a2 > 0.02) {
+      const sc = 0.9 + 0.1 * k;
+      g.save(); g.globalAlpha *= a2; g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
       rr(x, y + 2, w2, h, h / 2); g.fillStyle = 'rgba(58,36,24,0.25)'; g.fill();
       rr(x, y, w2, h, h / 2); g.fillStyle = '#FFE9A8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
       it.draw(x + 6 + is / 2, cy, is);

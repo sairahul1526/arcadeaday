@@ -277,7 +277,7 @@ function dailyLines(lvl, day, key, variant) {
   for (const k in count) if (KIND[k].food && count[k] > bn) { bn = count[k]; best = k; }
   const poolA = [];
   if (best && bn - 4 >= 12) poolA.push({ type: 'eat', kind: best, n: Math.min(20, bn - 4) });
-  poolA.push({ type: 'chain', n: 12 + (day % 7) });
+  poolA.push({ type: 'chain', n: 7 + (day % 5) });   // gulps since E1 (11-09): mid-level average bests are 7-16
   poolA.push({ type: 'big', n: 6 + (day % 5) });
   const poolB = [{ type: 'left', share: 0.3 }, { type: 'noBumps' }, { type: 'noBoost' }, { type: 'sizzle', n: 2 }];
   return { key, day, variant, lines: [{ type: 'win' }, poolA[(day * 7) % poolA.length], poolB[(day * 11) % poolB.length]] };
