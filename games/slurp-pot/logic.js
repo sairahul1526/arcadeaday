@@ -12,7 +12,7 @@
 import {
   DT, R0, R_MAX, SIZEUP_MUL, G, K_ING, BLOCK_K, TIP_T, CHAIN_WIN, SIZZLE_AT, SIZZLE_EVERY, SIZZLE_CAP,
   STAR3, STAR2, V_BASE, V_PER_R, V_CAP, A_ACC, A_BRAKE, BUMP_V, BUMP_CD, DOOM_EVERY, DOOM_GRACE, LOW_TIME,
-  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS, BOSS_WALK,
+  CRACK_V, WOBBLE_V, WOBBLE_D, SIMMER, MAGNET, FREEZE_ADD, MEGA, ITEM_MAX, GULL, HOT_SECS, BOSS_WALK, DONE_HOLD,
 } from './consts.js';
 
 // ------------------------------------------------------------------ the fit rule (§3.2; the only definition)
@@ -647,7 +647,14 @@ export function step(w, inp, dt) {
   // 2 timer
   const m0 = inp ? +inp.m || 0 : 0;
   if (w.tStart === null && m0 > 0) { w.tStart = t - dt; ev.push({ type: 'start' }); }
-  if (w.timed && w.tStart !== null && !_.finalBite) w.tLeft -= dt;
+  if (w.timed && w.tStart !== null && !_.finalBite) {
+    w.tLeft -= dt;
+    // B1 (consts.js DONE_HOLD): every line of the final ticket done -> the clock holds until the boss bite.
+    if (w.tLeft < DONE_HOLD && w.mode !== 'feast' && w.ti >= w.tickets.length - 1 && w.tickets[w.ti] && w.tickets[w.ti].done) {
+      if (!_.held) { _.held = true; ev.push({ type: 'clockHold' }); }
+      w.tLeft = DONE_HOLD;
+    }
+  }
   // 3 booster timers
   if (P.megaT > 0) { P.megaT -= dt; if (P.megaT < 0) P.megaT = 0; }
   if (P.magnetT > 0) { P.magnetT -= dt; if (P.magnetT < 0) P.magnetT = 0; }
@@ -1022,8 +1029,8 @@ export function doomed(w) {
 // holds its grace, and stars keep the old pace: left = (tLeft − freezeAdded − grace) / (T − grace). A slow hand gets
 // `grace` more seconds to win with 1★; a fast kid needs the same time as before for 3★. With grace 0 this is the old
 // formula bit for bit, so Daily and Feast (which never carry grace) do not move.
-/** A level's grace in seconds: 0 unless 0 < grace < T. */
-const graceOf = w => { const g = w.level ? +w.level.grace : 0; return g > 0 && g < w.T ? g : 0; };
+/** A level's grace in seconds: 0 unless 0 < grace < T. Negative on a first-try cut (mercy.js firstTry): pace = T − grace stays. */
+const graceOf = w => { const g = w.level ? +w.level.grace : 0; return (g > 0 && g < w.T) || g < 0 ? g : 0; };
 /** Seconds of tLeft (Freeze excluded) that still earn 3★ and 2★. UI's clock notch reads t3. */
 // 11-07 Sat (grandparent r5): every clean win of a slow hand was 1★ (the grace bought no 2★ either, L6 won with 11 s of
 // 72 left). 2★ now reads the full clock: (tLeft − freezeAdded) / T ≥ STAR2. 3★ keeps the grace-free pace, so a fast kid

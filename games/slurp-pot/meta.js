@@ -134,6 +134,7 @@ function defaults() {
     dailyLines: {},    // v2: { 'YYYY-MM-DD': mask } star lines met that day (bit0 serve, bit1 line 2, bit2 line 3), last 30
     feastTown: '',     // v2: the Feast town last chosen ('' = the town of the current level)
     help: 0,           // v2: mercy step carried to the next level (mercy.js), 0 to 2. Top level so an older tab keeps it
+    calm: 0,           // v2 (11-09): levels left with no first-try cut after a time-out (mercy.js CALM_LEVELS), 0 to 2
   };
 }
 export const DEFAULT_SAVE = defaults();
@@ -206,6 +207,7 @@ function sanitize(src) {
   }
   o.feastTown = TOWNS.includes(s.feastTown) ? s.feastTown : '';
   o.help = int(s.help, 0, HELP_MAX, 0);
+  o.calm = int(s.calm, 0, 2, 0);
   return o;
 }
 

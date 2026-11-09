@@ -70,7 +70,7 @@ export const STR = {
   tipArrows: 'Follow the arrows to the food you still need.', tipSmall: 'Eat small things first to grow.', tipBig: "Big things have to wait until you're bigger.",
   goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars', goal2Left: 'Finish with {n} left for 2 stars', goal2LeftShort: '{n} left for 2 stars',
   starFinish: 'Finish', starLeft: '{n}s left',
-  bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossUnlockedT: 'BOSS UNLOCKED! +{n} s', bossEaten: 'BOSS EATEN!',
+  bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossUnlockedT: 'BOSS UNLOCKED! +{n} s', clockHold: 'CLOCK HOLDS! EAT THE BOSS', bossEaten: 'BOSS EATEN!',
   canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', canGild: 'Gild your {skin}!', canGildShort: 'You can gild a pot!', replayBonus: 'Replay bonus',
   hotIntro: 'Hot chili! It burns {n} seconds. Steer around it.', hotIntroShort: 'Hot chili! Steer around it.', hotPop: '-{n}s',
   replay: 'Replay', map: 'Map', resume: 'Resume', restart: 'Restart', settings: 'Settings', paused: 'Paused',
@@ -455,11 +455,13 @@ function bindBus(bus) {
   on('line', d => { hud.lineDone[d.li] = T; if (d.ti === hud.ti) hud.chipPop[d.li] = T; });
   on('ticketDone', d => { hud.flip = T; hud.bossPulse = T; });
   on('padlock', d => {
-    hud.padPop = T; hud.padIdx = d.i; hud.bossPoint = T; tutSet('padlock'); hud.bossAdd = 0;
+    hud.padPop = T; hud.padIdx = d.i; hud.bossPoint = T; tutSet('padlock'); hud.bossAdd = 0; hud.hold = 0;
     if (lastW && lastW.mode !== 'feast' && !REC_M.record) hud.unlock = T;
   });
   // r7d: the sim floored the clock at the walk to the final boss (consts.js BOSS_WALK); the unlock ribbon names the gift.
   on('bossTime', d => { hud.bossAdd = d.add | 0; });
+  // B1 (11-09): the clock holds once every final order line is done (consts.js DONE_HOLD); say so on the unlock ribbon.
+  on('clockHold', () => { hud.hold = 1; hud.bossAdd = 0; if (lastW && !REC_M.record) hud.unlock = T; });
   on('bossNudge', () => { hud.padRattle = T; hud.chipNudge = T; });
   on('bossBite', d => {
     if (d.final === false) { hud.course = T; return; }
@@ -2249,11 +2251,11 @@ function drawUnlock(w) {
   if (!unlockOn()) return;
   const k = T - hud.unlock, u = L.u, band = L.hud.callout, big = hud.big;
   const rh = big ? Math.max(38, 46 * u) : Math.max(30, 34 * u), fsz = big ? Math.max(19, 25 * u) : Math.max(14, 17 * u);
-  const wk = hud.bossAdd > 0 ? 1.3 : 1, rw = Math.min(band.w - rh * 1.1, wk * (big ? Math.max(240, 320 * u) : Math.max(170, 220 * u)));
+  const wk = hud.bossAdd > 0 || hud.hold ? 1.3 : 1, rw = Math.min(band.w - rh * 1.1, wk * (big ? Math.max(240, 320 * u) : Math.max(170, 220 * u)));
   const cx = band.x + band.w / 2, cy = band.y + band.h / 2, sc = k < 0.2 ? 0.6 + 0.4 * back(k / 0.2) : 1;
   const pot = potBox(w), over = pot && pot.top < cy + rh / 2 && pot.bot > cy - rh / 2;
   g.save(); g.globalAlpha = (k > 1.4 ? (1.7 - k) / 0.3 : 1) * (over ? 0.55 : 1); g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
-  const lab = hud.bossAdd > 0 ? fmt(STR.bossUnlockedT, { n: hud.bossAdd }) : STR.bossUnlocked;
+  const lab = hud.hold ? STR.clockHold : hud.bossAdd > 0 ? fmt(STR.bossUnlockedT, { n: hud.bossAdd }) : STR.bossUnlocked;
   if (big) ribbon(cx, cy, rw, rh, lab, fsz, C.gold, C.brass); else ribbon(cx, cy, rw, rh, lab, fsz);
   g.restore();
 }

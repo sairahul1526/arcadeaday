@@ -21,7 +21,7 @@
 import P from '../shared/platform.js';
 import * as C from './consts.js';
 import * as bus from './bus.js';
-import { withMercy, mercySecs, mercyGrow, carryAfterWin } from './mercy.js';
+import { withMercy, mercySecs, mercyGrow, carryAfterWin, firstTry, CALM_LEVELS } from './mercy.js';
 import { createInput } from './input.js';
 
 const PAPER = '#FFF6E3', PAPER_SHADE = '#EBD9B8', INK = '#3A2418', GOLD = '#F5B323', GOLD_SHADE = '#B9770E', STAMP = '#E5483B';
@@ -500,9 +500,12 @@ function startLevel(n, opt = {}) {
   if (kind === 'level' || kind === 'daily') {
     // The step follows the player: fails on this level or Daily raise it, and a new one starts from the carried step.
     const key = kind === 'daily' ? 'daily' : n;
-    if (S.mercyN !== key) { S.mercyN = key; S.mercy = save().help | 0; }
+    if (S.mercyN !== key) { S.mercyN = key; S.mercy = save().help | 0; S.failedHere = false; }
     S.mercyBase = lvl;
     lvl = withMercy(lvl, S.mercy | 0);
+    // A1 (11-09): a clean first try plays the shorter clock (mercy.js firstTry); a retry or a calm save plays the stored one.
+    S.cut = 0;
+    if (kind === 'level' && !(S.mercy > 0) && !S.failedHere && !(save().calm > 0)) { lvl = firstTry(lvl); S.cut = lvl.cut | 0; }
   }
   const town = lvl.town;
   let w = null;
@@ -611,7 +614,12 @@ function onWin(ev, now) {
   if (S.resultDone) return;
   if (S.kind === 'feast') return; // Sim 12:32: the Feast never wins; feastStep rolls courses and the clock ends it
   S.resultDone = true; S.live = false;
-  if (!quietResult(ev) && (S.kind === 'level' || S.kind === 'daily')) { save().help = carryAfterWin(S.mercy | 0); safe(meta.save); }
+  if (!quietResult(ev) && (S.kind === 'level' || S.kind === 'daily')) {
+    save().help = carryAfterWin(S.mercy | 0);
+    if (S.kind === 'level' && !S.failedHere && save().calm > 0) save().calm = (save().calm | 0) - 1;
+    safe(meta.save);
+  }
+  S.failedHere = false;
   S.mercy = 0; S.mercyN = null;
   const w = S.w;
   if (input) input.enable(false);
@@ -700,7 +708,8 @@ function onFail(ev, now) {
   const data = { n: S.n, kind: S.kind, why, progress: w ? (safe(logic.sizeBar, w) || 0) : 0, missing: ev.missing || [], canFreeze: canFreeze(why), ...(ev.data || {}) };
   if ((S.kind === 'level' || S.kind === 'daily') && why === 'timeout' && S.mercyBase) {
     S.mercy = (S.mercy | 0) + 1;
-    data.mercy = mercySecs(S.mercyBase, S.mercy); data.grow = mercyGrow(S.mercy) > 1; data.fails = S.mercy;
+    if (S.kind === 'level') { S.failedHere = true; if (!quietResult(ev)) { save().calm = CALM_LEVELS; safe(meta.save); } }
+    data.mercy = mercySecs(S.mercyBase, S.mercy) + (S.cut | 0); data.grow = mercyGrow(S.mercy) > 1; data.fails = S.mercy;
     data.growPct = Math.round((mercyGrow(S.mercy) - 1) * 100);
   }
   if (now) go('fail', data);

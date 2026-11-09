@@ -17,6 +17,10 @@ export const BUMP_V = 1.2, BUMP_CD = 0.35, DOOM_EVERY = 0.25, DOOM_GRACE = 0.6, 
 // floored at the time to reach the boss: straight-line distance / pot speed * k + pad seconds. A player who has done every
 // line never loses on the walk. It only lifts a clock that is already low, so stars barely move (a late finish stays 1 star).
 export const BOSS_WALK = { k: 1.3, pad: 4 };
+// DECISION (11-09, FIX-LIST-7 B1, grandparent r8): lost on L12 with every order ticked, because the pot was still too small for the
+// boss (the padlock, and so BOSS_WALK, never fired). Once the final ticket's lines are all done the clock holds at DONE_HOLD s:
+// the boss can still take as long as it takes, nobody loses with every order done, and stars read the held clock (1 star).
+export const DONE_HOLD = 5;
 export const CRACK_V = 2.0, WOBBLE_V = 0.9, WOBBLE_D = 0.8;   // fragile: crack above 2.0 u/s; wobble+bounce 0.9–2.0; near warning within a + r + 0.8
 export const SIMMER = { shoveA: 0.5, shoveMax: 0.8, boilT: 0.3, boilV: 0.6 };   // shove junk with a < 0.5r up to 0.8 u; boil 0.3 s at vMax × 0.6
 export const GULL = { warn: 1.6, missCoins: 1 };        // telegraph s; target radius = SEE_R(w.pot.r) (logic.js); gullEvery is level data

@@ -2256,6 +2256,7 @@ function finish(c, spec, seed) {
     tickets, zones, seed: seed >>> 0,
     // Only levels that have them carry these, so a Daily or Feast level's expansion stays byte for byte the same.
     ...(spec.grace > 0 ? { grace: spec.grace } : null),
+    ...(spec.first > 0 ? { first: spec.first } : null),
     ...(c.piles.length ? { piles: c.piles.map(p => ({ x: mx(p.x), z: p.z, r: p.r })) } : null),
     ...(c.hot && c.hot.length ? { hot: c.hot.map(p => ({ x: mx(p.x), z: p.z })) } : null),
     ...(c.hot && c.hot.length && spec.n === HOT_FIRST ? { hotIntro: true } : null),
