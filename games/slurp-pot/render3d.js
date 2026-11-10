@@ -1369,6 +1369,16 @@ export function stats() {
 export function pxPerU() { return ppu; }
 export function worldToScreen(x, z) {
   if (!camera) return { x: 0, y: 0, on: false };
+  // DECISION (11-10, user screenshot: L4 on a wide window, the apple arrow pointed up off the map while the guide trail led down):
+  //   a ground point behind the camera plane has a negative clip w, and project() mirrors it through the centre, so the edge
+  //   arrow pointed the opposite way. The close desktop camera puts everything more than about 3 u below the pot behind it.
+  //   Such a point now returns a far off-screen position in its true direction (view-space x and y), with on: false.
+  _v.set(x, 0, z).applyMatrix4(camera.matrixWorldInverse);
+  if (_v.z > -camera.near) {
+    const l = Math.hypot(_v.x, _v.y) || 1, R = 4 * Math.max(cssW, cssH);
+    const e = camera.projectionMatrix.elements;   // the view axis is not the canvas centre when the frustum is sheared
+    return { x: (1 - e[8]) / 2 * cssW + _v.x / l * R, y: (1 + e[9]) / 2 * cssH - _v.y / l * R, on: false };
+  }
   _v.set(x, 0, z).project(camera);
   const sx = (_v.x + 1) / 2 * cssW, sy = (1 - _v.y) / 2 * cssH;
   return { x: sx, y: sy, on: _v.z < 1 && sx >= 0 && sx <= cssW && sy >= 0 && sy <= cssH };
