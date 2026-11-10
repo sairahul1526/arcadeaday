@@ -88,6 +88,10 @@ export function bandOf(n) {
   // three-stars from L4 to L20 while winning nearly every time: the kid called L5-L9 stingy and the viral marketer's early win card read
   // "Finish 29s faster". Early stars are a welcome, not a test: L4-L10 an average player mostly three-stars and a casual one mostly two-stars,
   // L11-L20 the third star is about a coin flip for average. The clock did not move for this: seconds went from grace (buys no stars) to pace.
+  // DECISION (11-10, FIX-LIST-7 B3): L2-L6 got a long pace and a 5-14 s grace (levels-data.js: pace = the slow hand's median finish / 0.65,
+  // so a first-time player three-stars about half its runs). A casual bot is quicker than that hand and now three-stars most runs, so the
+  // casual 3-star ceiling is off on L4-L6; L7 keeps 50.
+  if (n <= 6) return { avg: 80, exp: 98, plan: 0.88, avg3: [40, 100], cas3: 100 };
   if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [40, 100], cas3: 50 };
   if (n <= 10) return { avg: 75, exp: 97, plan: 0.80, avg3: [40, 100], cas3: 50 };
   if (n <= 20) return { avg: 75, exp: 97, plan: 0.80, avg3: [25, 65], cas3: 15 };
@@ -419,7 +423,9 @@ export function botGates(spec, lv, st) {
   // DECISION (11-06 Fri, round 2, hot chili): the cap on chili damage is geometry (levels.js hotClear and the gap), and this gate proves
   // it held: a level has enough chilis to matter, and a careful hand pays for at most two (average) or one (expert), median.
   if (lv.hot) {
-    if (lv.hot.length < 7) fails.push(`H only ${lv.hot.length} chilis`);
+    // DECISION (11-10, FIX-LIST-7 A4): L6-L27 carry 3 to 5 chilis (levels.js HOT_LEVELS), so the floor is the level's own count.
+    const want = LV.HOT_LEVELS[spec.n] || 7;
+    if (lv.hot.length < want) fails.push(`H only ${lv.hot.length} of ${want} chilis`);
     if (st.average && st.average.hot > 2) fails.push(`H average bot hits ${st.average.hot} chilis`);
     if (st.expert && st.expert.hot > 1) fails.push(`H expert bot hits ${st.expert.hot} chilis`);
   }
@@ -624,7 +630,7 @@ async function main() {
     const rows = list.map(statsRow), np = rows.filter(r => r.pass).length;
     const out = [`verify.mjs ${args.join(' ')} — §5.3 table from the stored stats in levels-data.js (tune confirm / verify runs:`,
       `100 casual + 100 average runs, expert 34 in a tune confirm, greedy + 20 ±3° noise seeds, planner deterministic); static gates re-run now.`,
-      `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 40+ cas3★ ≤50 | L8–10 75/97/.80/40+ cas3★ ≤50 | L11–20 75/97/.80/25–65 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
+      `bands: L4–7 avg ≥80 exp ≥98 planner ≤.88 avg3★ 40+ cas3★ ≤50 (L4–6 no cas3★ cap) | L8–10 75/97/.80/40+ cas3★ ≤50 | L11–20 75/97/.80/25–65 | L21–40 72/96/.78/15–35 | L41+ 70/95/.76/15–30;`,
       `casual 3★ ≤15 from L4; casual win within goal.casual ± 7; greedy % of T within goal.greedy ± 4 (70–85 from L10); D32 near ≥.6 on L3/L7;`,
       `§4.4: peaks ${PEAKS.join(' ')} greedy 80–95 casual 45–59 avg3★ floor 0; breathers ${BREATHERS.join(' ')} greedy ≤76 casual ≥80; twist intros ${TWIST_FIRST.join(' ')} greedy ≤74 casual ≥80.`,
       `${np}/${list.length} levels pass every gate`, ...rows.map(r => r.row), ...cliffLines(list)];

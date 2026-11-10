@@ -83,15 +83,16 @@ for (const [W, H] of SIZES) for (const [iname, ins] of Object.entries(INSETS)) {
   }
 }
 function checkCards(L, ctx) {
-  const S = L.menu || L.safe;
+  const S0 = L.menu || L.safe;
   {
     // ---- cards ----
     const cards = [
-      ['title', { firstBoot: true }], ['title', { firstBoot: false, showMute: true }], ['title', { firstBoot: false, showMute: false }],
-      ['win', {}], ['win', { strip: true }], ['win', { strip: true, nextSkin: true }], ['win', { strip: true, goal: true }], ['win', { strip: true, goal: true, nextSkin: true }], ['win', { strip: true, goal: true, nextSkin: true, buySkin: true }], ['win', { strip: true, nextSkin: true, buySkin: true }], ['info', { primary: true, second: true, ending: true }], ['info', { primary: true, second: false, ending: true }], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
+      ['title', { firstBoot: true }], ['title', { firstBoot: false, showMute: true }], ['title', { firstBoot: false, showMute: false }], ['title', { firstBoot: false, showMute: true, chipR: 240, chipT: L.H - 40 }],
+      ['win', {}], ['win', { daily: true, strip: true, stats: true }], ['win', { daily: true, strip: true, goal: true, nextSkin: true, stats: true }], ['win', { daily: true, strip: true, buySkin: true, goal: true, stats: true }], ['win', { share: true }], ['win', { share: true, daily: true, strip: true, goal: true, nextSkin: true, stats: true }], ['win', { share: true, strip: true, buySkin: true, goal: true, stats: true }], ['win', { strip: true }], ['win', { strip: true, nextSkin: true }], ['win', { strip: true, goal: true }], ['win', { strip: true, goal: true, nextSkin: true }], ['win', { strip: true, goal: true, nextSkin: true, buySkin: true }], ['win', { strip: true, nextSkin: true, buySkin: true }], ['info', { primary: true, second: true, ending: true }], ['info', { primary: true, second: false, ending: true }], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
       ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
       ['fail', { canFreeze: true, help: true }], ['fail', { canFreeze: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, help: true, tip: true }], ['fail', { canFreeze: false, help: true, tip: true }],
-      ['pause', { showMute: true }], ['pause', {}], ['pause', { showMute: true, stars: true }], ['pause', { stars: true }], ['settings', {}], ['map', {}],
+      ['fail', { canFreeze: true, boost: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, boost: true, help: true, tip: true }], ['fail', { canFreeze: false, boost: true, help: true, tip: true }], ['fail', { noBar: true, boost: true }],
+      ['pause', { showMute: true }], ['pause', {}], ['pause', { showMute: true, stars: true }], ['pause', { stars: true }], ['settings', {}], ['map', {}], ['map', { chipR: 300, chipT: L.H - 52 }], ['map', { chipR: 240, chipT: L.H - 40, saving: true }],
       ['shop', {}], ['cookbook', {}], ['daily', {}], ['daily', { primary: false }], ['daily', { town: false }], ['ladder', {}],
       ['feast', { towns: 1 }], ['feast', { towns: 3 }], ['feastend', {}],
       ['alldone', { primary: true, second: true }], ['info', { locked: 'daily' }], ['info', { locked: 'feast' }], ['gift', { primary: true, noBack: true }], ['lid', { primary: true, noBack: true }],
@@ -99,7 +100,7 @@ function checkCards(L, ctx) {
     for (const [name, o] of cards) {
       const C = cardLayout(L, name, o), cx = `${ctx}/${name}${JSON.stringify(o)}`;
       checkFonts(cx, C.fs);
-      const bs = C.buttons;
+      const bs = C.buttons, S = name === 'map' && o.chipR ? L.safe : S0;   // D1 (11-10): map pills may share the chips' strip
       if (!bs.length) fail(cx, 'no buttons (dead end)');
       for (const b of bs) {
         checks++;
@@ -141,7 +142,9 @@ function checkCards(L, ctx) {
       if (C.blocks.icons) for (const ic of C.blocks.icons) {
         if (!inside(ic.lab, S)) fail(cx, `icon label ${ic.id} outside safe`);
         for (const ic2 of C.blocks.icons) if (ic2 !== ic && overlap(ic.lab, ic2.lab)) fail(cx, `icon labels ${ic.id}/${ic2.id} overlap`);
-        for (const b of bs) if (overlap(ic.lab, b.r)) fail(cx, `icon label ${ic.id} overlaps button ${b.id}`);
+        // DECISION (11-10, D1): a landscape map icon is a pill button whose label sits inside its own button
+        for (const b of bs) if (overlap(ic.lab, b.r) && !(ic.pill && b.id === ic.id)) fail(cx, `icon label ${ic.id} overlaps button ${b.id}`);
+        if (ic.pill) { checks++; if (!inside(ic.lab, ic.r) || !inside(ic.ico, ic.r) || overlap(ic.lab, ic.ico)) fail(cx, `pill ${ic.id} icon/label not inside its pill`); }
       }
     }
   }
@@ -157,13 +160,31 @@ function checkMap(C, cx, S) {
     const a = M.nodes[i], ra = { x: a.x - M.nodeD / 2, y: a.y - M.nodeD / 2, w: M.nodeD, h: M.nodeD + M.starH + 2 };
     checks++;
     if (ra.x < -EPS || ra.x + ra.w > M.col.w + EPS || ra.y < -EPS || ra.y + ra.h > M.contentH + EPS) fail(cx, `node ${a.n} ${fmt(ra)} outside the column`);
-    for (let j = i + 1; j < Math.min(60, i + 4); j++) {
+    for (let j = i + 1; j < (M.serp ? 60 : Math.min(60, i + 4)); j++) {   // a serpentine row sits SERP_K nodes above its neighbour
       const b = M.nodes[j], rb = { x: b.x - M.nodeD / 2, y: b.y - M.nodeD / 2, w: M.nodeD, h: M.nodeD + M.starH + 2 };
       if (overlap(ra, rb)) fail(cx, `node ${a.n} overlaps node ${b.n}`);
     }
   }
   // side columns (landscape) never cover the path column
   for (const ic of C.blocks.icons) { checks++; if (overlap(ic.r, M.col) && !(ic.r.y >= V.y + V.h - EPS)) fail(cx, `map icon ${ic.id} over the path column`); }
+  if (M.serp) {
+    // D1/F3 (11-10): landscape serpentine. Enough nodes in one view, the bottom pill row clear of the web chips, the top pills sane
+    checks++;
+    const perView = (Math.floor((V.h - M.nodeD - M.starH) / M.step) + 1) * 5;   // whole rows that fit in one view
+    if (perView < 8) fail(cx, `serp map shows ${perView} nodes per view (< 8)`);
+    if (M.col.x < V.x - EPS || M.col.x + M.col.w > V.x + V.w + EPS) fail(cx, `serp column ${fmt(M.col)} wider than the view`);
+    const chipR = M.chipR || 0;
+    for (const ic of C.blocks.icons) {
+      checks++;
+      if (!ic.pill) fail(cx, `landscape map icon ${ic.id} is not a pill`);
+      if (overlap(ic.r, V)) fail(cx, `map pill ${ic.id} over the view`);
+      if (chipR && overlap(ic.r, { x: 0, y: M.chipT, w: chipR, h: 1e4 })) fail(cx, `map pill ${ic.id} ${fmt(ic.r)} over the web chips (r ${chipR}, t ${M.chipT})`);
+    }
+    for (const k of ['pillL', 'pillR']) {
+      const r = C.blocks[k]; checks++;
+      if (r && r.w > 0 && (overlap(r, V) || overlap(r, C.blocks.coins) || overlap(r, C.blocks.milestone) || overlap(r, C.blocks.back))) fail(cx, `map ${k} ${fmt(r)} overlaps the bar`);
+    }
+  }
 }
 // record mode (D31): u = 3 exactly at 1080x1920
 {
@@ -173,6 +194,16 @@ function checkMap(C, cx, S) {
   const cap = L.hud.caption;
   if (!cap || !inside(cap, L.play) || overlap(cap, L.hud.meter) || overlap(cap, L.hud.ticket)) fail('record', `caption band ${cap && fmt(cap)}`);
   rows.push(`1080x1920  rec   ${L.aspect.padEnd(9)} u=${L.u.toFixed(3)} (record, D31)`);
+}
+// 11-10 D5: a desktop HUD reads as one centre column: the bar is capped at 460u and centred between ticket and pause;
+//   the ticket is at least as wide as the 1.3x one it replaced; a landscape phone and a portrait tablet are untouched.
+for (const [W, H] of [[1280, 800], [1440, 900], [1920, 1080], [2560, 1440]]) {
+  const L = computeLayout(W, H, null, { lines: 2, record: false }), m = L.hud.meter, cx = `D5 ${W}x${H}`;
+  checks += 3;
+  if (m.w > L.u * 460 + 0.5) fail(cx, `meter ${fmt(m)} wider than 460u`);
+  const mid = ((L.hud.ticket.x + L.hud.ticket.w) + L.hud.pause.x) / 2;
+  if (m.w >= L.u * 460 - 0.5 && Math.abs(m.x + m.w / 2 - mid) > L.u * 160) fail(cx, `meter ${fmt(m)} far off the HUD centre ${mid.toFixed(0)}`);
+  if (L.hud.callout.x !== m.x || L.hud.callout.w !== m.w) fail(cx, `callout ${fmt(L.hud.callout)} not under the meter`);
 }
 console.log(rows.join('\n'));
 console.log(`\nlayout-test: ${checks} checks, ${fails} failures`);

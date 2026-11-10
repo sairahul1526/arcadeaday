@@ -449,7 +449,8 @@ console.log('hot chili');
     const list = [];
     for (let n = 1; n <= C.LEVELS; n++) { const lv = LV.getLevel(n); if (lv.hot) list.push(lv); }
     const ns = list.map(l => l.n);
-    ok(ns.length >= 10 && ns.length <= 14 && ns.every(n => n >= 31 && n <= 59 && !C.isMilestone(n)), 'chilis on about 12 levels in L31 to L59, none on a milestone', ns.join(' '));
+    // DECISION (11-10, FIX-LIST-7 A4): the chili arrives at L6 (3) and ramps over seven Picnic/Market levels into L31's 7.
+    ok(ns.length >= 17 && ns.length <= 21 && ns[0] === 6 && ns.every(n => n >= 6 && n <= 59 && !C.isMilestone(n) && ![16, 21, 22, 28, 29].includes(n)), 'chilis on about 19 levels from L6 to L59, none on a milestone, a peak, a twist intro or L21', ns.join(' '));
     ok(list.filter(l => l.hotIntro).length === 1 && list[0].hotIntro === true, 'hotIntro only on the first chili level', `L${list[0].n}`);
     let spawnOK = true, kindOK = true, gapOK = true, cnt = [];
     for (const l of list) {
@@ -462,7 +463,9 @@ console.log('hot chili');
     ok(kindOK, 'level.hot matches the chili items, all flagged HOT');
     ok(spawnOK, 'no chili within 6 u of the spawn');
     ok(gapOK, 'chilis stay at least 4 u apart, so they cannot chain', cnt.join(' '));
-    ok(cnt.every(c => c >= 7 && c <= 9), '7 to 9 chilis a level', cnt.join(' '));
+    ok(list.every((l, i) => (l.n < 31 ? l.hot.length >= 3 && l.hot.length <= 5 : l.hot.length >= 7 && l.hot.length <= 9) && (!i || l.hot.length >= list[i - 1].hot.length || l.n > 31)),
+      '3 to 5 chilis a level up to L29 (never fewer than the level before), 7 to 9 from L31', cnt.join(' '));
+    ok(list.every(l => l.hot.length === LV.HOT_LEVELS[l.n]), 'every chili level places all of its HOT_LEVELS chilis');
     const CAT = await import(join(ROOT, 'games/slurp-pot/catalog.js'));
     ok(CAT.KINDS[CAT.KINDS.length - 1].id === 'chili', 'chili is the last row of the kind table');
     let plain = true;

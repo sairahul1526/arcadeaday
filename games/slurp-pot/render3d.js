@@ -4,7 +4,7 @@
 import {
   WebGLRenderer, Scene, PerspectiveCamera, Group, Mesh, InstancedMesh, BufferGeometry, BufferAttribute,
   InstancedBufferAttribute, MeshLambertMaterial, MeshBasicMaterial, MeshPhongMaterial, ShaderMaterial,
-  CanvasTexture, Color, Vector2, Vector3, Matrix4, Quaternion, HemisphereLight, DirectionalLight, Fog, CircleGeometry,
+  CanvasTexture, Color, Vector2, Vector3, Vector4, Matrix4, Quaternion, HemisphereLight, DirectionalLight, Fog, CircleGeometry,
   CylinderGeometry, PlaneGeometry, TorusGeometry, RingGeometry, BoxGeometry, SphereGeometry, SRGBColorSpace, RepeatWrapping, BackSide,
   DynamicDrawUsage, AlwaysStencilFunc, EqualStencilFunc, NotEqualStencilFunc, ReplaceStencilOp, mergeGeometries,
 } from './vendor/three.bundle.js';
@@ -73,7 +73,7 @@ const ALIASED = new Set(Object.values(EV_ALIAS));
 let renderer = null, scene = null, camera = null, canvas = null, gl = null;
 let tier = 'high', REC = false, OGP = false, STILL = false, dpr = 1, cssW = 1, cssH = 1;
 let play = { x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.6 };
-const U = { time: { value: 0 }, edge: { value: 0 }, calm: { value: 0 } };
+const U = { time: { value: 0 }, edge: { value: 0 }, calm: { value: 0 }, cut: { value: new Vector4() } };   // cut: D3 ghost window (buffer px centre x, y; radii x, y)
 let time = 0, ppu = 50;
 let hemi, sun, fog;
 let propMat, potMat, gullMat;
@@ -115,6 +115,13 @@ const pot = { x: 0, z: 0, r: 0.3, rVis: 0.3 };
 const cam = { x: 0, z: 0, vx: 0, vz: 0, rCam: 0.3, yaw: 0, pitch: 55 * D2R, wv: 6, ax: 0, ay: 0 };
 let recSnap = false;   // record: the first frame after levelStart puts the camera on its goal (no spring in from the last shot)
 let titleOn = false, titleT = 0, reveal = null, punchT = 0, punchA = 0.08, bossCamT = -1, bossCamA = 0.1, shakeX = 0, shakeZ = 0, recWinT = -1;
+// DECISION (11-10, F4, playables-curator r8 "at spawn the ordered food is hard to pick out" on L41/L50/L60): from L21 on, the current
+// ticket's foods pulse (a soft scale beat), glow gold (the boss glow channel) and get a wider halo from level start through the boss
+// reveal's wide shot (where the curator saw "tiny dots") and CUE_T s after it lands. The halo has a pixel floor, so it still marks a
+// speck in the wide shot. All through attributes the item pass already writes: no new draw, no allocation. Reduced motion keeps the
+// glow and halo, no beat.
+const CUE_T = 3, CUE_FROM = 21;
+let cueT = -1, cueA = 0, cueK = 0, cueP = 0;
 let openK = 0, openT = -1, openW = 1;         // R1: the close opening view, 1 until the first touch, then eases to 0
 let apK = 0, apFit = null, apWait = 0, bossNear = null;   // R5: L60's pre-bite framing of pot and lighthouse
 let fw = null;                                // R6: L60's fireworks
@@ -173,7 +180,7 @@ function stencilOnly(m) {   // pit + stew: only inside the hole
 function makePropMat() {
   const m = new MeshLambertMaterial({ vertexColors: true });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = U.time; sh.uniforms.uEdge = U.edge;
+    sh.uniforms.uTime = U.time; sh.uniforms.uEdge = U.edge; sh.uniforms.uCut = U.cut;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec4 aFx;\nvarying vec4 vFx;\nuniform float uTime;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -195,10 +202,16 @@ if (aFx.w > 2.5 && color.r > 0.95) {
 varying vec4 vFx;
 uniform float uTime;
 uniform float uEdge;
-float spB2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
-float spB4(vec2 a) { return spB2(0.5 * a) * 0.25 + spB2(a); }`)
+uniform vec4 uCut;`)
+      // DECISION (11-10, D3, art-director r8 "the L21 dissolve dither reads as a glitch"): a solid in front of the pot no longer
+      // stipples away. It opens a clean round window around the pot instead (radius grows with the ghost, 0 -> full in the ~0.2 s
+      // ease), with a thin ink edge so the cut reads as deliberate. Everything outside the window stays solid and full size: a real
+      // scale-down would lie about the thing's size, and players judge "fits" by size; a real alpha fade would move every prop into
+      // the sorted transparent pass. One uniform, no draw, no allocation. The milestone's open boss still never ghosts (below).
       .replace('void main() {', `void main() {
-  if (vFx.y < 0.999 && spB4(gl_FragCoord.xy) >= vFx.y) discard;`)
+  float spG = vFx.y < 0.999 && uCut.z > 0.5 ? clamp((1.0 - vFx.y) / 0.72, 0.0, 1.0) : 0.0;
+  float spD = length((gl_FragCoord.xy - uCut.xy) / max(uCut.zw, vec2(1.0))), spR = spG;
+  if (spD < spR) discard;`)
       .replace('#include <opaque_fragment>', `{
   vec3 spV = normalize(vViewPosition);
   float spE = 1.0 - clamp(abs(dot(normal, spV)), 0.0, 1.0), spF = spE * spE;
@@ -213,12 +226,14 @@ float spB4(vec2 a) { return spB2(0.5 * a) * 0.25 + spB2(a); }`)
   outgoingLight = outgoingLight * (1.0 + 0.04 * vFx.x) + vec3(0.55) * vFx.x * spF;
   // R4 (round 2): a slow breath, not the old 10 rad/s buzz, so the glow reads as "this is the one" and not as a fault.
   outgoingLight += vec3(1.0, 0.65, 0.07) * vFx.z * (0.26 + 0.14 * sin(uTime * 3.77)) * (0.5 + spF);
+  // D3 (11-10): the window's ink edge, a few pixels wide.
+  outgoingLight = mix(outgoingLight, vec3(0.13, 0.07, 0.045), 0.85 * step(0.001, spG) * (1.0 - smoothstep(spR, spR + (2.0 + 0.03 * uCut.z) / max(0.5 * (uCut.z + uCut.w), 1.0), spD)));
   // R7: the flame lights itself.
   if (vFx.w > 2.5 && vColor.r > 0.95) outgoingLight = mix(outgoingLight, vColor.rgb * 1.1, 0.85);
 }
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => 'sp-prop-v3';
+  m.customProgramCacheKey = () => 'sp-prop-v4';
   return m;
 }
 
@@ -1153,7 +1168,7 @@ export function loadLevel(L, skinId) {
   for (let i = 0; i < FX_MAX; i++) fl[i] = 0;
   fxN = 0; fxMesh.count = 0; fxMesh.visible = false;
   reveal = null; punchT = 0; bossCamT = -1; recWinT = -1; fin = null; finHold = false; flashA = 0; shakeX = shakeZ = 0;
-  openK = 0; openT = -1; apK = 0; apFit = null; bossNear = null; fw = null;
+  openK = 0; openT = -1; apK = 0; apFit = null; bossNear = null; fw = null; cueT = -1; cueA = 0; cueK = 0;
   const sp = L.spawn || { x: 0, z: 0 }, r0 = +L.r0 || 0.3;
   pot.x = +sp.x || 0; pot.z = +sp.z || 0; pot.r = r0; pot.rVis = r0;
   cam.x = pot.x; cam.z = pot.z; cam.vx = cam.vz = 0; cam.rCam = r0;
@@ -1873,6 +1888,7 @@ export function onFx(ev, data) {
       lid.on = false; lid.pop = lid.jig = lid.steamT = 0; glance = null; bossRing = null; recWinT = -1; fin = null; finHold = false; flashA = 0; fw = null;
       const w = d.w || W, n = LV && LV.n;
       openT = -1; openK = !d.retry && !REC && !OGP && !STILL && !calm ? 1 : 0; openW = camOpenW(n); recSnap = REC && !STILL;
+      cueT = !REC && !STILL && (n | 0) >= CUE_FROM ? 0 : -1; cueA = 0; cueK = 0;
       // L1 opens on the pot, not on a boss the new player has no use for yet (FIX-LIST-3 R1).
       // 11-07 (viral r5): no boss reveal in a record run. Its wide frame was the clip's first frame (the pot a speck) and it cut in 0.3 s later.
       if (!d.retry && n !== 1 && !REC && w && w.tickets && w.tickets.length) {
@@ -2081,6 +2097,14 @@ export function update(w, dt, alpha = 1) {
   potLift += (lift - potLift) * ek(dt, 0.06);
   updateCamera(dt);
   const rv = pot.rVis;
+  // F4: the cue is on through the boss reveal, then CUE_T s more (cueT waits for the reveal; cueA, the beat, does not); it eases in
+  // over 0.2 s and out over the last 0.6 s.
+  if (cueT >= 0) {
+    cueA += dt;
+    if (!reveal) cueT += dt;
+    if (cueT >= CUE_T) { cueT = -1; cueK = 0; }
+    else { cueK = Math.min(1, cueA / 0.2, (CUE_T - cueT) / 0.6); cueP = 0.5 - 0.5 * Math.cos(cueA * TAU * 1.5); }
+  }
 
   // ---- items
   const cp = camera.position;
@@ -2181,6 +2205,8 @@ export function update(w, dt, alpha = 1) {
         const ph = (time + i * 0.37) % 2.5;
         if (ph < 0.5) { _ax.set(0.4, 0, 1).normalize(); _q2.setFromAxisAngle(_ax, Math.sin(ph * 50) * 0.05 * (1 - ph / 0.5)); _q.premultiply(_q2); }
       }
+      const cue = cueK > 0 && ing && open && !boss && s === 0 ? cueK : 0;   // F4
+      if (cue > 0 && !calm) sc *= 1 + 0.16 * cue * cueP;
       if (popT[i] > 0) { popT[i] = Math.max(0, popT[i] - dt); const p = 1 - popT[i] / 0.25; sc *= p < 0.7 ? (p / 0.7) * 1.12 : 1.12 - 0.12 * ((p - 0.7) / 0.3); }
       if (i === trI && truckSq > 0) { const p = 1 - truckSq / 0.3; sy = 1 + 0.12 * Math.sin(p * TAU) * (1 - p); }
       let shAlpha = 1;
@@ -2246,7 +2272,7 @@ export function update(w, dt, alpha = 1) {
           if (rc > 0) { _v.set(0, rc, 0).applyQuaternion(_q); _p.x -= _v.x; _p.y += rc - _v.y; _p.z -= _v.z; }
           _m.compose(_p, _q, _s); _m.toArray(m.instanceMatrix.array, k * 16);
           const f = ud.fx.array, o = k * 4;
-          f[o] = eGlow[i]; f[o + 1] = oc; f[o + 2] = boss ? (open ? 1 : mile ? 0.55 : 0) : 0; f[o + 3] = ud.sway;
+          f[o] = eGlow[i]; f[o + 1] = oc; f[o + 2] = boss ? (open ? 1 : mile ? 0.55 : 0) : cue * (0.7 + 0.5 * cueP); f[o + 3] = ud.sway;
           kindCnt[c] = k + 1;
         }
       }
@@ -2282,7 +2308,8 @@ export function update(w, dt, alpha = 1) {
       if (s === 1 || s === 5 || finI) continue;
       // markers: halo (open-line ingredient), gate outline, padlock (locked boss), icon (open line, within 6 u)
       if (ing && open) {
-        const R = Math.max(1.6 * a * boost * vis, 11 / ppu);
+        const cb = cue * (calm ? 0.5 : 0.6 + 0.4 * cueP);   // F4: the halo swells with the beat, and its pixel floor marks a speck in the wide shot
+        const R = Math.max(1.6 * a * boost * vis * (1 + 0.45 * cb), (11 + 14 * cb) / ppu);
         nF = flatInst(fScr, fScrM, nF, x, z, R, 0, i * 1.7, 1, 0);
         if (dist < 6 && nB < 48 && iconCell[c] > 0) {
           const bob = 0.04 * Math.sin(time * 5 + i);
@@ -2525,6 +2552,14 @@ export function draw() {
     }
   } else winStart = now;
   lastNow = now;
+  // D3 (11-10): the ghost window is the pot's own screen ellipse (its front rim gives the squash, plus the rim's height), in
+  // drawing-buffer px with a bottom-left origin, set after any dpr change above.
+  { const cv = renderer.domElement, rv = pot.rVis;
+    _v.set(pot.x, 0.1 * rv, pot.z).project(camera);
+    const cx = (_v.x + 1) * 0.5 * cv.width, cy = (_v.y + 1) * 0.5 * cv.height, on = _v.z < 1, rx = rv * ppu * cv.width / cssW;
+    _v.set(pot.x + Math.sin(cam.yaw) * rv, 0.1 * rv, pot.z + Math.cos(cam.yaw) * rv).project(camera);
+    const ry = Math.max(Math.abs((_v.y + 1) * 0.5 * cv.height - cy), 0.3 * rx);
+    U.cut.value.set(cx, cy, on ? 1.18 * rx : 0, on ? 1.18 * ry + 0.2 * rx : 0); }
   renderer.render(scene, camera);
 }
 

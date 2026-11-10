@@ -51,7 +51,7 @@ export function createBot(kind = 'greedy', seed = 1, opts = {}) {
     t: 0, nextDecide: 0, target: -1, targetT: -9, ban: new Float32Array(256), sideOn: true,
     stuckX: 0, stuckZ: 0, stuckT: 0, escapeT: 0, escapeSign: 1, skip: -1, skipT: 0, ox: 0, oz: 0, rTgt: -1, rT: -1, rWp: null,
     noise: 0, queue: [], out: { x: 0, z: 0, m: 0 }, dir: { x: 0, z: -1 }, plan: [], planT: -9, w: null,
-    lv: null, zNeed: null, foc: false, prevTgt: -1, gullT: null, wp: 0, hotI: null, hotOff: false,
+    lv: null, zNeed: null, foc: false, prevTgt: -1, gullT: null, wp: 0, hotI: null, hotOff: false, hotSide: null,
   };
 }
 
@@ -704,7 +704,7 @@ function predict(bot, w) {
 }
 
 /** Steering toward (tx, tz) from the predicted pot spot, with lateral push around solid blockers ahead. */
-const HOT_CLEAR = 0.4, HOT_LOOK = 2;
+const HOT_CLEAR = 0.4, HOT_LOOK = 2, HOT_HOLD = 0.5;
 function hotList(w) {
   const out = [];
   if (w.level && w.level.hot) for (let i = 0; i < w.n; i++) if (w.flags[i] & L.F.HOT) out.push(i);
@@ -754,7 +754,12 @@ function steer(bot, w, tx, tz, target) {
       }
       if (bj >= 0) {
         const ux = (w.ix[bj] - px) / bd, uz = (w.iz[bj] - pz) / bd;
-        const sn = reach < bd ? reach / bd : 1, cs = Math.sqrt(1 - sn * sn), sg = bl > 0 ? -1 : bl < 0 ? 1 : (bj & 1 ? 1 : -1);
+        const sn = reach < bd ? reach / bd : 1, cs = Math.sqrt(1 - sn * sn);
+        // DECISION (11-10, FIX-LIST-7 A4): the side is kept while the same chili stays in the lane (seen within HOT_HOLD s). Picked fresh each
+        // frame, a chili dead ahead flipped the side with every lagged wobble and the average hand stood still by it for good (L8, 2 of 40 runs).
+        const hs = bot.hotSide, keep = hs && hs.j === bj && bot.t - hs.t < HOT_HOLD;
+        const sg = keep ? hs.sg : bl > 0 ? -1 : bl < 0 ? 1 : (bj & 1 ? 1 : -1);
+        bot.hotSide = { j: bj, sg, t: bot.t };
         dx = ux * cs - uz * sn * sg; dz = uz * cs + ux * sn * sg;
       }
     }

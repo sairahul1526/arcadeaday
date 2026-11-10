@@ -36,7 +36,12 @@ export const WHITE_UV = [WHITE_PX / TEX, WHITE_PX / TEX];
 // colours because level generation reads them and Dailies may not move.
 // FIX-LIST-3 R2 (L45, L58): the teak still swallowed brown and tan food, same hue and same value. The deck is now sea-bleached grey,
 // cooler and lighter: warm food has a hue gap, white food still has a value gap. Display only, as above.
-export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#B3BAB8' };
+// DECISION (11-10, D2, art-director r8 "Harbour is washed out"): the grey deck sat at the same value as the food (waffle, mint,
+// candy, cotton candy, peas all 1.0-1.3 contrast on it). The planks are now a warm, saturated toy-boat wood a clear step DARKER
+// than the harbour food set, so pastel, white, yellow and tan food read by value (2-5x) and the dark few (coconut, burger,
+// berries) keep the harbour-only bright edge band in the prop shader. Teak failed (11-06) because it sat at tan food's value; this
+// sits well under it. Display only, as above.
+export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#A8693F' };
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
 // R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
 // catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
@@ -2204,7 +2209,9 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
     // 11-07 (art-director r5, L50/L55): one step was not enough, the deck still rendered near white and mint sweets, ice cream and
     // cotton candy sank into it. A near-white deck is now a sea-weathered blue-grey (half way to slate in linear light, about
     // #B0C5CB), so white and pastel food read by value and brown food by hue. Display only, like GROUND_BASE.
-    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? mixC(col, '#4E6E7C', 0.5) : col;
+    // D2 (11-10): the blue-grey was the washed-out deck; a near-white deck is now the same warm toy wood as the pier, a shade
+    // more orange so the platform still reads as its own piece.
+    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? '#B5733F' : col;
     for (let i = 0; i < n; i++) parts.push(P(rbox(w, 0.03, d / n - 0.02, 0.012, 1), mixC(base, '#3A2418', i % 2 ? 0.08 : 0), [0, 0.006, -d / 2 + (i + 0.5) * d / n]));
   } else {
     // blanket / rug: body + hem frame + inner line; blanket gets tassels on the short ends
@@ -2341,7 +2348,7 @@ export function groundTexture(town = 'picnic') {
       }
     }
   } else if (town === 'harbour') {
-    x.fillStyle = tone('#747C7C');
+    x.fillStyle = tone('#7E4E2E');   // D2 (11-10): warm gaps, alternate planks, grain and nails (every tone sits under the base)
     x.fillRect(0, 0, TEX, TEX);
     for (let r = 0; r < 8; r++) {
       const y0 = r * 64, off = (r * 173) % 300, rr = r;
@@ -2350,12 +2357,12 @@ export function groundTexture(town = 'picnic') {
         const forced = (rr === 0 || rr === 7) && xx + 2 <= WHITE_PX && xx + 298 > WHITE_PX;
         for (const dx of [0, TEX]) {
           const X = xx + dx;
-          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#A2AAAA');
+          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#97603A');
           x.fillRect(X + 2, y0 + 2, 296, 60);
-          x.fillStyle = tone('#A9B1B0');
+          x.fillStyle = tone('#9C5F38');
           x.fillRect(X + 2, y0 + 16, 296, 2);
           x.fillRect(X + 2, y0 + 47, 296, 2);
-          x.fillStyle = tone('#636A6A');
+          x.fillStyle = tone('#5A3420');
           for (const ny of [y0 + 12, y0 + 52]) for (const nx of [X + 12, X + 288]) { x.beginPath(); x.arc(nx, ny, 3, 0, TAU); x.fill(); }
         }
       }

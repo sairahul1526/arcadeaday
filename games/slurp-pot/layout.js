@@ -60,6 +60,17 @@ export function webInset(H) {
   } catch { return 0; }
 }
 
+// DECISION (11-10, D1): the site chips' rect (right edge, top) for the landscape map's bottom pill row; null when hidden or no DOM
+export function webChips() {
+  if (typeof document === 'undefined') return null;
+  try {
+    const nav = document.querySelector('nav.back');
+    if (!nav || getComputedStyle(nav).display === 'none' || getComputedStyle(nav).visibility === 'hidden') return null;
+    const r = nav.getBoundingClientRect();
+    return r.width && r.height ? { chipR: Math.ceil(r.right), chipT: Math.floor(r.top) } : null;
+  } catch { return null; }
+}
+
 function normIns(i) {
   if (!i) return { t: 0, r: 0, b: 0, l: 0 };
   return { t: +(i.t ?? i.top ?? 0) || 0, r: +(i.r ?? i.right ?? 0) || 0, b: +(i.b ?? i.bottom ?? 0) || 0, l: +(i.l ?? i.left ?? 0) || 0 };
@@ -108,14 +119,21 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
   //   the 12.5 px floor, a quarter smaller than portrait. Its ticket runs 1.25x (hu about 0.94): the ticket owns its own left
   //   column (the play rect starts right of it), so the bigger text costs about 30 px of width and no play space.
   const lphone = aspect === 'landscape' && Math.min(W, H) < 600 && !record;
-  const hs = W >= 820 && Math.min(W, H) >= 600 && !record ? 1.3 : lphone ? 1.25 : 1, hu = u * hs;
+  // DECISION (11-10, D5, art-director r8 "desktop ticket tiny at the far left, bar spans the screen"): a desktop-class
+  //   landscape screen (1280+ wide, 760+ tall) runs the ticket at 1.42x instead of 1.3x, and its progress bar is capped and
+  //   centred (below), so the HUD reads as one column of about 900 px instead of three corners.
+  const desk = aspect === 'landscape' && W >= 1280 && H >= 760 && !record;
+  const hs = desk ? 1.42 : W >= 820 && Math.min(W, H) >= 600 && !record ? 1.3 : lphone ? 1.25 : 1, hu = u * hs;
   // font sizes (CSS px), all floored at 12.5 (Wednesday brief: 12.5 px text floor)
   const fs = {
     hdr: Math.max(12.5, hu * 16), count: Math.max(12.5, hu * 14), serve: Math.max(13, U(16)), callout: Math.max(12.5, U(16)),
     secs: Math.max(12.5, U(18)), chain: Math.max(16, U(22)), badge: Math.max(12.5, U(12)), label: Math.max(12.5, U(13)),
     caption: Math.max(20, U(27)), bump: Math.max(13, U(15)),
   };
-  const btn = Math.max(44, U(44)), bst = Math.max(44, U(52)), tmr = Math.max(46, U(64));
+  // DECISION (11-10, D4, FIX-LIST-7): booster tins 52u -> 58u (about 12 % bigger, floor 44 -> 50) so they read as buttons on a phone.
+  const btn = Math.max(44, U(44)), bst = Math.max(50, U(58)), tmr = Math.max(46, U(64));
+  // the gap between tins clears the price chip's overhang (bstTag), which at 50 px tins on a short phone was a pixel over 8.
+  const bstGap = Math.max(10, U(12));
   const bstTag = Math.max(19, U(21)) * 0.45;   // the coin tag's overhang below a booster tin (ui.js drawBoosters: ph = max(19, 21u), 0.45 below)
   // the live "3 stars: 0:35" tag under the clock (ui.js drawStarChip): text max(12.5, 13.5u), pill 1.5x that, 2u under the ring;
   //   about 7.2 em wide at 13.5 px (97 px measured at 390x844), 7.4 em reserved
@@ -169,7 +187,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     let below = oldStar ? hud.meter.y + mh : hud.star.y + starH;
     if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(hud.meter.x, below + Math.max(3, U(4)), hud.meter.w, sh); below = hud.strip.y + sh; }
     hud.callout = R(safe.x + U(10), below + Math.max(4, U(6)), SW - U(20), ch);
-    const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
+    const gap = bstGap, colH = 3 * bst + 2 * gap;
     // DECISION (Friday fix U5): the booster column used to sit at 40 % of the screen height, on live play space; it now
     //   rides the lowest right corner just above the safe area (thumb reach, off the pot's usual line), like landscape.
     // DECISION (11-07 Sat, viral r6 "lowest booster label cut by the screen edge"): the coin tag hangs 0.45 of its height
@@ -196,15 +214,17 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
       hud.star = R(Math.min(Math.max(hud.timer.x + tmr / 2 - starW / 2, sLo), sHi - starW), hud.ticket.y + th + Math.max(4, U(6)), starW, starH);
       hud.star.lo = sLo; hud.star.hi = sHi; }
     const mh = Math.max(24, U(26));
-    const mx0 = Math.max(safe.x + U(240), col.x + colW + U(12));
-    const mx1 = Math.min(sr - U(70), hud.pause.x - U(10));
+    let mx0 = Math.max(safe.x + U(240), col.x + colW + U(12));
+    let mx1 = Math.min(sr - U(70), hud.pause.x - U(10));
+    // D5: on a desktop the bar is at most 460u (about 740 px at 1440x900), centred in the space between ticket and pause.
+    if (desk && mx1 - mx0 > U(460)) { const c = (mx0 + mx1) / 2; mx0 = c - U(230); mx1 = c + U(230); }
     hud.meter = R(mx0, top + (btn - mh) / 2, mx1 - mx0, mh);
     const ch = Math.max(34, U(40));
     let below = Math.max(hud.meter.y + mh, hud.pause.y + btn);
     if (opts.feast) { const sh = Math.max(22, U(24)); hud.strip = R(mx0, below + Math.max(3, U(4)), mx1 - mx0, sh); below = hud.strip.y + sh; }
     const cy = below + Math.max(4, U(6));
     hud.callout = R(mx0, cy, mx1 - mx0, ch);
-    const gap = Math.max(8, U(10)), colH = 3 * bst + 2 * gap;
+    const gap = bstGap, colH = 3 * bst + 2 * gap;
     let y0 = sb - U(12) - bstTag - colH;
     y0 = Math.max(y0, hud.callout.y + ch + U(8));
     hud.boosters = [0, 1, 2].map(i => R(sr - inset - bst, y0 + i * (bst + gap), bst, bst));
@@ -224,7 +244,7 @@ export function computeLayout(cssW, cssH, ins, opts = {}) {
     const chh = Math.max(56, U(78)), cy = play.y + U(10), cx0 = play.x + (aspect === 'landscape' ? U(4) : U(16));
     let cr = sr - U(16);
     const b0 = hud.boosters[0];
-    if (b0.y < cy + chh && b0.y + 3 * bst + 2 * Math.max(8, U(10)) > cy) cr = Math.min(cr, b0.x - U(8));
+    if (b0.y < cy + chh && b0.y + 3 * bst + 2 * bstGap > cy) cr = Math.min(cr, b0.x - U(8));
     hud.caption = R(cx0, cy, cr - cx0, chh);
   }
   // Edge arrows live inside the play rect (never over the HUD rows), 10u from its edges.
@@ -323,25 +343,26 @@ export function cardLayout(L, name, opts = {}) {
     // DECISION (Friday fix): a landscape screen with room (>= 600 px tall, a desktop) uses the phone's centred column (wordmark,
     //   pot, PLAY) scaled up; only short landscape phones keep the two-column group, with the wordmark centred over it.
     if (L.aspect === 'landscape' && S.h < 600) {
-      // DECISION (U11): on a wide desktop the logo/pot and PLAY form one centred group (max ~ 780u wide), not two ends of the screen.
+      // DECISION (11-10, D1/F3 title half, art director r8 "844x390 title icons are a cramped 2x3 grid on the scene"): a short
+      //   landscape title is the pot on the left and wordmark + PLAY on the right, over ONE row of the six icons along the bottom
+      //   (right of the web chips when their rect is known, opts.chipR; centred otherwise).
+      const rowH = iconB + lab * 1.5 + 6, chipR = Math.max(0, +opts.chipR || 0);
+      const rowY = S.y + S.h - P2 * 0.6 - (fb ? 0 : rowH);
       const gw = Math.min(S.w, Math.max(900, u * 780)), gx = S.x + (S.w - gw) / 2, half = gw / 2;
-      const left = R(gx + P2, S.y + topH + P2, half - 2 * P2, S.h - topH - 2 * P2);
-      const logoH2 = Math.min(left.h * 0.34, u * 120);
-      const right = R(gx + half + P2 * 0.5, left.y, half - 1.5 * P2, left.h);
-      B.pot = R(left.x, left.y + logoH2, left.w, left.h - logoH2);
-      const pw = Math.min(right.w, Math.max(220, u * 320)), ph = Math.max(60, u * 74);
-      // DECISION: balanced rows: 6 icons that need two rows go 3 + 3, never 5 + 1 or 4 + 2
-      const fit = Math.max(1, Math.min(n, Math.floor((right.w + 6) / (cellW + 6))));
-      const perRow = Math.ceil(n / Math.ceil(n / fit));
-      const rowsN = fb ? 0 : Math.ceil(n / perRow), rowH = iconB + lab * 1.5 + 6;
-      const total = ph + (rowsN ? gap * 2 + rowsN * rowH : 0);
-      // wordmark centred over the whole group when the right stack fits under it, else over the left column only
-      const wideLogo = total + logoH2 <= left.h;
-      B.logo = wideLogo ? R(gx + P2, left.y, gw - 2 * P2, logoH2) : R(left.x, left.y, left.w, logoH2);
-      let y = right.y + Math.max(wideLogo ? logoH2 : 0, (right.h - total) / 2);
-      B.play = R(right.x + (right.w - pw) / 2, y, pw, ph); btn('play', B.play, true);
-      y += ph + gap * 2;
-      if (!fb) iconGrid(ids, right.x, y, right.w, perRow, cellW, iconB, rowH, lab);
+      const top = S.y + P2 + topH + P2 * 0.4, areaH = rowY - gap - top;
+      const left = R(gx + P2, top, half - 2 * P2, areaH), right = R(gx + half + P2 * 0.5, top, half - 1.5 * P2, areaH);
+      const pw = Math.min(right.w, Math.max(220, u * 320)), ph = Math.max(56, u * 70);
+      const logoH2 = Math.min(areaH - ph - gap * 2, Math.max(70, u * 120));
+      B.pot = R(left.x, top, left.w, areaH);
+      const y0 = right.y + Math.max(0, (areaH - logoH2 - gap * 2 - ph) / 2);
+      B.logo = R(right.x, y0, right.w, logoH2);
+      B.play = R(right.x + (right.w - pw) / 2, y0 + logoH2 + gap * 2, pw, ph); btn('play', B.play, true);
+      if (!fb) {
+        let x0 = S.x + P2, w = S.w - 2 * P2;
+        if (chipR && S.x + S.w - P2 - (chipR + P2) >= n * cellW) { x0 = chipR + P2; w = S.x + S.w - P2 - x0; }
+        const w2 = Math.min(w, n * (cellW + Math.max(8, u * 30)));
+        iconGrid(ids, x0 + (w - w2) / 2, rowY, w2, n, cellW, iconB, rowH, lab);
+      }
     } else {
       const usable = R(S.x + P2, S.y + topH + P2, S.w - 2 * P2, S.h - topH - 2 * P2);
       const perRow = (n * cellW + (n - 1) * 6) <= usable.w ? n : 3;
@@ -359,7 +380,9 @@ export function cardLayout(L, name, opts = {}) {
       B.logo = R(usable.x, usable.y, usable.w, logoH);
       B.pot = R(usable.x, B.logo.y + logoH, usable.w, potH);
       B.play = R(usable.x + (usable.w - pw) / 2, B.pot.y + potH + gap, pw, ph); btn('play', B.play, true);
-      if (!fb) iconGrid(ids, usable.x, B.play.y + ph + gap * 2, usable.w, perRow, cellW, iconB, rowH, lab);
+      // D1 (11-10): a desktop's single icon row closes up into a group (it was spread over the full 1400 px)
+      const iw = dk && perRow === n ? Math.min(usable.w, n * (cellW + Math.max(24, L.u * 40))) : usable.w;
+      if (!fb) iconGrid(ids, usable.x + (usable.w - iw) / 2, B.play.y + ph + gap * 2, iw, perRow, cellW, iconB, rowH, lab);
     }
     const dkT = L.aspect === 'landscape' && S.h >= 600;
     fs.logo = Math.max(30, L.u * (dkT ? 81 : 54)); fs.label = lab; fs.play = dkT ? clamp(L.u * 21, 24, 36) : Math.max(22, L.u * 30); fs.pill = Math.max(14, L.u * 18);
@@ -409,7 +432,9 @@ export function cardLayout(L, name, opts = {}) {
       ...(opts.help && !twoCol ? [helpRow] : []),
       { id: 'retry', h: retryH, min: retryH, gap: opts.help && !twoCol ? gap * 0.5 : gap * 1.4 },
       // 11-07 Sat, U2: RETRY is the first thing the thumb lands on; paying to go on sits under it.
-      ...(opts.canFreeze ? [{ id: 'freeze', h: Math.max(48, U(54)), min: 48, gap: gap * 0.8 }] : []),
+      // DECISION (11-10, C1): RETRY WITH MAGNET shares this one secondary row with the Freeze continue (two halves when both show),
+      //   so a second fail adds no height and RETRY stays the one big button.
+      ...(opts.canFreeze || opts.boost ? [{ id: 'side', h: Math.max(48, U(54)), min: 48, gap: gap * 0.8 }] : []),
       { id: 'sec', h: secH, min: secH, gap },
     ] : [
       { id: 'stars', h: Math.max(44, U(66)), min: 40, gap },
@@ -423,13 +448,22 @@ export function cardLayout(L, name, opts = {}) {
       // Friday fix 2, U3: an affordable pot is a real button (44 px), a pot still out of reach is one line of text.
       ...(opts.buySkin ? (twoCol ? [] : [buyRow])
         : opts.nextSkin ? [{ id: 'hint', h: Math.max(fs.small * 1.6, U(24)), min: fs.small * 1.4 }] : []),
-      { id: 'next', h: primH, min: primH, gap: gap * 1.4 },
+      // C3 (11-10): the first Daily offer, a button the size of NEXT right above it (NEXT keeps its size)
+      ...(opts.daily ? [{ id: 'daily', h: primH, min: primH, gap: gap * 0.9 }] : []),
+      { id: 'next', h: primH, min: primH, gap: opts.daily ? gap * 0.6 : gap * 1.4 },
       { id: 'sec', h: secH, min: secH, gap },
     ];
     // 11-07 Sat, U6: a very short single column with the strip too: the third-star line goes, the buttons stay on the card.
-    if (!fail && !twoCol && [...rowsL, ...rowsR].reduce((s, r) => s + (r.min ?? r.h) + (r.gap || 0), 0) > inner.h) {
+    const need = rows => rows.reduce((s, r) => s + (r.min ?? r.h) + (r.gap || 0), 0);
+    const over = () => (twoCol ? need(rowsR) > colR.h : need([...rowsL, ...rowsR]) > inner.h);
+    if (!fail && (!twoCol || opts.daily) && over()) {
       const gi = rowsR.findIndex(r => r.id === 'goal');
       if (gi >= 0) rowsR.splice(gi, 1);
+    }
+    // C3 (11-10): with the Daily offer on a short card the pot hint goes next, then the stats row; NEXT and Daily stay.
+    for (const id of ['hint', 'stats']) {
+      if (fail || !opts.daily || !over()) break;
+      const i = rowsR.findIndex(r => r.id === id); if (i >= 0) rowsR.splice(i, 1);
     }
     let A, Bk;
     if (twoCol) {
@@ -463,15 +497,31 @@ export function cardLayout(L, name, opts = {}) {
     const bw = Math.min(B.sec.w, Math.max(200, U(280)));
     if (fail) {
       B.retry = centreW(B.retry, bw); btn('retry', B.retry, true);
-      if (B.freeze) { B.freeze = centreW(B.freeze, Math.min(B.freeze.w, Math.max(220, U(300)))); btn('freeze', B.freeze); }
+      if (B.side) {
+        const sd = B.side; delete B.side;
+        if (opts.canFreeze && opts.boost) {
+          const hw = Math.min((sd.w - gap) / 2, Math.max(150, U(200)));
+          B.boost = R(sd.x + sd.w / 2 - gap / 2 - hw, sd.y, hw, sd.h); btn('boost', B.boost);
+          B.freeze = R(sd.x + sd.w / 2 + gap / 2, sd.y, hw, sd.h); btn('freeze', B.freeze);
+        } else {
+          const one = centreW(sd, Math.min(sd.w, Math.max(220, U(300))));
+          if (opts.boost) { B.boost = one; btn('boost', B.boost); } else { B.freeze = one; btn('freeze', B.freeze); }
+        }
+      }
       const mw = Math.min(B.sec.w, Math.max(120, U(150)));
       B.map = centreW(B.sec, mw); btn('map', B.map);
     } else {
       B.next = centreW(B.next, bw); btn('next', B.next, true);
+      if (B.daily) { B.daily = centreW(B.daily, bw); btn('daily', B.daily); }
       if (opts.buySkin && B.hint) { B.hint = centreW(B.hint, Math.min(B.hint.w, Math.max(240, U(320)))); btn('buySkin', B.hint); }
-      const sw = Math.min((B.sec.w - gap) / 2, Math.max(110, U(140)));
-      B.replay = R(B.sec.x + B.sec.w / 2 - gap / 2 - sw, B.sec.y, sw, B.sec.h); btn('replay', B.replay);
-      B.map = R(B.sec.x + B.sec.w / 2 + gap / 2, B.sec.y, sw, B.sec.h); btn('map', B.map);
+      // DECISION (11-10, G3): on the plain web build a square Share button joins the Replay · Map row (never on yt or a portal,
+      //   where opts.share is false). The row stays centred as one group, so Replay and Map only narrow a little.
+      const sq = opts.share ? Math.max(44, B.sec.h) : 0, sg = sq ? gap : 0;
+      const sw = Math.min((B.sec.w - gap - sq - sg) / 2, Math.max(110, U(140)));
+      const x0 = B.sec.x + (B.sec.w - (sw * 2 + gap + sq + sg)) / 2;
+      B.replay = R(x0, B.sec.y, sw, B.sec.h); btn('replay', B.replay);
+      B.map = R(x0 + sw + gap, B.sec.y, sw, B.sec.h); btn('map', B.map);
+      if (sq) { B.share = R(x0 + sw * 2 + gap + sg, B.sec.y, sq, sq); btn('share', B.share); }
     }
     delete B.sec;
     return out;
@@ -823,20 +873,48 @@ function mapLayout(L, out, opts) {
   const P2 = Math.max(8, u * 12), topH = Math.max(44, u * 46);
   const side = L.aspect === 'landscape';
   B.back = R(S.x + P2, S.y + P2, topH, topH); btn('back', B.back);
-  const pillW = Math.max(98, u * 104);   // fits "9999" at the pill font
+  // C1 (11-10): opts.saving widens the coins pill by one pot icon (the skin being saved for, with a coins/price bar)
+  const saveW = opts.saving ? Math.round(topH * 0.78) : 0;
+  const pillW = Math.max(98, u * 104) + saveW;   // fits "9999" at the pill font (+ the pot icon)
   B.coins = R(S.x + S.w - P2 - pillW, S.y + P2, pillW, topH);
+  out.saveW = saveW;
   const midL = B.back.x + topH + P2, midR = B.coins.x - P2;
   const msW = Math.min(Math.max(150, u * 220), midR - midL);
   B.milestone = R(clamp(S.x + (S.w - msW) / 2, midL, midR - msW), S.y + P2, msW, topH);
   const iconB = Math.max(48, u * 54), lab = Math.max(12.5, u * 13), rowH = iconB + lab * 1.45 + 4;
   const ids = ['daily', 'feast', 'cookbook', 'shop'];
-  // DECISION (Friday fix 2, U5): a desktop map is a wide framing, not a phone strip: about 960 px at 1440, capped at 1040 so the
-  //   571 px art is not stretched past ~1.8x. Smaller nodes on a shorter step show about 7 levels of trail instead of 5.
-  const colWide = room => Math.min(room, Math.max(340, Math.min(u * 600, 1040)));
   const top = S.y + P2 + topH + Math.max(4, u * 6);
   B.icons = [];
-  let view, sideW = 0;
-  if (!side) {
+  let view; const sideW = 0;
+  if (side) {
+    // DECISION (11-10, D1/F3/kid13, art director r8 #1 "1440x900 and 844x390 map is a cropped sliver"): a landscape map (phone or
+    //   desktop) is one wide band. The two side columns are gone: Daily / Feast / Cookbook / Shop are one row of pill buttons
+    //   (icon + label) along the bottom, sharing the web chips' strip (the row starts right of the chips, opts.chipR), and the two
+    //   "next" pills ride in the top bar either side of the star bar (pillL / pillR), so the trail gets the full height between.
+    const ph = clamp(u * 46, 48, 66), lf = clamp(u * 14, 14, 21), pg = Math.max(8, u * 10);
+    const pw = Math.round(ph * 0.92 + lf * 5.1 + ph * 0.3);   // icon disc + "Cookbook" + end padding, one width for all four
+    const rowW = 4 * pw + 3 * pg, chipR = Math.max(0, +opts.chipR || 0), chipT = +opts.chipT || L.H;
+    // with the web chips' rect known (opts.chipR right edge, opts.chipT top) the row shares their strip, right of them; when
+    //   it does not fit there (narrow phones) it sits above the chips. Without chips (iframes, portals) it is centred.
+    let x0 = S.x + (S.w - rowW) / 2, SB = S.y + S.h, share = false;
+    if (chipR) {
+      share = Math.max(x0, chipR + pg) + rowW <= S.x + S.w - P2;
+      if (share) { x0 = Math.max(x0, chipR + pg); SB = L.safe.y + L.safe.h; } else SB = Math.min(SB, chipT - 4 + P2);
+    }
+    const ry = SB - P2 - ph;
+    view = R(S.x, top, S.w, ry - Math.max(6, u * 6) - top);
+    ids.forEach((id, i) => {
+      const r = R(x0 + i * (pw + pg), ry, pw, ph);
+      B.icons.push({ id, r, pill: true, ico: R(r.x + ph * 0.1, r.y + ph * 0.1, ph * 0.8, ph * 0.8), lab: R(r.x + ph * 0.96, r.y + ph * 0.18, pw - ph * 1.1, ph * 0.64) });
+      btn(id, r);
+    });
+    out.fs.label2 = lf;
+    // the "Win N more for a chest" and "Tomorrow" pills: left and right of the star bar (ui.js falls back to the band if they do not fit)
+    const pl = R(midL, S.y + P2, B.milestone.x - P2 - midL, topH), pr = R(B.milestone.x + B.milestone.w + P2, S.y + P2, B.coins.x - P2 - (B.milestone.x + B.milestone.w + P2), topH);
+    B.pillL = pl.w >= 90 ? pl : null; B.pillR = pr.w >= 90 ? pr : null;
+    if (share) out.panel = L.safe;   // the pill row sits in the chips' strip (right of them), below the raised menu rect
+    out.chipR = chipR; out.chipT = chipR ? chipT : 0;
+  } else {
     const barH = rowH + P2;
     view = R(S.x, top, S.w, S.y + S.h - barH - top);
     const bar = R(S.x, view.y + view.h, S.w, barH);
@@ -845,27 +923,16 @@ function mapLayout(L, out, opts) {
       const cx = x0 + cw * (i + 0.5), r = R(cx - iconB / 2, bar.y + Math.max(2, u * 3), iconB, iconB);
       B.icons.push({ id, r, lab: R(cx - cw / 2, r.y + iconB + 2, cw, lab * 1.3) }); btn(id, r);
     });
-  } else {
-    view = R(S.x, top, S.w, S.y + S.h - top);
-    const cw = Math.max(iconB + 12, lab * 6.2);
-    sideW = cw + 2 * P2;
-    const colH = 2 * rowH + P2, y0 = view.y + Math.max(0, (view.h - colH) / 2);
-    ids.forEach((id, i) => {
-      // DECISION (U11): the side buttons sit just outside the map column, not out at the far screen edges.
-      const cw0 = colWide(view.w - 2 * sideW), colL = view.x + (view.w - cw0) / 2, colR = colL + cw0;
-      const left = i < 2, cx = left ? Math.max(S.x + P2 + cw / 2, colL - P2 * 1.5 - cw / 2) : Math.min(S.x + S.w - P2 - cw / 2, colR + P2 * 1.5 + cw / 2);
-      const r = R(cx - iconB / 2, y0 + (i % 2) * (rowH + P2), iconB, iconB);
-      B.icons.push({ id, r, lab: R(cx - cw / 2, r.y + iconB + 2, cw, lab * 1.3) }); btn(id, r);
-    });
   }
   B.view = view;
-  const colW = side ? colWide(view.w - 2 * sideW) : L.aspect === 'square' ? Math.min(view.w, Math.max(340, u * 700)) : view.w;
+  if (side) return serpMap(L, out, view, P2);
+  const colW = L.aspect === 'square' ? Math.min(view.w, Math.max(340, u * 700)) : view.w;
   const col = R(view.x + (view.w - colW) / 2, view.y, colW, view.h);
-  const nodeD = Math.max(46, u * (side ? 44 : 52)), starH = Math.max(14, u * (side ? 13 : 15));
-  const step = Math.max(nodeD + starH + 12, u * (side ? 62 : 78));
+  const nodeD = Math.max(46, u * 52), starH = Math.max(14, u * 15);
+  const step = Math.max(nodeD + starH + 12, u * 78);
   const hdrH = Math.max(58, u * 68), chestH = Math.max(64, u * 74);
   const townH = hdrH + 20 * step + chestH;
-  const amp = Math.max(0, Math.min(colW / 2 - nodeD / 2 - P2 - 4, Math.max(60, u * (side ? 170 : 112))));
+  const amp = Math.max(0, Math.min(colW / 2 - nodeD / 2 - P2 - 4, Math.max(60, u * 112)));
   const nodes = [];
   for (let n = 1; n <= 60; n++) {
     const ti = ((n - 1) / 20) | 0, k = (n - 1) % 20;
@@ -875,7 +942,44 @@ function mapLayout(L, out, opts) {
   const towns = [0, 1, 2].map(ti => ({ i: ti, y: (2 - ti) * townH, h: townH, ribbon: (3 - ti) * townH - hdrH, chest: (2 - ti) * townH }));
   out.containers = ['view'];
   out.map = { col, nodeD, starH, step, hdrH, chestH, townH, contentH: 3 * townH, amp, nodes, towns, sideW };
-  out.fs = Object.assign(out.fs, { label: lab, pill: Math.max(14, u * 17), node: Math.max(14, u * 19), town: Math.max(18, u * 24),
+  return mapFs(out, u);
+}
+const mapFs = (out, u) => {
+  out.fs = Object.assign(out.fs, { label: Math.max(12.5, u * 13), pill: Math.max(14, u * 17), node: Math.max(14, u * 19), town: Math.max(18, u * 24),
     lock: Math.max(16, u * 20) });
   return out;
+};
+/**
+ * DECISION (11-10, D1/F3, art director + curator + kid13 r8): the landscape map (844x390 phone up to desktop) is a serpentine:
+ *   rows of SERP_K nodes that turn back at each end, SERP_ROWS rows per town, so a 270 px phone view holds 10-15 nodes and a
+ *   desktop view holds a whole town (20). The row pitch is fitted to the view height (one town per view when the screen is
+ *   tall enough, never under node + stars + 10 px), and the town art is drawn at the width whose disc spans one town band
+ *   (artW, tiled across the full width by ui.js), so no screen shows a cropped sliver of one disc or blurred side panels.
+ *   Portrait and square keep the winding single column.
+ */
+const SERP_K = 5, SERP_ROWS = 4, ART_AR = 1024 / 571, ART_DISC = 0.7;
+function serpMap(L, out, view, P2) {
+  const u = L.u, K = SERP_K;
+  const nodeD = Math.max(46, u * 40), starH = Math.max(14, u * 13);
+  const minRs = nodeD + starH + Math.max(10, u * 10);
+  const hdrH = Math.max(52, u * 58), chestH = Math.max(58, u * 62);
+  const rs = clamp((view.h - hdrH - chestH) / SERP_ROWS, minRs, minRs * 1.6);
+  const townH = hdrH + SERP_ROWS * rs + chestH;
+  const bulge = Math.min(rs * 0.42, nodeD * 0.9);          // how far a row's U-turn swings out past the end node (ui.js trail)
+  const artFit = townH / (ART_AR * ART_DISC);
+  const pathW = Math.min(view.w - 2 * P2 - nodeD - 2 * bulge, Math.max((K - 1) * nodeD * 1.7, artFit * 0.78));
+  const hs = pathW / (K - 1);
+  const colW = Math.min(view.w, pathW + nodeD + 2 * bulge + 8);
+  const col = R(view.x + (view.w - colW) / 2, view.y, colW, view.h);
+  const nodes = [];
+  for (let n = 1; n <= 60; n++) {
+    const ti = ((n - 1) / 20) | 0, k = (n - 1) % 20, r = (k / K) | 0, c = k % K, cc = r % 2 ? K - 1 - c : c;
+    const arch = rs * 0.16 * Math.sin(Math.PI * cc / (K - 1));   // each row bows up a little in the middle: a path, not a grid
+    nodes.push({ n, town: ti, row: r, x: colW / 2 - pathW / 2 + cc * hs, y: (3 - ti) * townH - hdrH - rs * (r + 0.5) - arch });
+  }
+  const towns = [0, 1, 2].map(ti => ({ i: ti, y: (2 - ti) * townH, h: townH, ribbon: (3 - ti) * townH - hdrH, chest: (2 - ti) * townH }));
+  out.containers = ['view'];
+  out.map = { col, nodeD, starH, step: rs, hdrH, chestH, townH, contentH: 3 * townH, amp: pathW / 2, nodes, towns, sideW: 0,
+    serp: true, bulge, chipR: out.chipR || 0, chipT: out.chipT || 0, artW: Math.max(artFit, (pathW + nodeD) / 0.86) };
+  return mapFs(out, u);
 }

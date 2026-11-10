@@ -78,6 +78,9 @@ export const MILESTONE_EVERY = 15, MILESTONE_COINS = 60;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS * 10 + 99; // 18,699
 export const TUT = { drag: 1, recipe: 2, padlock: 4, stars: 8, pens: 16, rolling: 32, fragile: 64, belt: 128, twocourse: 256, simmer: 512, gulls: 1024, truck: 2048, layered: 4096, freeze: 8192 };
 const WIN_A = 10, STAR_PAY = [0, 5, 10, 20], REPLAY_A = 3, DAILY_A = 40, DAILY_B = 10;
+// DECISION (11-10, C2): a replay that first reaches 3 stars pays a flat named bonus on top of the star gain, so the
+//   replay has a payoff the card can name ("3-star bonus"), not only a bigger number.
+const FIRST3_A = 15;
 const starPay = (n, st) => Math.round(STAR_PAY[st] * (1 + n / 30));
 const SMALL_CHEST = { 1: 30, 5: 40, 10: 50, 15: 60 };
 const CHEST_COINS = [150, 150, 300], CHEST_BOOST = 2;
@@ -558,7 +561,7 @@ function claimChests() {
 }
 /**
  * Records a level win (n = 1..60) and pays it. r = { stars (1..3), tLeft, chainBest }.
- * Returns { coins, newStars, first, stars, gifts:[{kind:'booster',k,n}], chest:{town,coins,boost}|null (the first one;
+ * Returns { coins, newStars, first, first3 (the 3-star replay bonus inside coins, 0 if none), stars, gifts:[{kind:'booster',k,n}], chest:{town,coins,boost}|null (the first one;
  *           `chests` lists all), milestone:{n,coins,boost}|null (the first one; `milestones` lists all), nextSkin,
  *           allDone (true only on the win that completed all 60) }.
  * Everything returned is already credited; flushes the save at once.
@@ -566,7 +569,7 @@ function claimChests() {
 export function levelResult(n, r = {}) {
   const d = D();
   n = int(n, 1, LEVELS, 0);
-  const none = { coins: 0, newStars: 0, first: false, stars: 0, gifts: [], chest: null, chests: [], milestone: null, milestones: [], nextSkin: null, allDone: false };
+  const none = { coins: 0, newStars: 0, first: false, first3: 0, stars: 0, gifts: [], chest: null, chests: [], milestone: null, milestones: [], nextSkin: null, allDone: false };
   if (!d || !n) return none;
   const st = int(r.stars, 1, 3, 1);
   const wasDone = allDone();
@@ -574,6 +577,8 @@ export function levelResult(n, r = {}) {
   const first = prev === 0;
   const newStars = Math.max(0, st - prev);
   let pay = first ? WIN_A + n + starPay(n, st) : REPLAY_A + starPay(n, Math.max(st, prev)) - starPay(n, prev);
+  const first3 = !first && st === 3 && prev < 3 ? FIRST3_A : 0;
+  pay += first3;
   if (isFinale(n)) pay *= 2;
   d.stars[n - 1] = Math.max(prev, st);
   d.cur = Math.max(d.cur, Math.min(LEVELS + 1, n + 1));
@@ -587,7 +592,7 @@ export function levelResult(n, r = {}) {
   d.cur = Math.min(LEVELS + 1, d.stars.reduce((hi, v, i) => (v > 0 ? i + 1 : hi), 0) + 1);
   save(true);
   reportScore();
-  return { coins: pay, newStars, first, stars: st, gifts, chest: chests[0] || null, chests, milestone: milestones[0] || null, milestones, nextSkin: nextSkin(100), allDone: !wasDone && allDone() };
+  return { coins: pay, newStars, first, first3: isFinale(n) ? first3 * 2 : first3, stars: st, gifts, chest: chests[0] || null, chests, milestone: milestones[0] || null, milestones, nextSkin: nextSkin(100), allDone: !wasDone && allDone() };
 }
 
 // ---------- daily order ----------

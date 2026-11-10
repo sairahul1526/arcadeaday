@@ -71,7 +71,7 @@ let M = {}; // parsed modes
 
 // ------------------------------------------------------------------ state
 const S = {
-  screen: 'loading', data: null, paused: false,
+  screen: 'loading', data: null, paused: false, freeBoost: new Set(), pendBoost: null,
   kind: 'level', n: 1, lvl: null, w: null, fs: null,
   bot: null, botKind: 'greedy', qaBot: null,
   driver: null, recLevel: null, // REC run: modes' director decide(w, dt) and REC course (api.startRecord opts)
@@ -514,7 +514,7 @@ function startLevel(n, opt = {}) {
   const sameLevel = S.lvl === lvl || (S.lvl && S.lvl.n === lvl.n && S.kind === kind && kind === 'level');
   S.kind = kind; S.n = kind === 'level' ? n : 0; S.lvl = lvl; S.w = w; S.fs = fs;
   if (kind !== 'record') { S.driver = null; S.recLevel = null; }
-  S.started = false; S.resultDone = false; S.cardFreezeUsed = false; S.queue = null;
+  S.started = false; S.resultDone = false; S.cardFreezeUsed = false; S.queue = null; S.pendBoost = null;
   S.run = { eaten: {}, big: 0, boosts: 0 };
   S.retry = !!opt.retry && sameLevel;
   acc = 0; slowT = 0; S.finBite = false;
@@ -538,6 +538,16 @@ function qaSteerBot(seed) {
 function retry() {
   if (S.kind === 'feast') return startLevel(0, { kind: 'feast', town: S.fsTown, retry: S.screen !== 'feastend' });
   return startLevel(S.n, { kind: S.kind, retry: true });
+}
+/** C1 (11-10): the fail card's RETRY WITH MAGNET. The Magnet goes on at the first touch (bus 'start'), so it never burns while the
+ *  level waits for tap-to-start. A free one is marked used only when it is actually applied. */
+function boostRetry() {
+  const o = S.screen === 'fail' && S.data && S.data.boostRetry;
+  if (!o || S.kind !== 'level') return false;
+  const n = S.n;
+  if (!retry()) return false;
+  S.pendBoost = { kind: o.kind, free: !!o.free, n };
+  return true;
 }
 /**
  * Title PLAY.
@@ -563,6 +573,15 @@ function toAllDone() {
 bus.on('start', () => {
   if (S.started) return;
   S.started = true;
+  if (S.pendBoost) {
+    const pb = S.pendBoost; S.pendBoost = null;
+    if (pb.n === S.n && S.kind === 'level') queueMicrotask(() => {
+      if (S.screen !== 'play' || !S.w || S.resultDone) return;
+      const own = (save().boost && save().boost[pb.kind]) | 0;
+      if (own > 0) useBooster(pb.kind);   // logic emits 'boost', which counts it in S.run
+      else if (pb.free && !S.freeBoost.has(pb.n) && safe(logic.useBooster, S.w, pb.kind)) S.freeBoost.add(pb.n);
+    });
+  }
   if (M.record || M.og || S.kind === 'record') return; // capture runs: no host gameplay calls, stats or analytics
   safe(P.gameplayStart);
   safe(meta.stat, 'plays', 1);
@@ -641,7 +660,9 @@ function onWin(ev, now) {
     safe(P.flush);
     P.event('level_complete', { id: levelId(), stars, tLeft: r1(tLeft), chainBest, secs: secsOf(w) });
   }
-  const data = { n: S.n, kind: S.kind, stars, tLeft, chainBest, coins: 0, newStars: 0, gifts: [], chest: null, milestone: null, nextSkin: null, ...res, ...(ev.data || {}) };
+  // G1 (11-10): eaten = the level's bites, for the win card's "You ate N!" (qa data may override it)
+  const data = { n: S.n, kind: S.kind, stars, tLeft, chainBest, coins: 0, newStars: 0, gifts: [], chest: null, milestone: null, nextSkin: null,
+    eaten: (w && w.stats && w.stats.bites) | 0, ...res, ...(ev.data || {}) };
   const st = w && safe(logic.starTimes, w);
   data.t3Left = st && stars < 3 ? Math.max(0, Math.ceil(st.t3 - (tLeft - ((w && w.freezeAdded) || 0)))) : 0;
   // 11-07 Sat r7c: a 1★ win off the clock (no card Freeze) names the 2★ line on the card, the next star rather than the far third.
@@ -649,6 +670,11 @@ function onWin(ev, now) {
   data.bigBoss = S.kind === 'level' && S.n > 0 && S.n % 10 === 0;
   data.strip = S.kind === 'level' && S.n <= WIN_STRIP_MAX;
   if (daily) { data.mask = daily.mask; data.met = daily.met; data.lines = daily.lines; data.stars = stars; }
+  // DECISION (11-10, C3): the first Daily offer rides on the win card itself (a Daily button above NEXT, NEW badge and its day-1
+  //   reward) instead of a full card in the NEXT chain. Same rule as the old intro card: first L6+ win, a calm save (or L10+),
+  //   Daily open and not offered before. NEXT marks it offered, so it shows once.
+  if (S.kind === 'level' && S.n >= 6 && data.first && (!(save().help > 0) || S.n >= 10) && dailyUnlocked() && dailyOpen()
+    && has(meta, 'seen') && !safe(meta.seen, 'dailyIntro')) data.dailyOffer = true;
   if (S.kind === 'record') return;
   if (now) go('win', data);
   else S.pend = { t: S.finBite ? (S.kind === 'level' && C.isMilestone(S.n) ? (S.n === 60 ? FIN_L60_CARD_S : FIN_BIG_CARD_S) : FIN_CARD_S) : WIN_CARD_S, screen: 'win', data };
@@ -711,6 +737,13 @@ function onFail(ev, now) {
     if (S.kind === 'level') { S.failedHere = true; if (!quietResult(ev)) { save().calm = CALM_LEVELS; safe(meta.save); } }
     data.mercy = mercySecs(S.mercyBase, S.mercy) + (S.cut | 0); data.grow = mercyGrow(S.mercy) > 1; data.fails = S.mercy;
     data.growPct = Math.round((mercyGrow(S.mercy) - 1) * 100);
+  }
+  // DECISION (11-10, C1): from the second fail in a row of a campaign level the card offers RETRY WITH MAGNET as one secondary
+  //   button. It takes one Magnet from the stock at the first touch of the retry; with none in stock it is free once per level
+  //   per session (S.freeBoost, not in the save). RETRY +N s stays the primary.
+  if (S.kind === 'level' && (S.mercy | 0) >= 2 && boosterOk('magnet')) {
+    const own = (save().boost && save().boost.magnet) | 0, free = own <= 0 && !S.freeBoost.has(S.n);
+    if (own > 0 || free) data.boostRetry = { kind: 'magnet', own, free };
   }
   if (now) go('fail', data);
   else S.pend = { t: FAIL_CARD_S, screen: 'fail', data };
@@ -808,7 +841,8 @@ function next() {
   }
   // DECISION: a player who is struggling is not pushed into a Daily at L6. The card waits for a calm win, L10 at the latest.
   const calm = !(save().help > 0) || S.n >= 10;
-  if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus(), next: S.n + 1 }]);
+  if (d.dailyOffer) safe(meta.seen, 'dailyIntro', true);   // C3: offered on the card, so no intro card after it
+  else if (S.n >= 6 && d.first && calm && (!has(meta, 'seen') || safe(meta.seen, 'dailyIntro', true))) q.push(['daily', { intro: true, status: dailyStatus(), next: S.n + 1 }]);
   S.queue = { list: q, n: S.n + 1 };
   return advance();
 }
@@ -916,6 +950,17 @@ function command(name, d) {
     case 'next': return next();
     case 'nice': case 'later': case 'phew': return back();
     case 'retry': case 'again': case 'replay': return retry();
+    case 'boostRetry': return boostRetry();
+    case 'dailyOffer': {
+      // C3 (11-10): the win card's Daily button. Plays today's Daily now; its Ladder card comes back to the next level.
+      if (S.screen !== 'win' || !(S.data && S.data.dailyOffer) || !dailyUnlocked()) return false;
+      safe(P.breakpoint);
+      safe(meta.seen, 'dailyIntro', true);
+      const nx = S.n + 1;
+      if (!startDaily()) return false;
+      S.resumeN = nx;
+      return true;
+    }
     case 'restart': quitLevel(); return retry();
     case 'freeze': return freezeContinue();
     case 'pause': return pause();

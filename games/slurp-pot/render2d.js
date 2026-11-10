@@ -32,7 +32,7 @@ const rnd = mulberry32(0x2D0F2D);          // render-only RNG (blinks, fx): neve
 // ------------------------------------------------------------------ colours (copies of props.js / render3d.js)
 const LID = { sunny: '#F5B323', cauldron: '#C8743A', wok: '#D9412F', teapot: '#2FB5A5', ricecooker: '#E6D6BA',
   dutch: '#8FE3C8', steamer: '#D9B36B', royal: '#FFD23F', ufo: '#C9D3E0', starladle: '#2B3A8C' };
-const GROUND = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#B3BAB8' };   // props.js GROUND_BASE says why
+const GROUND = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#A8693F' };   // props.js GROUND_BASE says why
 const BACK = { picnic: '#A99272', market: '#B39D7B', harbour: '#2AA7C9' };   // table / street / sea = clear colour
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
@@ -571,7 +571,7 @@ function board(g) {
     g.fillStyle = shade(GROUND.harbour, 0.05); g.beginPath();
     for (let z = z0, r = 0; z < z1; z += 0.5, r++) if (r % 2) g.rect(x0, z, bw, 0.5);
     g.fill();
-    g.strokeStyle = 'rgba(92,100,100,0.45)'; g.lineWidth = 0.04; g.beginPath();
+    g.strokeStyle = 'rgba(74,42,24,0.5)'; g.lineWidth = 0.04; g.beginPath();   // D2 (11-10): warm plank seams
     for (let z = z0, r = 0; z < z1; z += 0.5, r++) {
       g.moveTo(x0, z); g.lineTo(x1, z);
       for (let x = x0 + hsh(r + 7) * 4.68; x < x1; x += 4.68) { g.moveTo(x, z); g.lineTo(x, z + 0.5); }
@@ -600,7 +600,7 @@ function surface(g, type, w, d, color) {
     rr(g, -w / 2, -d / 2, w, d, Math.min(0.4, Math.min(w, d) / 3)); g.fillStyle = col; g.fill();
     g.strokeStyle = '#E8FBFF'; g.lineWidth = 0.07; rr(g, -w / 2 + 0.095, -d / 2 + 0.095, w - 0.19, d - 0.19, 0.3); g.stroke();
   } else if (type === 'deck') {
-    const n = Math.max(1, Math.round(d / 0.28)), base = lum(col) > 0.75 ? shade(col, -0.15) : col;   // R4, as props.js
+    const n = Math.max(1, Math.round(d / 0.28)), base = lum(col) > 0.75 ? '#B5733F' : col;   // D2 (11-10), as props.js
     for (let i = 0; i < n; i++) { g.fillStyle = shade(base, i % 2 ? -0.08 : 0); rr(g, -w / 2, -d / 2 + i * d / n + 0.01, w, d / n - 0.02, 0.012); g.fill(); }
   } else {
     const hem = lum(col) > 0.6 ? HEM[town] || HEM.picnic : '#FFF1DC';

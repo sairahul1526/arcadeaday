@@ -2084,7 +2084,12 @@ export function genLevel(spec, seed) {
 // each must leave every food goal reachable by a clean line at three pot sizes (hotClear); and these are normal levels, so the
 // spare time of the average player pays for a couple of burns (verify's hot gate).
 // DECISION (11-06 Fri, round 3): 7 to 9 a level, down from 10 to 14. The loop keeps its draw order, so these are the first chilis of the old set.
-const HOT_LEVELS = { 31: 7, 32: 7, 35: 7, 36: 8, 38: 8, 42: 8, 43: 8, 45: 8, 48: 9, 51: 9, 55: 9, 56: 9 };
+// DECISION (11-10, FIX-LIST-7 A4, kid13 r8 "a second thing to avoid from L5-L6"): the chili arrives early. L6 meets it with 3, then
+// six more Picnic and Market levels ramp 3, 3, 4, 4, 5, 5 into the 7 at L31. Same rules as above: none of them is a milestone (10, 20),
+// a peak (29, 30) or a twist's first level (16, 22, 28), L21 (the Market opener) is left alone, and each had 17 kinds or fewer
+// (L7, L11, L17, L18 sit at the cap of 18). The pass draws from its own rng after everything else, so these levels keep every
+// other item and draw they had (studio/2026-11-10/levels/hash-*.txt). Exported for verify.mjs's hot gate (all chilis placed).
+export const HOT_LEVELS = { 6: 3, 8: 3, 13: 3, 14: 4, 19: 4, 23: 5, 27: 5, 31: 7, 32: 7, 35: 7, 36: 8, 38: 8, 42: 8, 43: 8, 45: 8, 48: 9, 51: 9, 55: 9, 56: 9 };
 const HOT_FIRST = Math.min(...Object.keys(HOT_LEVELS).map(Number));
 const HOT_CELL = 0.5, HOT_RIM = 0.3, HOT_SIZES = [0.35, 0.65, 1];
 /** One pot size of the clean-way test: cells the pot cannot stand on, and the cells from which each food goal can be eaten. */
