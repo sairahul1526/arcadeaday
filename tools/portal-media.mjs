@@ -27,8 +27,13 @@ const JOBS = [
   ['cover-800x800', 'cover-square', 800, 800, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['thumb-512x512', 'cover-square', 512, 512, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['thumb-512x384', 'cover-wide', 512, 384, 0.42, TOP ? { ...TOP, s: 0.112 } : { ...L, s: 0.16 }],
-  ['thumb-200x120', 'cover-wide', 200, 120, 0.45, { ...L, s: 0.17 }],
+  // DECISION (11-11 Wed, FIX-LIST-7 F5, store critic r8 "thumb-200x120 stacks the title in two lines over the pot"): one line in the sky.
+  ['thumb-200x120', 'cover-wide', 200, 120, 0.45, TOP ? { ...TOP, y: 0.13, s: 0.18 } : { ...L, s: 0.17 }],
   ['fb-cover-1200x630', 'cover-wide', 1200, 630, 0.5, TOP || L],
+  // DECISION (11-11 Wed, FIX-LIST-7 F5, store critic r8 "no cover shows the eat-and-grow hook or a chain"): one cover from a real
+  //   frame (record course 4.5 s at 1067x600 x1.8: the pot gulping a drink-box pile, ×21 chain, live ticket and clock), title on the
+  //   blanket bottom-left, clear of the pot and the HUD. Only for games that have the raw (studio/2026-11-11/orch/play-frames.mjs).
+  ...(slug === 'slurp-pot' ? [['cover-play-1920x1080', 'cover-play', 1920, 1080, 0.5, { lines: [title], align: 'left', x: 0.03, y: 0.865, s: 0.15 }]] : []),
   ['fb-cover-1080x1080', 'cover-square', 1080, 1080, 0.5, { lines: [title], align: 'center', x: 0.5, y: 0.885, s: 0.12, band: true }],
   ['fb-banner-1200x400', 'cover-wide', 1200, 400, 0.5, { ...L, s: 0.2 }],
 ];

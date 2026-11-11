@@ -32,7 +32,8 @@ export const CAM_OPEN_S = 2.2;
  */
 // 11-07 (r5 landscape check): the 0.88 is for a short PORTRAIT screen only; on a 844x390 phone it closed a view that was
 // already too close (see camLand).
-export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1) * (w > h && w >= 1100 && n === 1 ? 1.2 : 1);
+// 11-11 (D5): the desktop pull-back now lives in camLand for every level, so the L1-only 1.2 is gone (it would stack to 2.5x).
+export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1);
 /**
  * Landscape follow-width factor. DECISION (11-07 Sat, r5): a flat 1.35 left a 844x390 phone (2.16:1) seeing about half the depth
  * a portrait phone sees, the pot 40 % of the screen's height (curator r5 r-play-844x390). The short side now shows at least
@@ -40,7 +41,11 @@ export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1) * (w > h && 
  */
 // DECISION (11-07 Sat r7c, curator r7b #1 "landscape cramped"): a short landscape phone (under 600 px tall) now shows 0.85 of the
 // portrait depth (1.84 at 844x390, was 1.62), so the pot is about 30 % of the height instead of a third. Desktops keep 0.75.
-export const camLand = (w, h) => Math.max(1.35, (h < 600 ? 0.85 : 0.75) * w / h);
+// DECISION (11-11 Wed, FIX-LIST-7 D5, mobile r8 "desktop play camera is very close"): a desktop window (1100+ wide, 700+ tall)
+// sees 1.45 of the portrait width in depth, not 0.75, so the play reads as a board overview: 2.32x at 1440x900 and 2.58x at
+// 1920x1080 (was 1.35), and the pot drops from about 27 % of the height to about 16 %. 1.25 (tried first) only took 1920x1080 from 380 to 240 px. boardCapWv still caps it on small boards.
+// Phones and tablets (under 1100 wide or 700 tall) keep the r7c numbers.
+export const camLand = (w, h) => Math.max(1.35, (h < 600 ? 0.85 : w >= 1100 && h >= 700 ? 1.45 : 0.75) * w / h);
 /** Near + far table the view may show past the board in depth (the clamps' 0.6 u + 2 u), and that view's slack. */
 export const CAM_EDGE = 2.6, CAM_SLACK = 1.15;
 /**

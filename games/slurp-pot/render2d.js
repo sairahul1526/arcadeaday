@@ -37,7 +37,7 @@ const BACK = { picnic: '#A99272', market: '#B39D7B', harbour: '#2AA7C9' };   // 
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
   market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#8F7355', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#CC9459', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 const HEM = { picnic: '#2FB5A5', market: '#FF7A59', harbour: '#2AA7C9' };
 const HOOD = { picnic: '#F5B323', market: '#2FB5A5', harbour: '#E04F4F' };
@@ -589,6 +589,17 @@ function surface(g, type, w, d, color) {
   if (type === 'path') {
     // R6: a square path is a disc (stepping stone or boss pad): a pale stone with a kerb, like props.js, never a stain
     const stone = Math.abs(w - d) < 0.01, rad = Math.min(w, d) / 2;
+    if (town === 'harbour' && !stone) {   // 11-11: a boardwalk of lighter, warmer planks across the road, as props.js (no grey-brown pebble strip)
+      const long = Math.max(w, d), wide = w >= d, pn = Math.max(1, Math.round(long / 0.42)), pl = long / pn, br = Math.min(0.1, Math.min(w, d) / 4);
+      rr(g, -w / 2, -d / 2, w, d, br); g.fillStyle = '#7E5030'; g.fill();
+      for (let i = 0; i < pn; i++) {
+        const o = -long / 2 + (i + 0.5) * pl;
+        g.fillStyle = mix(i % 2 ? '#CC9459' : '#D6A068', '#7E5030', i % 3 === 1 ? 0.06 : 0);
+        if (wide) rr(g, o - (pl - 0.05) / 2, -d / 2 + 0.06, pl - 0.05, d - 0.12, 0.01); else rr(g, -w / 2 + 0.06, o - (pl - 0.05) / 2, w - 0.12, pl - 0.05, 0.01);
+        g.fill();
+      }
+      return;
+    }
     rr(g, -w / 2, -d / 2, w, d, rad); g.fillStyle = stone ? mix(col, '#FFF1DC', 0.3) : col; g.fill();
     if (stone) { rr(g, -w / 2 + 0.1, -d / 2 + 0.1, w - 0.2, d - 0.2, rad - 0.1); g.fillStyle = mix(col, '#FFF1DC', 0.74); g.fill(); }
     const n = Math.max(2, Math.round((w * d) / 0.9));

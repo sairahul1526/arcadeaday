@@ -1100,7 +1100,10 @@ function drawTicket(w, t) {
   const pad = r.pad, hy = r.y + railR.h + Math.max(3, 4 * u) + fs.hdr * 0.6;
   const name = (w.level && w.level.name) || '';
   // DECISION: a record run's ticket is headed with its town ("Picnic Park"), never the course's internal name.
-  const head = REC_M.record ? [STR[(w.level && w.level.town) || 'picnic'] || STR.title, STR.title]
+  // DECISION (11-11 Wed, FIX-LIST-7 G1, viral r8 "show a real ticket"): the body is the real order now (strawberry chips, then
+  //   Serve it), so the header carries the climbing count ("20 eaten"); the town is left only for the instant before a bite.
+  const recN = REC_M.record ? (w.stats && w.stats.bites) | 0 : 0;
+  const head = REC_M.record ? (recN ? [fmt(STR.recEaten, { n: recN })] : [STR[(w.level && w.level.town) || 'picnic'] || STR.title, STR.title])
     : w.mode === 'daily' ? [name || STR.dailyLabel, STR.dailyLabel]
     : w.mode === 'feast' ? [STR.feastLabel + ' · ' + ((w.ti || 0) + 1), STR.feastLabel]
     : [fmt(STR.levelLabel, { n, name }), fmt(STR.levelShort, { n })];
@@ -1115,10 +1118,17 @@ function drawTicket(w, t) {
     // header and full chips are gone from k 0.4 on: the strip below owns the paper
     // record: the header and the count clear as the stamp lands, so nothing ghosts through it (viral r5)
     const recUp = REC_M.record && ou >= 0 && ou < 9, clr = recUp ? 1 - clamp((ou - 0.15) / 0.12, 0, 1) : 1;
-    if (ck < 0.4 && clr > 0) { g.save(); g.globalAlpha *= clr; txtMin(head, r.x + r.w / 2, hy, fs.hdr, { col: C.ink, maxW: r.w - 2 * pad }); g.restore(); }
+    if (ck < 0.4 && clr > 0) {
+      g.save(); g.globalAlpha *= clr;
+      if (recN) { const pk = popK(hud.lastBite ?? -9, 0.14); g.translate(r.x + r.w / 2, hy); g.scale(pk, pk); txtMin(head, 0, 0, fs.hdr * 1.25, { col: C.stamp, maxW: r.w - 2 * pad }); }
+      else txtMin(head, r.x + r.w / 2, hy, fs.hdr, { col: C.ink, maxW: r.w - 2 * pad });
+      g.restore();
+    }
     g.save(); g.translate(0, bodyY + bodyH / 2); g.scale(1, Math.max(0.05, fsY)); g.translate(0, -(bodyY + bodyH / 2));
     if (ck < 0.4) {
-      if (REC_M.record) { if (clr > 0) { g.save(); g.globalAlpha *= clr; drawRecCount(w, r, bodyY, bodyH); g.restore(); } }
+      if (REC_M.record && clr <= 0) { /* the stamp owns the ticket */ }
+      else if (REC_M.record && !t.lines.length) { g.save(); g.globalAlpha *= clr; drawRecCount(w, r, bodyY, bodyH); g.restore(); }   // a course without lines
+      else if (REC_M.record) { g.save(); g.globalAlpha *= clr; if (showServe) drawServe(w, t, r, bodyY, bodyH); else if (L.aspect === 'landscape') drawLinesList(w, t, r, bodyY); else drawChips(w, t, r, bodyY); g.restore(); }
       else if (showServe) drawServe(w, t, r, bodyY, bodyH);
       else if (L.aspect === 'landscape') drawLinesList(w, t, r, bodyY);
       else drawChips(w, t, r, bodyY);
@@ -1762,22 +1772,65 @@ function guideDots(w, r) {
   //   Dots inside a chili's clearance (chili + pot radius) are pushed sideways onto its edge, so the path bends around the hazard. 512 is F_HOT.
   const hots = [];
   if (w.flags) for (let i = 0; i < (w.n || 0); i++) if ((w.flags[i] & 512) && !(w.st && w.st[i] !== 0) && !isHid(w, i)) hots.push({ x: w.ix[i], z: w.iz[i], c: (w.ia ? w.ia[i] || 0.3 : 0.3) + (w.pot ? w.pot.r || 0.3 : 0.3) + 0.12 });
+  // DECISION (11-11, guide-trail fix): (1) the chili push moved each dot sideways but left the sample spacing along the ROUTE, so on the
+  //   bent stretch the dots bunched on the inside and spread on the outside. The route is now sampled finely, every point is displaced,
+  //   and the dots are laid at an even arc length (sp) along the displaced line. (2) A live solid prop (cooler, crate, ...) is not
+  //   walkable: a dot that lands inside one (the route hugs solids, and the chili push can swing a dot across) is pushed radially to its
+  //   rim, and dropped when two passes still leave it inside a solid or a chili. 2 is logic.js F_SOLID (set only while the pot is not
+  //   bigger than the prop).
+  const sol = [];
+  if (w.flags) for (let i = 0; i < (w.n || 0); i++) if ((w.flags[i] & 2) && !(w.flags[i] & 512) && i !== r.i && !(w.st && w.st[i] !== 0) && !isHid(w, i)) sol.push({ x: w.ix[i], z: w.iz[i], c: (w.ia ? w.ia[i] || 0.3 : 0.3) + 0.1 });
+  const inside = (list, x, z, slack) => list.some(h => (x - h.x) * (x - h.x) + (z - h.z) * (z - h.z) < (h.c - slack) * (h.c - slack));
+  // each chili gets one side to pass on (the side the route already lies on), flipped when that side's arc point sits in a solid prop
+  for (const h of hots) {
+    let bd = 1e9, ux = 0, uz = -1, side = 1;
+    for (const q of seg) {
+      const qx = (q.b.x - q.a.x) / q.l, qz = (q.b.z - q.a.z) / q.l, t = Math.max(0, Math.min(q.l, (h.x - q.a.x) * qx + (h.z - q.a.z) * qz)), px = q.a.x + qx * t, pz = q.a.z + qz * t, dd = Math.hypot(h.x - px, h.z - pz);
+      if (dd < bd) { bd = dd; ux = qx; uz = qz; side = (pz - h.z) * qx - (px - h.x) * qz < 0 ? -1 : 1; }
+    }
+    const arc = sd => ({ x: h.x - uz * sd * h.c, z: h.z + ux * sd * h.c });
+    h.side = side;
+    if (inside(sol, arc(side).x, arc(side).z, 0.02) && !inside(sol, arc(-side).x, arc(-side).z, 0.02)) h.side = -side;
+  }
+  const fine = [], fs = sp / 6;
   let k = seg.length - 1;
-  for (let d = len - stop; d > 0 && k >= 0; d -= sp) {
+  for (let d = len - stop; d > 0 && k >= 0; d -= fs) {
     while (k > 0 && seg[k].s > d) k--;
     const q = seg[k], f = (d - q.s) / q.l, ux = (q.b.x - q.a.x) / q.l, uz = (q.b.z - q.a.z) / q.l;
     let x = q.a.x + (q.b.x - q.a.x) * f, z = q.a.z + (q.b.z - q.a.z) * f;
-    for (const h of hots) {
-      const dx = x - h.x, dz = z - h.z, al = dx * ux + dz * uz, la = dz * ux - dx * uz;
-      if (al * al + la * la < h.c * h.c) { const m = Math.sqrt(h.c * h.c - al * al) * (la < 0 ? -1 : 1) - la; x -= uz * m; z += ux * m; }
+    for (let pass = 0; pass < 2; pass++) {
+      for (const h of hots) {
+        const dx = x - h.x, dz = z - h.z, al = dx * ux + dz * uz, la = dz * ux - dx * uz;
+        if (al * al + la * la < h.c * h.c) { const m = Math.sqrt(h.c * h.c - al * al) * h.side - la; x -= uz * m; z += ux * m; }
+      }
+      for (const h of sol) {
+        const dx = x - h.x, dz = z - h.z, dd = Math.hypot(dx, dz);
+        if (dd < h.c) { const e = dd > 1e-6 ? 1 / dd : 0; x = h.x + (e ? dx * e : 1) * h.c; z = h.z + (e ? dz * e : 0) * h.c; }
+      }
     }
+    if (inside(sol, x, z, 0.02) || inside(hots, x, z, 0.02)) continue;
+    fine.push({ x, z, d });
+  }
+  const dots = [];
+  if (fine.length) {
+    dots.push(fine[0]);
+    let need = sp;
+    for (let i = 1; i < fine.length; i++) {
+      const a = fine[i - 1], b = fine[i], l = Math.hypot(b.x - a.x, b.z - a.z);
+      if (l < 1e-9) continue;
+      let t0 = 0;
+      while (l - t0 >= need - 1e-9) { t0 += need; const f = t0 / l; dots.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, d: a.d + (b.d - a.d) * f }); need = sp; }
+      need -= l - t0;
+    }
+  }
+  for (const q of dots) {
     let onFood = false;
     for (let i = 0; i < (w.n || 0) && !onFood; i++) {
       if ((w.st && w.st[i] !== 0) || isHid(w, i)) continue;
-      const rr2 = (w.ia ? w.ia[i] : 0.3) + 0.06, dx = w.ix[i] - x, dz = w.iz[i] - z;
+      const rr2 = (w.ia ? w.ia[i] : 0.3) + 0.06, dx = w.ix[i] - q.x, dz = w.iz[i] - q.z;
       if (dx * dx + dz * dz < rr2 * rr2) onFood = true;
     }
-    if (!onFood) out.push({ x, z, d });
+    if (!onFood) out.push(q);
   }
   return out.slice(-44);   // the stretch by the pot is the one that matters
 }
@@ -1809,6 +1862,7 @@ function guideTick(w, dt) {
     G.next = T + GUIDE_EVERY;
     G.g = safe(() => guide(w), null);
     G.dots = guideDots(w, G.g);
+    if (globalThis.__qa) globalThis.__uiGuideDots = G.dots.map(q => ({ x: q.x, z: q.z }));   // QA readout only (spacing and solid-clearance probes)
     if (globalThis.__qa) globalThis.__uiGuide = { kind: G.g && G.g.kind, i: G.g ? G.g.i : -1, blocked: !!(G.g && G.g.blocked), by: G.g && G.g.by, dots: G.dots.length, stuck: G.stuck };   // QA readout only
   }
   if (G.stuck && G.g && now - G.callT >= STUCK_LINE_EVERY) {
@@ -1975,11 +2029,12 @@ function finHudA() {
 let hudOff = null;
 
 // ---- order up (boss bite): stamp lands on the ticket in screen centre ----
-// DECISION: in a record run the ticket and its stamp fade out over 17.8-18.0 s of record time (__recState.t), so they are gone
-//   when the end card lands at 18.0 s (modes.js REC_END_T; 18.6-19.0 s before viral r6, 21.5-21.9 s before the 11-07 tail cut).
+// DECISION: in a record run the ticket and its stamp fade out over the 0.2 s before the end card (__recState.t vs .endT, modes.js
+//   REC_END_T: 15.75 s since the 11-11 REC_SKIP, 18.0 s before), so they are gone when it lands. The restart at REC_OVER_T resets the hud.
 function recOrderFade() {
   const rs = REC_M.record ? recState() : null;
-  return rs && typeof rs.t === 'number' ? 1 - clamp((rs.t - 17.8) / 0.2, 0, 1) : 1;
+  const end = rs && typeof rs.endT === 'number' ? rs.endT : 15.75;
+  return rs && typeof rs.t === 'number' ? 1 - clamp((rs.t - (end - 0.2)) / 0.2, 0, 1) : 1;
 }
 function drawOrderUp(w) {
   const fo = recOrderFade(), k = T - hud.orderUp + (REC_M.record ? 0.3 : 0);   // record: the stamp lands 0.3 s sooner
@@ -2087,20 +2142,26 @@ function drawRecord(st, w) {
   const rs = recState(); if (!rs) return;
   const sh = rs.show || {}, u = L.u, k = u / 3, cov = img('end-cover');   // asked from frame 0, so it is decoded long before 18 s
   const capR = L.hud.caption || { x: 16 * u, y: cssH * 0.22 - 39 * u, w: cssW - 32 * u, h: 78 * u };
+  // DECISION (11-11 Wed, FIX-LIST-7 G2, viral r8 "the hook card covers the play area for the first 2-3 s"): the captions are a slim
+  //   top banner now, one line at 54/3 u (shrunk to fit, down to 72 %) hugging the top of the caption band, about 3.5 % of a
+  //   1080x1920 frame instead of a 12 % card. Only a long ?hook= that cannot fit one line falls back to two lines at 44/3 u.
   const cap = (text, a) => {
     if (!text || !(a > 0.01)) return;
-    const size = Math.max(20, 64 * k), maxW = capR.w - 2 * Math.max(12, 28 * k);
+    const padX = Math.max(10, 24 * k), maxW = capR.w - 2 * padX, base = Math.max(18, 54 * k);
+    const w0 = measure(text, base), fit = w0 > maxW ? base * maxW / w0 : base, two = fit < base * 0.72;
+    const size = two ? Math.max(16, 44 * k) : fit, w1 = Math.min(maxW, measure(text, size));
     g.save(); g.globalAlpha = clamp(a, 0, 1);
-    const sc = 0.9 + 0.1 * ease(a);
-    const cx = capR.x + capR.w / 2, cy = capR.y + capR.h / 2;
+    const sc = 0.94 + 0.06 * ease(a);
+    const ph = two ? size * 2.5 : size * 1.5, pw = Math.min(capR.w, (two ? maxW : w1) + 2 * padX);
+    const cx = capR.x + capR.w / 2, cy = capR.y + ph / 2;
     g.translate(cx, cy); g.scale(sc, sc); g.translate(-cx, -cy);
-    const w1 = measure(text, size), two = w1 > maxW;
-    const ph = two ? Math.max(capR.h, size * 2.55) : Math.max(capR.h, size * 1.45), pw = Math.min(capR.w, (two ? maxW : w1) + 2 * Math.max(12, 28 * k));
-    const prad = Math.min(ph / 2, 40 * k), off = Math.max(3, 8 * k);
+    const prad = Math.min(ph / 2, 22 * k), off = Math.max(2, 5 * k);
     rr(cx - pw / 2, cy - ph / 2 + off, pw, ph, prad); g.fillStyle = 'rgba(42,26,18,0.55)'; g.fill();
     rr(cx - pw / 2, cy - ph / 2, pw, ph, prad); g.fillStyle = 'rgba(255,246,227,0.92)'; g.fill();
-    g.lineWidth = Math.max(3, 8 * k); g.strokeStyle = C.ink; g.stroke();
-    txt2(text, cx, cy, size, { col: C.ink, stroke: C.paper, sk: Math.max(2, 4 * k), maxW });
+    g.lineWidth = Math.max(2, 5 * k); g.strokeStyle = C.ink; g.stroke();
+    // one line goes through txt (it only shrinks): txt2 would wrap a fitted line that measures a hair over maxW at its new size
+    const to = { col: C.ink, stroke: C.paper, sk: Math.max(2, 4 * k), maxW };
+    if (two) txt2(text, cx, cy, size, to); else txt(text, cx, cy, size, to);
     g.restore();
   };
   const ir = clamp(rs.iris || (sh.iris || 0), 0, 1);
@@ -2646,7 +2707,10 @@ function drawWin(st, w) {
     if (T - shareAt.t < 1.8) {
       const a = Math.min(1, (1.8 - (T - shareAt.t)) / 0.3), lbl = STR.shared;
       const pf = Math.max(13, fs.small), pw = measure(lbl, pf, FT) + pf * 1.4, ph = pf * 1.9;
-      const px = Math.min(B.share.x + B.share.w / 2 - pw / 2, CL.panel.x + CL.panel.w - pw - Math.max(10, 14 * cu)), py = B.share.y - ph - 6;
+      // DECISION (11-11, toast fix): the toast used to sit above the Share button, which put it on NEXT's bottom edge for 1.8 s at 360x640.
+      //   It now rides the top of the card, centred: just above the panel when there is room, else it straddles the panel's top edge
+      //   (above the heading stamp). No card button lives up there at any size.
+      const px = CL.panel.x + (CL.panel.w - pw) / 2, above = CL.panel.y - ph - 6, py = above >= 4 ? above : Math.max(3, CL.panel.y - ph * 0.4);
       g.save(); g.globalAlpha *= a; rr(px, py, pw, ph, ph / 2); g.fillStyle = C.ink; g.fill();
       txt(lbl, px + pw / 2, py + ph / 2 + pf * 0.04, pf, { col: '#FFFFFF' }); g.restore();
     }
@@ -3198,17 +3262,24 @@ function drawMap(st, dt) {
     const vy0 = Math.max(V.y, y0), vy1 = Math.min(V.y + V.h, y1);
     if (im && mp.serp) {
       // DECISION (11-10, D1/F3, art director r8 #1 "dead blurred panels"): a serpentine band shows the town art at mp.artW wide,
-      //   its disc spanning the band, tiled sharp across the full width (mirrored every other tile so the discs meet edge to
-      //   edge), with the tiles off the trail only lightly dimmed. No blurred wing copies, no column edge.
+      //   its disc spanning the band, sharp in the middle with the tiles off the trail only lightly dimmed. No column edge.
+      // DECISION (11-11, desktop side panels read as mirrored copies): the panels beside the centre tile were the same art flipped
+      //   (a second lighthouse and a visible V seam). They are now ONE soft blurred, dimmed cover of the town art (wingArt, cached,
+      //   no flip, no tiling, so no seam) with a soft shadow where the sharp tile meets it. No new art.
       const aw = mp.artW, th = aw * (im.naturalHeight || im.height) / (im.naturalWidth || im.width), ty = y0 + (tw.h - th) / 2;
-      const cx0 = col.x + col.w / 2 - aw / 2, n = Math.ceil((cx0 - V.x) / aw);
+      const cx0 = col.x + col.w / 2 - aw / 2;
       g.save(); g.beginPath(); g.rect(V.x, vy0, V.w, vy1 - vy0); g.clip();
-      for (let c = -n; c <= n; c++) {
-        const px = cx0 + c * aw;
-        if (px > V.x + V.w || px + aw < V.x) continue;
-        if (c % 2) { g.save(); g.translate(px * 2 + aw, 0); g.scale(-1, 1); g.drawImage(im, px, ty, aw, th); g.restore(); }
-        else g.drawImage(im, px, ty, aw, th);
-        if (c) { g.fillStyle = 'rgba(58,36,24,0.16)'; g.fillRect(px, vy0, aw, vy1 - vy0); }
+      if (cx0 > V.x + 1 || cx0 + aw < V.x + V.w - 1) {
+        const bl = wingArt(TOWNS[tw.i], im), bw = bl.width, bh = bl.height, sc = Math.max(V.w / bw, tw.h / bh);
+        g.drawImage(bl, V.x + (V.w - bw * sc) / 2, y0 + (tw.h - bh * sc) / 2, bw * sc, bh * sc);
+        g.fillStyle = 'rgba(58,36,24,0.34)'; g.fillRect(V.x, vy0, V.w, vy1 - vy0);
+      }
+      g.drawImage(im, cx0, ty, aw, th);
+      const sw = Math.min(60 * u, Math.max(0, cx0 - V.x));
+      if (sw > 1) for (const [x0, x1] of [[cx0, cx0 - sw], [cx0 + aw, cx0 + aw + sw]]) {
+        const sh = g.createLinearGradient(x0, 0, x1, 0);
+        sh.addColorStop(0, 'rgba(58,36,24,0.45)'); sh.addColorStop(1, 'rgba(58,36,24,0)');
+        g.fillStyle = sh; g.fillRect(Math.min(x0, x1), vy0, sw, vy1 - vy0);
       }
       g.restore();
     } else if (im) {

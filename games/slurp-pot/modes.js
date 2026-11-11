@@ -39,12 +39,16 @@ const DT = 1 / 60;
 // DECISION (11-07 Sat, viral r6 "3 s of static ORDER UP, CTA only 1.4 s"): the end card comes in at 18.0 s (ORDER UP keeps
 //   about 0.8 s after the cake drops), so the call to action holds 2.0 s solid plus the 0.5 s loop iris, which now opens
 //   on the restarted frame-0 scene instead of closing to a teal dot (ui.js drawRecord): the last frame matches the first.
-const REC_OVER_T = 20.0;      // mode 'over' and the loop restart, after the end card has shown 2.0 s (GDD §12.1)
-export const REC_END_T = 18.0, REC_LOOP_T = 20.5;
+// 11-11 (G2): video time = course time − REC_SKIP (see REC_PRE below). The end card, the loop and the og tip keep their
+//   course times (18.0 / 20.0 / 20.5 / 17.0 s), so in video time they come REC_SKIP sooner and the clip is 18.25 s (was 20.5).
+// DECISION (11-11): 2.25, not 2.0: 2.0 opened on 17 eaten; 2.25 opens on about 20 (viral r8 asked for the 20-36 beat).
+export const REC_SKIP = 2.25;
+export const REC_OVER_T = 20.0 - REC_SKIP;   // mode 'over' and the loop restart, after the end card has shown 2.0 s (GDD §12.1)
+export const REC_END_T = 18.0 - REC_SKIP, REC_LOOP_T = 20.5 - REC_SKIP;
 // DECISION (11-04, og at the tip): GDD §12.3 says 1,092 steps (18.2 s), but on today's REC course that frame is past
 //   the gulp (win heart showing). Measured in record.mjs snaps: final boss bite 16.63 s, cake whole on the rim 16.8 s,
 //   half sunk 17.2 s, a sliver + ORDER UP 17.6 s, heart 18.0 s. 1,020 steps (17.0 s) = the cake tipping into the pot.
-export const OG_STEPS = 1020; // 17.0 s of REC
+export const OG_STEPS = Math.round((17.0 - REC_SKIP) * 60);  // course 17.0 s (1,020 steps before the 11-11 REC_SKIP)
 const STILL_GUARD_MS = 25000; // og/cover: stop stepping after this much wall time (SwiftShader safety), see __ogSteps
 const TIERS = ['low', 'mid', 'high'];
 const COVERS = ['wide', 'tall', 'square'];
@@ -387,14 +391,20 @@ function installQa(api, M) {
 }
 
 // ------------------------------------------------------------------ REC showcase: course + director (§12.1, §12.2)
-export const REC_PRE = 0.4;                         // preroll seconds: Core runs 24 steps before frame 0
-// [video t, SIZE UP step] knots of the growth schedule: the big beats of D31 land exactly on these times.
-export const REC_KNOTS = [[-REC_PRE, 0], [2.5, 2], [7.5, 5], [11.5, 8], [14.5, 11]];
+// Course time: the plan, the director and the knots below run on it (t = steps × DT − C_PRE, so the first bite is near 0).
+// DECISION (11-11 Wed, FIX-LIST-7 G2, viral r8 "open on the 20-36 eaten beat"): the video starts REC_SKIP s into the course,
+//   so frame 0 is a pot already mid-feast (about 20 eaten, chain alive, SIZE UP 2 at 0.25 s), not three peas under the hook.
+//   The course and its tuning are unchanged; only the camera starts later, and the clip is 2.25 s shorter (18.25 s).
+//   A longer preroll on the old knots (tried first) starved the planner: no food is small enough for 12 bites/s that slowly.
+const C_PRE = 0.4;                                  // course time of step 0
+export const REC_PRE = C_PRE + REC_SKIP;            // steps before frame 0 (s): Core runs REC_PRE / DT of them (startRecord opts.pre)
+// [course t, SIZE UP step] knots of the growth schedule: the big beats of D31 land exactly on these times.
+export const REC_KNOTS = [[-C_PRE, 0], [2.5, 2], [7.5, 5], [11.5, 8], [14.5, 11]];
 export const REC_OPEN_T = 15.5, REC_RUSH_T = 16.0;  // padlock pops; the pot rushes the cake
-const REC_FIRST = [-0.30, -0.17, -0.04];            // three peas in the preroll: chain x3 on frame 0, the third tipping
+const REC_FIRST = [-0.30, -0.17, -0.04];            // three peas open the course (the chain starts at once)
 const REC_BERRY_T = [3.3, 4.8, 6.3];                // strawberry ticket 1/3, 2/3, 3/3 (tick before SIZE UP 5)
 // Target bites per second over video time (the montage gets denser early, chunkier late).
-const REC_RATE = [[-REC_PRE, 12], [7.5, 9], [11.5, 6], [14.5, 4], [REC_OPEN_T, 4]];
+const REC_RATE = [[-C_PRE, 12], [7.5, 9], [11.5, 6], [14.5, 4], [REC_OPEN_T, 4]];
 const REC_Q = 0.92;                                 // every course item fits with 8 % to spare when it is reached
 const REC_V = 0.86;                                 // planned cruise = 86 % of top speed (the director has headroom)
 const REC_GAP = 0.06, REC_GAP_MAX = 0.5;            // bite spacing (s); 0.5 keeps the chain alive (CHAIN_WIN 0.7)
@@ -409,6 +419,7 @@ const REC_KINDS = ['pea', 'blueberry', 'cherry', 'juicebox', 'cupcake', 'pinwhee
 // DECISION (11-07 Sat): no cap let the planner take 9 swing sets in the last 0.7 s, one red pile in front of the cake.
 //   Gazebos share the job. No level uses one, so kindMax has no entry and its pool falls back to render3d capFor's 48.
 const REC_CAP = { swingset: 4, gazebo: 3 };
+const REC_CLOCK = 60;                               // the course's level clock (s); the REC spec itself is untimed
 const r3 = v => Math.round(v * 1000) / 1000;
 const frac = v => v - Math.floor(v);
 const knotAt = (K, t) => {
@@ -484,7 +495,7 @@ export function recPlan(base) {
   const byId = id => KINDS.find(k => k.id === id);
   const pea = byId('pea') || pool[pool.length - 1], berry = byId('strawberry');
   const used = {}, bites = [];
-  let r2 = r0 * r0, t = -REC_PRE, rot = 0, bk = 0;
+  let r2 = r0 * r0, t = -C_PRE, rot = 0, bk = 0;
   const R = () => Math.sqrt(r2);
   const gain = (k, ing) => G * (ing ? K_ING : num(k.k, 1)) * k.a * k.a;
   const add = (k, tt, ing) => { bites.push({ k, t: tt, r: R(), ing: !!ing }); used[k.id] = (used[k.id] | 0) + 1; r2 += gain(k, ing); t = tt; };
@@ -511,8 +522,8 @@ export function recPlan(base) {
   }
   // arc length the pot covers by time t at the planned cruise speed
   const sTab = [];
-  for (let s = 0, tt = -REC_PRE; tt <= REC_OPEN_T + 1; tt += DT) { sTab.push(s); s += REC_V * Lg.speedOf(S.rAt(tt)) * DT; }
-  const sAt = tt => { const f = (tt + REC_PRE) / DT, j = clamp(Math.floor(f), 0, sTab.length - 2); return sTab[j] + (sTab[j + 1] - sTab[j]) * clamp(f - j, 0, 1); };
+  for (let s = 0, tt = -C_PRE; tt <= REC_OPEN_T + 1; tt += DT) { sTab.push(s); s += REC_V * Lg.speedOf(S.rAt(tt)) * DT; }
+  const sAt = tt => { const f = (tt + C_PRE) / DT, j = clamp(Math.floor(f), 0, sTab.length - 2); return sTab[j] + (sTab[j + 1] - sTab[j]) * clamp(f - j, 0, 1); };
   const arcs = bites.map(b => sAt(b.t) + 0.9 * Math.max(0, b.r - 0.25 * b.k.a));
   const need = Math.max(sAt(REC_OPEN_T), arcs.length ? arcs[arcs.length - 1] : 0) + 0.3;
   const spawn = base.spawn || { x: 0, z: 13 }, cake = { x: boss.x, z: boss.z };
@@ -562,7 +573,11 @@ export function recPlan(base) {
     });
   }
   const tickets = [{ lines: [{ kind: 'strawberry', need: Math.min(3, bites.filter(b => b.ing).length) || 1, place: 'open' }], boss: 0 }];
+  // DECISION (11-11 Wed, FIX-LIST-7 G1, viral r8 "the clip shows no order, no timer, no ticket"): the course runs on a real
+  //   level clock (60 s, the egg timer and the chain's +1 s sizzles show), so the clip's HUD is the one a player sees.
+  //   60 s is never reached (the win is at about 16.7 s of video, 18.6 s of clock).
   const level = Object.assign({}, base, {
+    timed: true, T: REC_CLOCK,
     items, tickets, path: route.map(([x, z]) => ({ x: r3(x), z: r3(z) })),
     zones: [{ id: 0, x: 0, z: 0, parent: -1, gate: -1, r: 0 }],
     zoneGraph: { nodes: [{ id: 0, x: 0, z: 0, items: items.map((_, i) => i) }], edges: [] },
@@ -573,14 +588,14 @@ export function recPlan(base) {
 /** The scripted showcase bot: plan from recPlan. Pure and deterministic like bots.js (reads w, never writes it). */
 export function createDirector(plan) { return { plan: plan || [], j: 0, n: 0, out: { x: 0, z: -1, m: 0 } }; }
 /**
- * One decision per sim step -> { x, z, m }. Video time = steps so far − the 0.4 s preroll.
+ * One decision per sim step -> { x, z, m }. Course time = steps so far × DT − C_PRE (video time + REC_SKIP).
  * DECISION: target = the first planned item still on the board that fits (looking ≤ 6 ahead, so a missed one never
  *   stalls the run); speed m = distance to its swallow point / time left to its planned bite, over top speed
  *   (0.08..1, full when late). Props that do not fit yet and sit ahead within reach bend the heading onto their
  *   tangent (no bump stalls). After the plan: face the cake, creep (m 0.1) while the padlock pops, rush at 16.0 s.
  */
 export function directorDecide(d, w, dt = DT) {
-  const vt = d.n * dt - REC_PRE;
+  const vt = d.n * dt - C_PRE;   // course time
   d.n++;
   const o = d.out;
   if (!w || w.result) { o.m = 0; return o; }
@@ -643,7 +658,7 @@ function startRecordLevel(api, rec) {
   if (isFn(api.startRecord) && P) {
     const d = createDirector(P.plan);
     const decide = (w, dt) => directorDecide(d, w, dt);
-    const ok = safe(api, 'startRecord', () => api.startRecord({ level: P.level, decide }), false);
+    const ok = safe(api, 'startRecord', () => api.startRecord({ level: P.level, decide, pre: REC_PRE }), false);
     if (ok !== false && d.n > 0) { if (rec) rec.director = d; return true; }
     fallback('recHook');
     const d2 = createDirector(P.plan);
@@ -669,15 +684,17 @@ function startRecordLevel(api, rec) {
 
 /**
  * Caption alphas and the loop iris for ui.js, from video time t (s). DECISION: hook on from frame 0, fading out
- * 2.75–3.0 s and back in over the last 0.5 s (so the last frame matches frame 0); cap2 12.8–15.6 s with 0.2 s fades;
+ * 3.25–3.5 s (HOOK_OUT) and back in over the last 0.5 s (so the last frame matches frame 0); cap2 course 12.8–15.6 s with 0.2 s fades;
  * end card in over 0.2 s from REC_END_T and held until the loop frame; iris 0→1 over the last 0.5 s (the end card opens in
  * a circle on the restarted frame-0 pot, so the loop frame is frame 0).
  */
+// DECISION (11-11 Wed, G2): the hook is a top banner now, clear of the play, so it holds 0.5 s longer (out by 3.5 s, was 3.0).
+const HOOK_OUT = 3.5;
 export function recShow(t) {
   const up = (a, b) => clamp((t - a) / (b - a), 0, 1);
   return {
-    hook: t < REC_OVER_T ? 1 - up(2.75, 3.0) : up(REC_OVER_T, REC_LOOP_T),
-    cap2: up(12.8, 13.0) * (1 - up(15.4, 15.6)),
+    hook: t < REC_OVER_T ? 1 - up(HOOK_OUT - 0.25, HOOK_OUT) : up(REC_OVER_T, REC_LOOP_T),
+    cap2: up(12.8 - REC_SKIP, 13.0 - REC_SKIP) * (1 - up(15.4 - REC_SKIP, 15.6 - REC_SKIP)),   // course 12.8-15.6 s: the cake tease
     end: t < REC_LOOP_T ? up(REC_END_T, REC_END_T + 0.2) : 0,
     iris: up(REC_OVER_T, REC_LOOP_T),
   };
@@ -717,7 +734,7 @@ function makeCapture(api) {
  *   the restart and before frame 0 are not sent to the soundtrack.
  */
 function installRecord(api, M, still) {
-  const rec = { t: 0, frames: 0, over: false, hook: M.hook, cap2: M.cap2, end: M.end, still: !!still, ready: false, steps: 0,
+  const rec = { t: 0, frames: 0, over: false, hook: M.hook, cap2: M.cap2, end: M.end, still: !!still, ready: false, steps: 0, endT: REC_END_T, overT: REC_OVER_T,
     show: recShow(0), iris: 0, step: 0, beats: [], looped: false, director: null };
   api.rec = rec;
   window.__recState = rec;
@@ -779,7 +796,7 @@ function installRecord(api, M, still) {
     try {
       safe(api, 'record.tut', () => { api.meta.tutAll(); });
       startRecordLevel(api, rec);
-      if (recCourse) rec.beats = recCourse.beats.map(b => ({ t: b.t, step: b.s }));
+      if (recCourse) rec.beats = recCourse.beats.map(b => ({ t: Math.round((b.t - REC_SKIP) * 1000) / 1000, step: b.s }));   // video time
       // the preroll's bites happen before frame 0: the soundtrack starts clean at t = 0
       for (let i = events.length - 1; i >= 0; i--) if (!/^(start|levelStart)$/.test(events[i].ev)) events.splice(i, 1);
       await fontsReady();

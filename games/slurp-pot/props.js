@@ -2169,7 +2169,7 @@ export function boardGeometry(W, D, town = 'picnic') {
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
   market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#8F7355', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#CC9459', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 function shade(hex, t) { return mixC(hex, t > 0 ? '#FFFFFF' : '#3A2418', Math.abs(t)); }
 function lum(hex) { const c = lin(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
@@ -2193,6 +2193,19 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
     // read as stains on the floor (the "eaten marks" of the 11-06 critics: nothing is left by eating, these are level
     // surfaces from the first frame). So a disc is a pale paving stone with a darker kerb. Roads keep the level's colour.
     const stone = Math.abs(w - d) < 0.01, rad = Math.min(w, d) / 2;
+    if (town === 'harbour' && !stone) {
+      // DECISION (11-11, harbour path): the level's path colour (#A87A47 from catalog.js, #8F7355 here) pebbled to a grey-brown strip that read
+      //   as a darker stain on the warm deck. On the pier a road is a boardwalk: lighter, warmer planks laid across it, a dark seam
+      //   between each, close in value to the deck (#A8693F ground) so the path reads as a laid path, not a mark. render2d.js mirrors it.
+      const long = Math.max(w, d), wide = w >= d, pn = Math.max(1, Math.round(long / 0.42)), pl = long / pn, br = Math.min(0.1, Math.min(w, d) / 4);
+      parts.push(P(slab(rrShape(w, d, br), 0.016, 0, 6), '#7E5030'));
+      for (let i = 0; i < pn; i++) {
+        const o = -long / 2 + (i + 0.5) * pl, hex = mixC(i % 2 ? '#CC9459' : '#D6A068', '#7E5030', i % 3 === 1 ? 0.06 : 0);
+        parts.push(P(rbox(wide ? pl - 0.05 : w - 0.12, 0.02, wide ? d - 0.12 : pl - 0.05, 0.01, 1), hex, [wide ? o : 0, 0.012, wide ? 0 : o]));
+      }
+      const hg = merge(parts); setWhiteUV(hg); hg.computeBoundingBox(); hg.computeBoundingSphere();
+      return hg;
+    }
     const top = stone ? mixC(col, '#FFF1DC', 0.74) : null, fleck = (t) => (stone ? mixC(col, '#FFF1DC', t) : shade(col, t > 0.5 ? 0.18 : -0.1));
     parts.push(P(slab(rrShape(w, d, rad), 0.016, 0, 6), stone ? mixC(col, '#FFF1DC', 0.3) : col));
     if (stone) parts.push(P(slab(rrShape(w - 0.2, d - 0.2, rad - 0.1), 0.016, 0, 6), top, [0, 0.004, 0]));

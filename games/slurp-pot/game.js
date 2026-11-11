@@ -1053,7 +1053,7 @@ const api = {
   advance(dtReal = 1 / 60) { if (S.ready === true && !S.fatal && !S.paused) simAdvance(dtReal); },
   /**
    * §12.1 REC run: opts.level (modes' REC course) or levels.getRecord(), driven by opts.decide(w, dt) (modes'
-   * director) or else the bots.js director; no boosters, recordPath, then the 0.4 s preroll pose.
+   * director) or else the bots.js director; no boosters, recordPath, then the preroll pose (opts.pre s, default 0.4).
    * DECISION: the preroll is 24 sim steps run here with the bus live (audio is never started in record mode and
    * results/analytics are quiet), so the record tool's frame 0 already has the chain going.
    */
@@ -1063,7 +1063,9 @@ const api = {
     S.recLevel = (opts && opts.level) || null;
     S.botOn = !S.driver; S.botKind = 'director';
     if (!startLevel(0, { kind: 'record' })) return false;
-    for (let i = 0; i < 24; i++) simAdvance(C.DT);
+    // 11-11 (G2): opts.pre = modes' REC_PRE (2.65 s since 11-11: REC_SKIP 2.25 + 0.4); 24 steps (0.4 s) without it
+    const pre = opts && opts.pre > 0 ? Math.round(opts.pre / C.DT) : 24;
+    for (let i = 0; i < pre; i++) simAdvance(C.DT);
     acc = 0;
     return true;
   },
