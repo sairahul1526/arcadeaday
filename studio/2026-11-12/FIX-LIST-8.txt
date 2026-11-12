@@ -1,0 +1,84 @@
+FIX-LIST-8, Slurp Pot, from the r9 panel (Thursday 2026-11-12, frozen build 57aa1b8 on 127.0.0.1:8812)
+Gate: Sunday 2026-11-15. Every critic >= 8, mean >= 9, zero blockers.
+
+r9 scores (r8 in brackets):
+  viral-marketer     8.4  (8.3)
+  kid13              8.3  (8.6)
+  playables-curator  8.3  (8.4)
+  grandparent        8.1  (8.0)
+  mobile-designer    8.0  (7.6)
+  art-director       7.6  (8.4)   <- the only one under 8
+  MEAN               8.12 (8.22)
+All six: Q1-Q3 YES. Console: 0 game errors; the 404s were frozen-copy artifacts (/site.css, sibling og.jpg).
+Each critic named the one change that lifts them: art 8.6, viral 8.9, curator 8.9-9.0, grandparent 8.8, mobile 8.8-9.0,
+kid 8.8. If every one of those lands, the mean is about 8.8. A mean of 9 by Sunday is unlikely; every critic >= 8 is in reach.
+Reports: studio/2026-11-12/critics/r9/*-report.txt
+
+Owner files: UI = ui.js, layout.js, meta.js, game.js. Render = render3d.js, render2d.js, props.js, camw.js.
+Levels = levels*.js, logic.js, bots.js, tools. Clip = modes.js REC_*, tools/record.mjs, tools/portal-media.mjs.
+
+== BLOCKER ==
+X1 DONE 11-12  "Bigger pot!" beat drew over the "BOSS UNLOCKED!" ribbon (curator, L25 and L41: "BO Bigger pot! ED!").
+               ui.js drawBeat: while the unlock ribbon is up, a beat under way is cut (callouts already waited).
+               Not yet re-seen in a frame on L25/L41; check in Friday's shots.
+
+== A. Art (art-director 7.6, the only score under 8) ==
+A1 DONE 11-12  Food vs ground in Market and Harbour. Harbour walnut #A8693F -> #80604A (Y 0.188 -> 0.134), cool and less
+               saturated; boardwalk path #9C8868, slab #5F4939, deck piece #8A694A. Market cobble is cool grey-blue at the
+               same value (#A9B0B8, path #B7BDC4, street #878E96/#6F767E) and gets the shader ink edge (U.edge 1).
+               props.js, render3d.js, render2d.js. Before/after: studio/2026-11-12/render/shots/cmp-L{25,30,50,60}-{phone,desk}.jpg
+               (headless tier low). Food pops in all four. props-test PASS.
+A2             Picnic gingham fights pink/red food on open cloth (L1-L3). Soften the play-board check about 25 % toward cream
+               (stripe about #E9BBAB, cross about #D58879); keep the map's saturated version. props.js GINGHAM, render2d.js.
+A3             Ticket icons about 1.3x on phone; seed 2 target foods near the start on sparse late levels (L57: 3 of 4 targets
+               only edge arrows). ui.js ticket rail; levels lane for seeding.
+A4             Booster stack sits over food on the right edge (L25, L60): smaller, price on tap. "Hold and drag" pill sits on the
+               pot on cold jumps (L44/L50/L60; check it only shows to a first-time player). Boss lock icon washed out under the
+               gold ticket glow (L50). ui.js.
+
+== B. Pace and stars (the biggest lever across four critics; one curve, tuned per hand) ==
+B1             Retry gift too big (curator): L5 30 s -> "RETRY +100 s", L21 +54 s, L45 +74 s; try 2 has no stakes. Cap the gift
+               at about +30-40 s and keep the first-try clock >= about 60 % of the natural clock.
+B2             Slow hand ends L8-L12 with 5-8 s left and 1 star (grandparent: L9 7.4 s, L12 5 s). Grace so a slow hand ends
+               those with about 15 s spare.
+B3             3 stars out of reach for a normal hand from L11 on (mobile). Target: 3 stars on about 1 in 3 average-hand runs on
+               L11-L30. Tune the 3-star line separately from the clock (LG.starTimes).
+B4             Fast hand walks L1-L7 (kid13: wants the first "oh no" around L4-L7; mobile: first real pressure L8-10). Add a
+               spike moment (a chili line or a boss-open on L4/L7), not a shorter clock, so the slow hand is not hit.
+B5             Boss win cards read "Finish 47s faster for 3 stars" beside "0:45 left" (viral, L10/L60). On boss levels the 3-star
+               line asks for about 1:30 left; check starTimes on boss levels, and if the gap is over about 30 s name the 2-star
+               win's clock target instead.
+Gates for B: first-try-test, slow-hand tables (tools/slurp-pot/slow-hand.mjs), verify.mjs on every changed level.
+
+== C. Moments ==
+C1             A loud boss-open moment (kid13): flash, small shake, stinger, on top of the unlock ribbon.
+C2             Chain pulse at x5 (small); fail card points at the missing line and shows "N s short" or "N more bites" (viral,
+               mobile). ui.js fail card.
+C3             Check L60 length (85+ s) for a slow hand.
+
+== D. UI (card and map) ==
+D1 DONE 11-12  Win-card clock keeps "left" (it only goes short when the other cells' short words still don't fit). ui.js.
+D2 DONE 11-12  Next-reward hint line 15 px+ in darker gold #8A5308 (5.9:1 on cream; goldS was 3.4:1); hint row raised.
+               ui.js, layout.js.
+D3 DONE 11-12  "3 stars: m:ss" HUD chip hides once 3 stars are plainly out of reach (rest of the order at the pace so far
+               needs over 2.2x the 3-star time left + 3 s). ui.js starOut.
+D4             Win-card "Chain xN!" ribbon cuts across the clipboard and pot art (curator). Move it below the art or inline it.
+D5             Phone map: empty band; L7 node clipped under the header pills; two header pills crowd the top (art, mobile).
+D6             Desktop/landscape map: narrow column between blurred sides (art, viral, curator). Use the width.
+D7             Desktop map "+40" chip covers "Daily"; locked chips look tappable; Gild quieter when unaffordable; greyed boosters
+               look broken; Feast "5" on the pot belly; fail card flat emoji icons (art, mobile).
+D8             Desktop L1-L5 camera too far back: pot about 100 px at 1440x900 (curator). Tighten 25-30 % on L1-L5 only. camw.js.
+
+== E. Economy ==
+E1             Too rich: 2172 coins by L24 (mobile). Income -30 % or a mid-price sink. meta.js.
+
+== G. Clip and store (viral-marketer) ==
+G1             Clip first second: the hook says "pea-sized pot" over a mid-size pot at 24 eaten. Open 0.8 s on the pea pot beside
+               one cupcake, then cut to the fed pot; or reword the hook to "Eat everything in the park". modes.js REC_*.
+G2             Clip 10-13 s dead stretch (empty lawn while the count goes 123 -> 136): cut it or put a cluster in front of the pot.
+G3             Title screen has no promise line: add "Start tiny. Eat the whole park." under the logo; cake on the title scene.
+G4             Day-one return hook thin: name tomorrow's reward on the L3-L5 win cards; the next-skin coin bar after the first win.
+
+Friday order (most score per hour): B1 + B5 + D4 (curator 8.9-9.0), G1 + G2 (viral 8.9), B2 (grandparent 8.8),
+B3 + B4 (mobile, kid 8.8), then A2-A4, C1, D5-D8, E1. Then rebuild the seven packs and the Playables zip from the final
+tree, regenerate media, redeploy the preview. Saturday: re-panel on a frozen copy (with site.css). Sunday: gate.

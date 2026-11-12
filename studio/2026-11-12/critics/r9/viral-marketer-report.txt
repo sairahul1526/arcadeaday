@@ -1,0 +1,36 @@
+SLURP POT r9 - viral-marketer (clip, record mode, covers, title, hook)
+
+SCORE: 8.4/10
+
+Q1 Did the first 10 seconds hook me? YES. Cold page (cold-title.png): warm picnic scene, big smiling pot, one huge PLAY button. Tap, and L1 opens on a sea of cupcakes, strawberries and sweets with the pot in the middle and a pulsing "Drag to move" hand (cold-p0.png). Readable with no text. In my real-time drag test the pot moved, "Too big! Eat smaller food" then "Go around it" appeared (cold-d3.png, cold-d9.png). Visually it hooks. Weakness: the title screen has no promise line (no "start tiny, eat the park"), and the game starts static until you drag.
+Q2 Did I hit retry or next without thinking? YES. Win card (a-L1-win-0.png): one fat NEXT button, 3 stars, "You ate 76!", chain. Fail card (b-L5-fail-0.png): one primary "RETRY +100 s" button with a sad pot. L5 failed once on the first try, retried at once and won (b-L5-win-1.png). No dead-end.
+Q3 Would I come back tomorrow? YES, but mostly on the promise of stuff, not yet on felt pull. Daily Order with a 7-day ladder, Feast, 10 skins to gild, cookbook with 60 silhouettes, boss bites and chests are all visible on the map (scr-ph-map.png, scr-ph-shop.png, scr-ph-cookbook.png). Daily and Feast are locked at first, so day one has little "come back tomorrow" hook beyond "+40 NEW" on the L10 win card.
+
+BLOCKERS: none found. Console: zero errors on phone and landscape. On the desktop run I saw 8 x 404 "Failed to load resource" (the known frozen-copy site.css / og.jpg artifact, not counted). No text overlap or clipping seen on title, map, daily, feast, shop, cookbook, settings, win cards, play HUD at 390x844, 1440x900, 844x390. Not verified: progress surviving a reload (my QA shortcuts left progress at 0, so my reload test proved nothing), sound while paused (headless, no audio heard), real fps.
+
+WHAT I COVERED
+- Clip videos/2026-11-08-slurp-pot.mp4 as 18 frames at 1 fps (clip/sheet.jpg) and its caption .md. Covers: 800x1200-title cover viewed full size; others listed only.
+- Played by __qaSteer('average','normal') with a scripted continuous driver, phone touch (CDP) L1, L2, L3, L4, L5 (1 fail, then win), L10 boss (2 stars), L20 boss, L30 (cold jump: FAILED once on a jumped-to level, a sample only, not retried to a win), L45 (win), L60 lighthouse boss (win, 2 stars). Desktop mouse L2 (3 stars), landscape 844x390 L2 (3 stars). Frames: a-*, b-*, c-*, d-*, e-*.
+- Screens at 3 sizes: title, map, daily, feast, shop, cookbook, settings (scr-*.png), win cards and the L5/L30 fail cards.
+- NOT covered: Daily and Feast actually played (only their locked screens), record mode ?record=1 live (I judged the shipped mp4 instead), the other covers beyond one, audio, real-GPU feel, a human-order playthrough of L6-L44 (I jumped), post-loss help after 2 fails.
+
+CLIP VERDICT (promise vs delivery)
+The clip is a strong thumb-stopper: opening on 20+ eaten with a x9 chain and a countdown, juice boxes exploding into a pile, parasols and the giant cake as the payoff, ORDER UP stamp, end card with the pot and cake. The caption hook "start the size of a pea... eat the whole park... even the giant cake" is the right story, and the game does deliver the cake as the L20 boss bite (s20.jpg, b-L20-t063-0.png). But the clip overpromises scale on first contact: it shows chain x45 and 136 eaten, while L1-L5 gave me chain x9-x19 and 76-108 eaten on small tables of cupcakes. The cake appears at L20, not in the first minute. The clip never shows a fail, the timer pressure, the chili, or the boss UI.
+
+3 BEST THINGS
+1. Visual identity: warm toy-town, glossy gold pot with eyes, strong against the usual hole-game flat grey. The cover (cover-800x1200-title.jpg) alone would stop a scroll: cake lifting out of the pot, big gold title.
+2. The growth/swallow loop reads instantly: ticket icons, food that glows when edible, "Too big!" tip, dotted guide trail, and a satisfying bite payoff on bosses (basket L10, cake L20, lighthouse L60).
+3. The cards: one big button, stars, "You ate N!", chain ribbon, coin counter. Win and fail both push the next try with no menu (a-L1-win-0.png, b-L5-fail-0.png).
+
+TOP 5 PROBLEMS
+1. Clip opening starts after the growth story. Frame 1 (clip/f01.jpg) is "24 eaten" with the pot already mid-size, yet the on-screen hook says "pea-sized pot". Change: first 0.8 s should show the pea pot beside one cupcake, then smash-cut to the fed pot; or reword the hook to "Eat everything in the park" so text and picture agree.
+2. Clip dead stretch around 10-13 s (f10-f13): pot on an almost empty lawn with tiny scattered food while the counter climbs 123 to 136. The energy drops just before the cake. Change: cut these 3 s, or put a bonus cluster in front of the pot so the last bites stay dense.
+3. Title screen has zero promise (cold-title.png): logo plus PLAY. A scrolling-from-social player gets no "why". Change: add a one-line tagline under the logo ("Start tiny. Eat the whole park.") and show the cake on the title scene.
+4. Day-one return hook is thin: Daily and Feast are greyed with "Win 6 / 12 more levels" (scr-ph-daily.png, scr-ph-feast.png), and the cookbook is all "?" silhouettes. Change: let the Daily be playable from L1 (easy mode) or show the NEXT skin teaser with a coin bar prominently after the first win, and name tomorrow's reward on the L3-L5 win cards.
+5. Fail card is flat (b-L5-fail-0.png, c-L30-fail-0.png): same sad pot every time, no near-miss line. The cold L30 fail on "average-normal" and the L5 first-try fail came with no "so close, 3 more bites" hook. Change: show the remaining ticket count or a "N s short" line and a shaking pot with the missing food highlighted, to make retry feel like the next try wins.
+Also minor: desktop map (s_dt.jpg) is a narrow column between blurred sides; the boss win cards on L10/L60 say "Finish 47s faster for 3 stars" when 0:45 was left, which reads confusing.
+
+THE ONE CHANGE THAT WOULD RAISE MY SCORE MOST
+Re-cut the clip's first second and hook line so the picture and words tell the same "pea to park" growth story (pea pot beside one cupcake, then the 24-eaten chain), and drop the empty-lawn stretch. That is the piece that decides whether a stranger taps; the game itself already delivers. After it I would give 8.9.
+
+Folder: /Users/sairahul/Documents/projects/poki/studio/2026-11-12/critics/r9/viral-marketer/

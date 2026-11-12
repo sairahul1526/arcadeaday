@@ -447,7 +447,7 @@ export function cardLayout(L, name, opts = {}) {
       ...(opts.strip && !twoCol ? [stripRow] : []),
       // Friday fix 2, U3: an affordable pot is a real button (44 px), a pot still out of reach is one line of text.
       ...(opts.buySkin ? (twoCol ? [] : [buyRow])
-        : opts.nextSkin ? [{ id: 'hint', h: Math.max(fs.small * 1.6, U(24)), min: fs.small * 1.4 }] : []),
+        : opts.nextSkin ? [{ id: 'hint', h: Math.max(Math.max(15, fs.small * 1.15) * 1.5, U(24)), min: Math.max(15, fs.small * 1.15) * 1.3 }] : []),   // 11-12: the hint line is 15 px+
       // C3 (11-10): the first Daily offer, a button the size of NEXT right above it (NEXT keeps its size)
       ...(opts.daily ? [{ id: 'daily', h: primH, min: primH, gap: gap * 0.9 }] : []),
       { id: 'next', h: primH, min: primH, gap: opts.daily ? gap * 0.6 : gap * 1.4 },

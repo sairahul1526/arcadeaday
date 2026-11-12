@@ -1,0 +1,47 @@
+CRITIC kid13 (13-year-old, Subway Surfers / Roblox / hole games). Steered with __qaSteer('average','normal'). Round r9, frozen copy :8812.
+Screenshots + scripts: studio/2026-11-12/critics/r9/kid13/ (lib.mjs, run1-4.mjs, probe.mjs, log.txt, stats1.json)
+
+SCORE: 8.3/10
+
+Q1 Did the first 10 seconds hook me? YES. Title (00-title-4s.png) is a big chunky pot with eyes on a picnic table, one huge PLAY button, tap anywhere starts. L1 (01-after-tap.png, L01-try1-t005.png) is: drag, eat stuff, pot grows, x7 chain pops, orange/green confetti, a progress bar with a locked cake at the end. You are growing within 3 seconds. L1 took about 10 s of play and went straight into a win card with 3 stars and "Chain x10" (F-L1-card-1.8s.png).
+Q2 Did I hit retry or next without thinking? YES. Win card has a big NEXT with Replay/Map under it; the fail card has a big RETRY +65 s (12-fail-card-forced.png, T-41-card.png), a free "+10 s, keep cooking" and a Map link. On L8 I lost once, the retry came with "Extra time to help you! +23s" (L08-try2-t000.png) and I won it straight away. No dead ends, no menu detour.
+Q3 Would I come back tomorrow, and why? YES. Daily day-1 order with a 7-day reward ladder ("Tomorrow: Chest!", 11-screen-daily.png), a coins-to-next-skin bar on the map, 10 pot skins (shop, 11-screen-shop.png), "You can buy the Royal Pot!" nags on win cards, the cookbook of dishes with 3-star slots (11-screen-cookbook.png), and 3 towns with a locked "Market Street, opens at L21" tease. Plenty to unlock.
+
+BLOCKERS: none from the game.
+ - Console: on the phone profile 0 errors on every run. On the desktop run I saw 404s for /<sibling-game>/og.jpg (bin-it, cap-flip, cat-stack, dont-pop, fifty-fifty, knot-kitty, reel-greedy, stone-skip), the "more games" tiles, in the frozen copy. Same class as the known /site.css artifact (I did not see site.css 404 myself). I count these as artifacts, not blockers. Worth confirming the shipped packs carry those thumbnails or the tiles degrade quietly.
+ - No text overlap or clipping at 390x844, 844x390, 1440x900, 1024x768, 820x1180, and a live resize 1440 to 390 (D-resize-*.png) in what I looked at. One nit: on the Feast end card the big "5" sits on top of the pot's belly (T-feast-card.png). It reads as intentional but is the closest thing to an overlap.
+ - Progress survived a reload (state saved at progress 12 and 1004 coins, reloaded to title with progress 12, coins 1004; 10-title-reloaded.png).
+
+PLAY LOG, L1 to L12 in order, one page, retries via the card (phone 390x844, real CDP touch, __qaInput + __qaAdvance(0.1) loop). Seconds-left is the clock left on the win.
+ L1  1 try 3 stars (no clock)   L2 1 try 3* 53.8 s   L3 1 try 3* 64 s   L4 1 try 3* 55 s   L5 1 try 3* 5 s
+ L6  1 try 3* 5 s (hot chili, trail bends round it, 11-ish s of real tension)   L7 1 try 3* 5 s
+ L8  2 tries: try1 timed out (clock ~35 s), retry got +23 s gift, won 2 stars with 89 s left
+ L9  1 try 3* 60 s   L10 1 try 3* 57 s   L11 1 try 3* 8 s   L12 1 try 3* 6 s (card: "Mega rim +1")
+ Total 13 attempts for 12 levels, one loss. Caveat: the game also runs on its own rAF between my calls, so my driver is slightly looser than a real thumb; I did not judge difficulty on jumped levels.
+
+SAMPLES (jumped with __qaLevel, so cold, first-try short clock, no retry history; these are samples not verdicts):
+ L20 boss (Birthday Bash, "BOSS ORDER" banner): timed out cold, pot 2.83 vs needR 2.67 at the end, the boss had just opened. Not retried.
+ L21 (Market Street): won 2 stars, 34 s left.   L30 boss (Lunch Hour, bakery van): won 2 stars, "BOSS EATEN!", "Finish 20s faster for 3 stars" bar (S-L30-card.png).
+ L41 (Harbour, Gull Watch): timed out 3/4 + 0/2 cold, card offered RETRY +65 s (T-41-card.png). Not retried.
+ L45 boss: won 2 stars 40 s left.   L55 (Breezy Pier, red hot-chili rings visible, T-55-t018.png): won 2 stars, 63 s left.
+ L60 (Lighthouse Feast, two bosses locked): timed out cold with 3/3 of one line done and bar ~45 % (T-60-t012.png). Not retried.
+ Daily (jumped): won 2 stars, 10 s left.   Feast: 5 orders served, NEW BEST +75 coins (T-feast-card.png). Feast ran 110 s of sim, ended by timeout as designed.
+ Screens seen: title, map (phone + desktop + landscape), daily, feast intro, shop, cookbook, settings, win cards (L1, L2, L12, boss), forced fail card L13, natural fail card L41.
+ Desktop 1440x900 (mouse): real mouse drag moves the pot, L1 and L2 won by the driver, the camera shows a good overview and the ticket is large and readable (D-L2-t005.png). Landscape 844x390: L14 played and won 2 stars, HUD and boosters fit, nothing clipped (LS-L14-t000.png).
+
+3 BEST THINGS
+1. The feel. The pot, the confetti on bites, the x-chain counter, the orange glow on the rim, the crying pot on the fail card: it looks and reads like a premium hole game, and the Order Up / Boss Eaten stamp cards feel like rewards.
+2. The loss design. A loss never feels like a wall: the fail card hands you extra seconds ("RETRY +65 s", "Extra time to help you! +23s") and a one-tap retry; on L8 that turned a loss into a win in about 25 s.
+3. Meta that makes me want one more: skins with prices, "You can buy the Royal Pot!", boosters in the shop, cookbook slots, daily chest ladder, towns that change the look (picnic, market street, wooden pier) and a boss every 10 levels.
+
+TOP 5 PROBLEMS
+1. L1 to L7 are a walkover for a kid who plays Subway Surfers: 3 stars every time with 50+ s left on L2 to L4. Tension only starts around L6 to L7 and shows up properly at L11/L12 (5 to 8 s left). Change: move the first real "oh no" up to about L4 (a bigger ticket or a hot chili on L3 to L4), so a fast kid never sees a calm 3 stars at 60 s left twice in a row.
+2. Cold boss levels were the ones I lost (L20, L41, L60 timed out on first try; samples only). Boss "open" moment is quiet: the locked padlock plus the pot just needing to be big enough, with nothing shouting "NOW" (S-L20 frames). Change: when the boss opens, flash the boss, shake the screen and play a stinger so a kid knows to rush it with the clock running.
+3. First 10 levels give you a sloppy chain: my average hand's chain sat at 0 to 4 for most of L6 to L12, so the x-counter, the juiciest feedback, rarely got a showing. Change: widen the chain window a little in L1 to L12 or add a bite-streak burst (screen pulse) at x5 so it is felt even at low chains.
+4. Fail card on a retry gift has no "why you lost" hint: it shows 0/3 and 0/4 but not what was in the way (I lost L8 and L41 with the pot circling). Change: highlight the line you were closest to and say "Eat [cheese] first, it was the slowest line", or point the first 5 s of the retry at the missing food.
+5. Small polish: Feast end card puts the big "5" on the pot's belly (T-feast-card.png); the map card for "Daily" and "Feast" shows locked chips ("L6", "L12") that look tappable on desktop (D-map.png) and the desktop 404 for sibling-game thumbnails (above).
+
+THE ONE CHANGE THAT WOULD RAISE MY SCORE MOST: make L3 to L10 spike earlier for a fast hand (tighter first-try clock plus a guaranteed hot-chili or boss-open moment on L4/L7), so a 13-year-old feels "that was close, one more" before L8. After it: 8.8/10.
+
+COVERED: L1 to L12 in order on one page with real touch (13 attempts); L13, L14, L15 loaded; samples L20, L21, L30, L41, L45, L55, L60; Daily and Feast played with the driver; map, shop, cookbook, settings, alldone screens (settings/alldone shots were taken but I only opened the first five); forced win and fail cards plus natural win and fail cards; reload persistence; desktop 1440x900 (mouse, L1 and L2) plus live resize; landscape 844x390 (L14).
+NOT CHECKED: sound (and sound while paused: my pause tap at 780,30 on the landscape view did not land, so no pause test), real GPU fps (headless showed 13 fps, not meaningful), slow-hand play, the "2 straight fails to Retry + Magnet" card, the shop purchase flow, the real first-time-player timing without my scripted driver (I made one 4 s real-time mouse drag on desktop; it moved the pot and ate items fine), L61+ or retries on L20/L41/L60.

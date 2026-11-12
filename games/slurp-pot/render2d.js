@@ -32,12 +32,12 @@ const rnd = mulberry32(0x2D0F2D);          // render-only RNG (blinks, fx): neve
 // ------------------------------------------------------------------ colours (copies of props.js / render3d.js)
 const LID = { sunny: '#F5B323', cauldron: '#C8743A', wok: '#D9412F', teapot: '#2FB5A5', ricecooker: '#E6D6BA',
   dutch: '#8FE3C8', steamer: '#D9B36B', royal: '#FFD23F', ufo: '#C9D3E0', starladle: '#2B3A8C' };
-const GROUND = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#A8693F' };   // props.js GROUND_BASE says why
+const GROUND = { picnic: '#F7E9D4', market: '#A9B0B8', harbour: '#80604A' };   // props.js GROUND_BASE says why
 const BACK = { picnic: '#A99272', market: '#B39D7B', harbour: '#2AA7C9' };   // table / street / sea = clear colour
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
-  market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#CC9459', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  market: { blanket: '#2FB5A5', path: '#B7BDC4', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#9C8868', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 const HEM = { picnic: '#2FB5A5', market: '#FF7A59', harbour: '#2AA7C9' };
 const HOOD = { picnic: '#F5B323', market: '#2FB5A5', harbour: '#E04F4F' };
@@ -561,7 +561,7 @@ function board(g) {
     let k = 0;
     for (let z = z0; z < z1; z += 0.5) for (let x = x0 + (Math.round((z - z0) / 0.5) % 2 ? 0.3 : 0); x < x1; x += 0.6, k++) if (hsh(k) < 0.12) g.rect(x + 0.03, z + 0.03, 0.54, 0.44);
     g.fill();
-    g.strokeStyle = '#A5957B'; g.lineWidth = 0.05; g.beginPath();
+    g.strokeStyle = '#99A1AA'; g.lineWidth = 0.05; g.beginPath();
     for (let z = z0, r = 0; z < z1; z += 0.5, r++) {
       g.moveTo(x0, z); g.lineTo(x1, z);
       for (let x = x0 + (r % 2 ? 0.3 : 0); x < x1; x += 0.6) { g.moveTo(x, z); g.lineTo(x, z + 0.5); }
@@ -591,10 +591,10 @@ function surface(g, type, w, d, color) {
     const stone = Math.abs(w - d) < 0.01, rad = Math.min(w, d) / 2;
     if (town === 'harbour' && !stone) {   // 11-11: a boardwalk of lighter, warmer planks across the road, as props.js (no grey-brown pebble strip)
       const long = Math.max(w, d), wide = w >= d, pn = Math.max(1, Math.round(long / 0.42)), pl = long / pn, br = Math.min(0.1, Math.min(w, d) / 4);
-      rr(g, -w / 2, -d / 2, w, d, br); g.fillStyle = '#7E5030'; g.fill();
+      rr(g, -w / 2, -d / 2, w, d, br); g.fillStyle = '#5F4939'; g.fill();
       for (let i = 0; i < pn; i++) {
         const o = -long / 2 + (i + 0.5) * pl;
-        g.fillStyle = mix(i % 2 ? '#CC9459' : '#D6A068', '#7E5030', i % 3 === 1 ? 0.06 : 0);
+        g.fillStyle = mix(i % 2 ? '#9C8868' : '#A49379', '#5F4939', i % 3 === 1 ? 0.06 : 0);
         if (wide) rr(g, o - (pl - 0.05) / 2, -d / 2 + 0.06, pl - 0.05, d - 0.12, 0.01); else rr(g, -w / 2 + 0.06, o - (pl - 0.05) / 2, w - 0.12, pl - 0.05, 0.01);
         g.fill();
       }
@@ -611,7 +611,7 @@ function surface(g, type, w, d, color) {
     rr(g, -w / 2, -d / 2, w, d, Math.min(0.4, Math.min(w, d) / 3)); g.fillStyle = col; g.fill();
     g.strokeStyle = '#E8FBFF'; g.lineWidth = 0.07; rr(g, -w / 2 + 0.095, -d / 2 + 0.095, w - 0.19, d - 0.19, 0.3); g.stroke();
   } else if (type === 'deck') {
-    const n = Math.max(1, Math.round(d / 0.28)), base = lum(col) > 0.75 ? '#B5733F' : col;   // D2 (11-10), as props.js
+    const n = Math.max(1, Math.round(d / 0.28)), base = lum(col) > 0.75 ? '#8A694A' : col;   // D2 (11-10), 11-12 A1, as props.js
     for (let i = 0; i < n; i++) { g.fillStyle = shade(base, i % 2 ? -0.08 : 0); rr(g, -w / 2, -d / 2 + i * d / n + 0.01, w, d / n - 0.02, 0.012); g.fill(); }
   } else {
     const hem = lum(col) > 0.6 ? HEM[town] || HEM.picnic : '#FFF1DC';

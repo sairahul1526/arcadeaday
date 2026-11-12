@@ -1237,11 +1237,23 @@ function drawLinesList(w, t, r, y) {
 
 // ---- egg timer (D33): tomato kitchen timer clipped to the rail's right end ----
 // U11: the seconds left to keep 3 stars, live, in a small tag under the clock. It leaves once the third star is gone.
+const HINT_INK = '#8A5308';   // 11-12: darker gold for small reward lines (5.9:1 on the card cream, goldS was 3.4:1)
+// 11-12 (FIX-LIST-8 D, mobile-designer r9): the chip also leaves once the third star is plainly out of reach, so it never
+//   counts down a lost cause: at the pace so far the rest of the order needs well over twice the 3-star time left. Pots
+//   snowball (a bigger pot eats faster), which is why the margin is wide; a finished order always keeps the chip.
+function starOut(w, left) {
+  let need = 0, got = 0;
+  for (const t of w.tickets || []) for (const l of t.lines || []) { need += l.need | 0; got += Math.min(l.got | 0, l.need | 0); }
+  if (!need) return false;
+  const f = got / need, el = (w.T || 0) + (w.freezeAdded || 0) - w.tLeft;
+  if (f >= 1 || el < 8) return false;
+  return (el / Math.max(0.05, f)) * (1 - f) > left * 2.2 + 3;
+}
 function drawStarChip(w, r) {
   if (REC_M.record || finOn() || w.result || T - hud.hotPop < 1) return;
   const st = pauseStars(w);
   const left = st ? Math.ceil(w.tLeft - st.t3) : 0;
-  if (left <= 0) return;
+  if (left <= 0 || starOut(w, left)) return;
   const u = L.u, fsz = Math.max(12.5, 13.5 * u), label = fmt(STR.starsLive, { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` });
   const h = Math.max(19, fsz * 1.5), tw2 = measure(label, fsz, FB, '800'), w2 = tw2 + h * 0.9;
   // the chip starts right of the ticket (its counts sit on the right edge) and ends inside the safe right edge; the meter row
@@ -1271,6 +1283,9 @@ function drawBeat(w) {
       if (globalThis.__qa) globalThis.__uiBeat = { text, at: (w.t || 0) - w.tStart };   // QA readout only
     }
   }
+  // 11-12 (FIX-LIST-8 blocker, curator r9 L25/L41): a beat that began a moment before the boss opened drew over the
+  //   BOSS UNLOCKED ribbon ("BO Bigger pot! ED!"). The ribbon owns the band: a beat under way when it lands is cut.
+  if (unlockOn()) { hud.beatTxt = null; return; }
   const k = T - (hud.beatT ?? -9);
   if (k < 0 || k > 1.3 || !hud.beatTxt) return;
   const rw = Math.min(band.w - rh * 1.1, measure(hud.beatTxt, fsz) + rh * 2.4), sc = k < 0.18 ? 0.6 + 0.4 * back(k / 0.18) : 1;
@@ -2611,6 +2626,9 @@ function drawWin(st, w) {
     if (d.chainBest && !brag) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest }), fmt(STR.chainShort, { n: d.chainBest })]);
     // G1 (11-10): three cells on a narrow card take their short words, then the chain (then the clock) gives way to the count
     const fits = list => list.every(c => fs.stat * 1.2 + 16 + measure(c[1], fs.stat, FB, '800') <= st2.w / list.length);
+    // 11-12 (FIX-LIST-8 D, grandparent r9): the clock keeps its "left" longest, so "0:28" never stands unlabeled; it takes the
+    //   short form only when the other cells' short words still do not fit
+    if (!fits(cells)) cells = cells.map(c => c[0] === 'clock' ? c : [c[0], c[2], c[2]]);
     if (!fits(cells)) cells = cells.map(c => [c[0], c[2], c[2]]);
     while (cells.length > 1 && !fits(cells)) cells.pop();
     const cw = st2.w / Math.max(1, cells.length);
@@ -2642,14 +2660,16 @@ function drawWin(st, w) {
   // Friday fix 2 (U3): never "0 coins". A pot the player can pay for is a button to the Shop; Back from there comes home to this card.
   if (B.hint && !canBuy && (next || tmr)) {
     const both = !!(next && tmr), ph = cardT % 5, showTmr = !!tmr && (!next || ph >= 2.5), tp = ph % 2.5;
+    // 11-12 (FIX-LIST-8 D, grandparent r9): the next-reward line was 12.5 px light gold on cream; now 15 px or more, darker gold
+    const hfs = Math.max(15, fs.small * 1.15);
     g.save(); if (both) g.globalAlpha = Math.min(1, tp / 0.25, (2.5 - tp) / 0.25);
     if (showTmr) {
       const is = Math.min(B.hint.h * 1.1, 30 * cu + 6), room = B.hint.w - is - 6;
-      const s1 = measure(tmr.txt, fs.small, FB, '800') <= room ? tmr.txt : tmr.short, tw = Math.min(room, measure(s1, fs.small, FB, '800'));
+      const s1 = measure(tmr.txt, hfs, FB, '800') <= room ? tmr.txt : tmr.short, tw = Math.min(room, measure(s1, hfs, FB, '800'));
       const x0 = B.hint.x + (B.hint.w - (is + 4 + tw)) / 2, cyh = B.hint.y + B.hint.h / 2;
       rewardIcon(tmr.rw, x0 + is / 2, cyh, is);
-      txt(s1, x0 + is + 4, cyh + 1, fs.small, { f: FB, align: 'left', col: C.goldS, maxW: room });
-    } else txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, fs.small, { f: FB, col: C.goldS, maxW: B.hint.w });
+      txt(s1, x0 + is + 4, cyh + 1, hfs, { f: FB, align: 'left', col: HINT_INK, maxW: room });
+    } else txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, hfs, { f: FB, col: HINT_INK, maxW: B.hint.w });
     g.restore();
   }
   if (B.hint && canBuy) {

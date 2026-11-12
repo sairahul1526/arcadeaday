@@ -1,0 +1,36 @@
+SLURP POT r9 - mobile-designer (steer: average / normal hand, phone 390x844 touch via CDP, headless, __qaInput + __qaAdvance(0.1) loop)
+Folder: studio/2026-11-12/critics/r9/mobile-designer/  (log.jsonl = per-level log, sample.jsonl = sampling, play.mjs / sample.mjs / lib.mjs = drivers)
+
+SCORE: 8.0/10
+Q1 Did the first 10 seconds hook me? YES. Title (p-title.png) is a living picnic board, glossy pot with eyes, one fat PLAY button, tap-anywhere starts L1. L1 (p-after.png) drops me in the pot with a 3-item ticket and an immediate eat loop; first win at ~25 s, "ORDER UP!, Chain x17, You ate 72!, Bonus chest +30, Next pot: Cauldron 30 more coins" (card-L1-t1-win.png). Royal-Match-grade juice and a visible goal ladder.
+Q2 Did I hit retry or next without thinking? YES. Win card: NEXT is the dominant button. Fail card (card-L14-t1-fail.png, card-L17-t1-fail.png, card-L20-t1-fail.png) has one giant "RETRY +47 s" with per-line progress (12/12, 6/6, 0/4), so the reason for the loss is legible. I retried every time and won on try 2 each time.
+Q3 Would I come back tomorrow? YES, but it is the weakest YES. Daily ladder (7 days, skin on day 7), Daily Order +40 NEW upsell, daily chest hint on map, coins-to-next-skin bar, 10 pots x 10 gild levels, Feast L12. Reasons are there; what I could not feel is a daily-return pull stronger than "more levels" (see problems 3 and 5).
+
+BLOCKERS: none that I can prove. One console message on every page load: "Failed to load resource: 404 (File not found)" (in log.jsonl end lines and sample.jsonl). I did not identify the URL (probably favicon-class); the brief lists "console error" as a blocker, so someone must find that 404 and either remove it or confirm it is harmless. I did NOT test: sound while paused, reload progress loss by hand (my driver re-injected the save between runs and it resumed at the right level, which is indirect evidence only), resize, landscape play, desktop 1440x900.
+
+PLAY RECORD (in order, one save, retries via the card button; average/normal hand). tLeft = clock at the card, "5" repeating looks like the post-ticket clock hold; stars as shown on card.
+L1 1 try 3* | L2 1 try 3* tLeft52 | L3 1 try 3* | L4 1 try 3* | L5 1 try 3* | L6 1 try 3* (chili hazard, magnet booster shown, guide trail clear: L6-t0-12.png) | L7 1 try 3* | L8 1 try 2* | L9 1 try 3* | L10 1 try 3* | L11 1 try 1* (tLeft 6) | L12 1 try 3* | L13 1 try 1* | L14 2 tries (timeout 0/4 banana, then 2*) | L15 1 try 2* | L16 1 try 2* | L17 2 tries (timeout at bar 0.86, then 3*) | L18 1 try 2* | L19 1 try 2* | L20 2 tries (timeout bar 0.92, then 2*, chain 26) | L21 1 try 2* | L22 1 try 2* | L23 1 try 1* | L24 1 try 1*.
+Reached L24 by play (25 not played, time). 24 levels = 28 attempts, 4 losses (L14, L17, L20 and none on L1-13) = 3 of 24 levels needed a retry (12.5 percent). All retries won first time after the gift clock.
+Samples (cold __qaLevel jumps, so only samples): L30 boss "BOSS EATEN!" win 2* 0:57 (S-L30-card.png, "Finish 16s faster for 3 stars"); L41 win 2*; L50 timeout loss (S-L50-card.png); L21 and L60 did not finish in my 60 s wall cap (60 reached 85 s sim, still playing), so no verdict. Screens captured: map, daily, feast, shop, cookbook, settings (scr-*.png; map and shop viewed, others only captured, not individually reviewed).
+
+DIFFICULTY / ECONOMY READ (numbers)
+- L1-13: 13/13 first-try wins, 10 of 13 at 3 stars. That is a gentle ramp, Royal Match style, correct. But the first losses only arrive at L14, 13 levels with no pressure; Block Blast/Royal Match put the first real "oh no" near L8-10. Stars drop from 3 to 1-2 from L11 on and almost never return to 3 (L16-L24 stars: 2,3,2,2,2,2,2,1,1): the 3-star bar from L18 up is a mean slower than a regular hand, so stars stop being a goal and become noise.
+- L23 and L24 ended at 1 star with tLeft 5-6 s: these are near-losses, the right tension, and L20-L24 coin pace (+60 to +270 per level) is fine.
+- Coins: 50 start, 2172 after L24 (about 90 per level). Cheapest skin 150, boosters 40-120, gild 600 (scr-shop.png). By L24 I could have bought most of the shop; with no pressure to spend, the sink is too shallow for the first hour. Boosters unlock at L6/L9/L13 for 40-120 coins, which is trivially cheap against income.
+- Fail card: "RETRY +47 s" gift plus "+10 s keep cooking 3 left" is generous and clear. Good.
+
+3 BEST THINGS
+1. Win and fail cards: stamp, chain ribbon, "You ate N!", bonus chest, next-skin teaser, "Finish N s faster for 3 stars", green Daily Order upsell; each one tells me exactly what to do next (card-L1-t1-win.png, S-L30-card.png).
+2. In-play readability: edge arrows with food icons, bent guide trail around the chili, ticket + stopwatch + pause + progress bar to the boss, booster with count (L6-t0-12.png). I never felt lost.
+3. Fail-recovery: failing shows which ticket line is empty, gives extra seconds, and one tap retries; zero friction.
+
+TOP 5 PROBLEMS
+1. Stars stop meaning anything from L11 on (L16-L24: seven 2*, two 1*, one 3*). 3 stars on a normal-hand mean is nearly unreachable ("16s faster" on the L30 boss card). Change: make 3 stars reachable by a regular hand on about 1 level in 3, or tie the third star to something non-time (no chili burn, chain >= N) so there is a goal other than "faster".
+2. Difficulty is flat then spiky: 13 straight first-try wins (L1-13), then 3 timeouts in the next 11 levels, each as a one-line "banana 0/4" or "bar 0.86" loss with nothing teaching the player what to change. Change: pull the first light pressure up to L8-10 (the brief's shorter first-try clock was there but invisible to me), and on a timeout show the single biggest missing line with an arrow hint.
+3. Economy too rich: 2172 coins by L24 vs prices 40-1300. Nothing in the first hour makes me choose. Change: scale coin income down about 30 percent or add a mid-price sink (a second tier of boosters bought per level, a skin at 300 that is visible on the map) so the coin bar is a live goal.
+4. Cold-start jump reliability / late-game length: L21 and L60 did not finish in 60 s of wall time under the bot (L60 85 s of game time and still going). If a normal hand really needs 85+ s for a level, that is long for a mobile level (mega-hits sit at 30-60 s). Check the late-level length or reduce item counts.
+5. The unidentified 404 on every load (console). Find it, remove it.
+
+THE ONE CHANGE THAT WOULD RAISE MY SCORE MOST: rework the star and pressure curve (problems 1 and 2): make 3 stars reachable on L11-L30 for a normal hand and move the first real loss pressure to L8-10. That makes every level a mini-goal instead of "win and move on". I would give 8.8 after it; with a coin-sink fix as well, 9.0.
+
+COVERED: phone 390x844 touch play L1-L24 in order with retries; boss L30, L41, L50 by bot-sample; win cards (L1, L30), fail cards (L14, L17, L20), map, shop viewed; daily/feast/cookbook/settings only captured by __qaScreen, not reviewed in detail, Daily and Feast not played. Driver was the "average/normal" __qaSteer bot, not my own hands; headless software rendering (fps ~30 headless, not judged). NOT covered: desktop, landscape, L25-L29, L31-40, L42-49 (sampled only 30/41/50), L55-60 verdict, audio, pause, resize, reload by hand, share button, real-GPU performance, the three-fail "Retry + Magnet" path.

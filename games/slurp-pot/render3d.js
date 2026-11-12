@@ -608,7 +608,7 @@ function hs32(s) { let h = 2166136261; for (const ch of String(s)) h = Math.imul
 function streetGeo(cx, cz, town) {
   const g = new PlaneGeometry(200, 200, 40, 40).rotateX(-PI / 2).toNonIndexed();
   const p = g.attributes.position, n = p.count, col = new Float32Array(n * 3), uv = new Float32Array(n * 2);
-  const A = new Color('#907F68'), B = new Color('#7A6A56'), T = props.GROUND_TILE || 4;
+  const A = new Color('#878E96'), B = new Color('#6F767E'), T = props.GROUND_TILE || 4;   // 11-12 A1: cool stone, as props.js
   for (let i = 0; i < n; i++) {
     const t = sstep(9, 46, Math.hypot(p.getX(i), p.getZ(i)));
     col[i * 3] = lerp(A.r, B.r, t); col[i * 3 + 1] = lerp(A.g, B.g, t); col[i * 3 + 2] = lerp(A.b, B.b, t);
@@ -1140,7 +1140,7 @@ export function loadLevel(L, skinId) {
   LV = L; W = null;
   const town = TOWN[L.town] ? L.town : 'picnic';
   buildStatic(L, town);
-  U.edge.value = town === 'harbour' ? 1 : 0;
+  U.edge.value = town === 'picnic' ? 0 : 1;   // 11-12 A1: Market's cobble gets the earlier ink line and bright inner band too
   if (town !== curTown) {
     const T = TOWN[town], Lt = LIGHT[town] || LIGHT.picnic;
     scene.background.set(T.sky); fog.color.set(T.fog);

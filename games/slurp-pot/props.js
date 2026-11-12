@@ -41,7 +41,14 @@ export const WHITE_UV = [WHITE_PX / TEX, WHITE_PX / TEX];
 // than the harbour food set, so pastel, white, yellow and tan food read by value (2-5x) and the dark few (coconut, burger,
 // berries) keep the harbour-only bright edge band in the prop shader. Teak failed (11-06) because it sat at tan food's value; this
 // sits well under it. Display only, as above.
-export const GROUND_BASE = { picnic: '#F7E9D4', market: '#B8AB93', harbour: '#A8693F' };
+// DECISION (11-12, FIX-LIST-8 A1, art-director r9 7.6 "food vs ground in Market and Harbour"): two more steps on the same line.
+//   Harbour: the orange wood still shared tan food's hue, so fries, waffles, tacos and hot dogs sank (L50, L60). The planks are now
+//   a walnut a further ~28 % darker and less saturated (#A8693F -> #80604A; every plank tone, the deck piece and the boardwalk path
+//   scale by the same per-channel ratio), so tan food reads by value (3-4x) and by saturation. Not grey (r8 washed out) and not teak
+//   (11-06, tan's value). Market: the tan cobble was the pretzel and chestnut colour (L25, L30), so the stones are a cool
+//   grey-blue at the same value: brown, orange, yellow and green food all get a hue gap. Both towns now run the shader's ink edge
+//   (U.edge, render3d.js). Display only, as above; render2d.js mirrors it.
+export const GROUND_BASE = { picnic: '#F7E9D4', market: '#A9B0B8', harbour: '#80604A' };
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
 // R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
 // catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
@@ -2168,8 +2175,8 @@ export function boardGeometry(W, D, town = 'picnic') {
 
 const SURF_DEFAULT = {
   picnic: { blanket: '#FFF1DC', path: '#EBD3A0', rug: '#FFF1DC', deck: '#C99A63', water: '#2AA7C9' },
-  market: { blanket: '#2FB5A5', path: '#A5957B', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
-  harbour: { blanket: '#F6ECD6', path: '#CC9459', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
+  market: { blanket: '#2FB5A5', path: '#B7BDC4', rug: '#7A4C9E', deck: '#C99A63', water: '#2AA7C9' },
+  harbour: { blanket: '#F6ECD6', path: '#9C8868', rug: '#F6ECD6', deck: '#E8FBFF', water: '#2AA7C9' },
 };
 function shade(hex, t) { return mixC(hex, t > 0 ? '#FFFFFF' : '#3A2418', Math.abs(t)); }
 function lum(hex) { const c = lin(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
@@ -2198,9 +2205,9 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
       //   as a darker stain on the warm deck. On the pier a road is a boardwalk: lighter, warmer planks laid across it, a dark seam
       //   between each, close in value to the deck (#A8693F ground) so the path reads as a laid path, not a mark. render2d.js mirrors it.
       const long = Math.max(w, d), wide = w >= d, pn = Math.max(1, Math.round(long / 0.42)), pl = long / pn, br = Math.min(0.1, Math.min(w, d) / 4);
-      parts.push(P(slab(rrShape(w, d, br), 0.016, 0, 6), '#7E5030'));
+      parts.push(P(slab(rrShape(w, d, br), 0.016, 0, 6), '#5F4939'));   // 11-12 A1: scaled with the deck
       for (let i = 0; i < pn; i++) {
-        const o = -long / 2 + (i + 0.5) * pl, hex = mixC(i % 2 ? '#CC9459' : '#D6A068', '#7E5030', i % 3 === 1 ? 0.06 : 0);
+        const o = -long / 2 + (i + 0.5) * pl, hex = mixC(i % 2 ? '#9C8868' : '#A49379', '#5F4939', i % 3 === 1 ? 0.06 : 0);
         parts.push(P(rbox(wide ? pl - 0.05 : w - 0.12, 0.02, wide ? d - 0.12 : pl - 0.05, 0.01, 1), hex, [wide ? o : 0, 0.012, wide ? 0 : o]));
       }
       const hg = merge(parts); setWhiteUV(hg); hg.computeBoundingBox(); hg.computeBoundingSphere();
@@ -2224,7 +2231,7 @@ export function surfaceGeometry(type, w, d, color, town = 'picnic') {
     // #B0C5CB), so white and pastel food read by value and brown food by hue. Display only, like GROUND_BASE.
     // D2 (11-10): the blue-grey was the washed-out deck; a near-white deck is now the same warm toy wood as the pier, a shade
     // more orange so the platform still reads as its own piece.
-    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? '#B5733F' : col;
+    const pw = 0.28, n = Math.max(1, Math.round(d / pw)), base = lum(col) > 0.75 ? '#8A694A' : col;   // 11-12 A1: was #B5733F, scaled with the ground
     for (let i = 0; i < n; i++) parts.push(P(rbox(w, 0.03, d / n - 0.02, 0.012, 1), mixC(base, '#3A2418', i % 2 ? 0.08 : 0), [0, 0.006, -d / 2 + (i + 0.5) * d / n]));
   } else {
     // blanket / rug: body + hem frame + inner line; blanket gets tassels on the short ends
@@ -2337,7 +2344,7 @@ export function groundTexture(town = 'picnic') {
   x.fillStyle = '#FFFFFF';
   x.fillRect(0, 0, TEX, TEX);
   if (town === 'market') {
-    x.fillStyle = tone('#8F7E65');
+    x.fillStyle = tone('#7D848D');   // 11-12 A1: cool grey-blue stone (was tan #8F7E65 / #A5957B / #AE9F87)
     x.fillRect(0, 0, TEX, TEX);
     const widths = [[96, 112, 80, 128, 96], [112, 96, 128, 80, 96]];
     for (let r = 0; r < 8; r++) {
@@ -2347,7 +2354,7 @@ export function groundTexture(town = 'picnic') {
         const wdt = row[k % row.length], id = r * 31 + k;
         const forced = (r === 0 || r === 7) && xx + 4 <= WHITE_PX - 4 && xx + wdt - 4 >= WHITE_PX + 4;
         const pick = hsh(id);
-        x.fillStyle = forced || pick < 0.5 ? '#FFFFFF' : pick < 0.8 ? tone('#A5957B') : tone('#AE9F87');
+        x.fillStyle = forced || pick < 0.5 ? '#FFFFFF' : pick < 0.8 ? tone('#99A1AA') : tone('#A2A9B1');
         for (const dx of [0, TEX]) {
           x.beginPath();
           if (x.roundRect) x.roundRect(xx + 4 - dx, y0 + 4, wdt - 8, 56, 14); else x.rect(xx + 4 - dx, y0 + 4, wdt - 8, 56);
@@ -2361,7 +2368,7 @@ export function groundTexture(town = 'picnic') {
       }
     }
   } else if (town === 'harbour') {
-    x.fillStyle = tone('#7E4E2E');   // D2 (11-10): warm gaps, alternate planks, grain and nails (every tone sits under the base)
+    x.fillStyle = tone('#5F4737');   // D2 (11-10): warm gaps, alternate planks, grain and nails (every tone sits under the base)
     x.fillRect(0, 0, TEX, TEX);
     for (let r = 0; r < 8; r++) {
       const y0 = r * 64, off = (r * 173) % 300, rr = r;
@@ -2370,12 +2377,12 @@ export function groundTexture(town = 'picnic') {
         const forced = (rr === 0 || rr === 7) && xx + 2 <= WHITE_PX && xx + 298 > WHITE_PX;
         for (const dx of [0, TEX]) {
           const X = xx + dx;
-          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#97603A');
+          x.fillStyle = forced || hsh(id) < 0.55 ? '#FFFFFF' : tone('#735844');
           x.fillRect(X + 2, y0 + 2, 296, 60);
-          x.fillStyle = tone('#9C5F38');
+          x.fillStyle = tone('#775742');
           x.fillRect(X + 2, y0 + 16, 296, 2);
           x.fillRect(X + 2, y0 + 47, 296, 2);
-          x.fillStyle = tone('#5A3420');
+          x.fillStyle = tone('#432F27');
           for (const ny of [y0 + 12, y0 + 52]) for (const nx of [X + 12, X + 288]) { x.beginPath(); x.arc(nx, ny, 3, 0, TAU); x.fill(); }
         }
       }

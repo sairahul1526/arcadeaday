@@ -1,0 +1,48 @@
+SLURP POT r9, CRITIC "grandparent" (68-year-old first-time player, slow hand). Steered with __qaSteer('casual','slow'). Phone 390x844 touch (CDP touch events, __qaInput then __qaAdvance(0.1) per loop), headless Chromium, one browser at a time. Frames in studio/2026-11-12/critics/r9/grandparent/.
+
+SCORE: 8.1/10
+
+Q1 Did the first 10 seconds hook me? YES. Title (probe-title.png) is warm and clear: big "Slurp Pot", a cute pot with eyes, one big PLAY button, tap anywhere starts L1. L1 (a-L1-t1-start.png, a-L1-t1-f60.png) gives a 0/3 sandwich ticket, a glowing pot, and the first eat+chain "x4" arrives within seconds; L1 won in about 17 s with 3 stars and "ORDER UP!" (a-card-win-L1-2.png). No reading needed.
+Q2 Did I hit retry or next without thinking? YES. After a win the card's big NEXT goes straight to the next level; after a loss the big yellow "RETRY +100 s" (b-card-fail-L5-3.png) was the obvious thing, and the retry then won. No dead end.
+Q3 Would I come back tomorrow, and why? YES. Daily order with a 7-day reward ladder and "Tomorrow: Chest!", a coins-to-next-skin bar, "Win 3 more for a chest", a cookbook of dishes to fill (s-phone-cookbook.png), shop with 10 pots. There is a reason to return. (This is judged from the screens; I did not live through a day change.)
+
+BLOCKERS:
+- Console error on every page load: "Failed to load resource ... 404", the request is http://127.0.0.1:8812/site.css (games/slurp-pot/index.html line 20 links /site.css, and the frozen server on 8812 does not serve it). It may only be an artifact of the frozen copy, but it is a console error as served. Fix: remove the link or make the pack not request it. No other console errors in any run (phone, desktop, landscape).
+- Everything else: none found. No text overlap or clipping on any phone/desktop/landscape screen I looked at; progress survived a reload (map showed 12 beaten, L13 next, 893 coins, stars kept: s-phone-map.png); no stuck state, no unwinnable level seen on L1-L12. Sound while paused: NOT checked (headless, no audio probing).
+
+PLAY LOG L1-L12, in order on one page (one save carried between three script runs by copying localStorage, so the "same page" is approximate; each run restarted from the title and tapped PLAY). Slow-hand casual bot:
+ L1  1 try, 3 stars, about 17 s wall
+ L2  1 try, 3 stars, 39 s left
+ L3  1 try, 2 stars, 39.8 s left
+ L4  1 try, 2 stars, 36.6 s left
+ L5  2 tries. Try 1 timed out (clock 30 s, got cheese 3/3 but cupcakes 0/3). Retry got 130 s, won 3 stars, 67.6 s left
+ L6  1 try, 3 stars, 40.5 s left (clock 98, chili hazard, magnet gifted)
+ L7  1 try, 2 stars, 28 s left (clock 86)
+ L8  1 try, 2 stars, 22.2 s left (clock 48, first-try short clock)
+ L9  1 try, 1 star, 7.4 s left (clock 99), a near loss
+ L10 1 try, 2 stars, 35.1 s left
+ L11 2 tries. Try 1 (clock 51) timed out; retry gave 135 s, won 2 stars, 59.3 s left. (A prior L11 attempt was cut off by my own script wall cap, not counted.)
+ L12 1 try, 1 star, 5.0 s left (Feast-gate level, clock 111), a near loss
+Summary: 12 levels, 14 attempts, 2 losses (L5, L11: the designed first-try spikes), stars 3,3,2,2,3,3,2,2,1,2,2,1. A slow first-timer gets through easily on the loss side but only 3-stars L1,L2,L5,L6. L9 and L12 were within 5-8 s of a loss for this hand.
+SAMPLES (cold jumps via __qaLevel, so samples not verdicts, same slow hand, one attempt each): L20 (picnic boss, Birthday Bash): lost on time with strawberries 0/6 and lemons 0/3, fail card offered "RETRY +26 s" and "+10 s, keep cooking" (d-L20-end.png). L21 (Market Morning): won, 1 star, 5 s left. L41 (Gull Watch, Harbour): won, 1 star, 7.7 s left. L60 (Lighthouse Feast): not finished in my 105 s wall cap, still playing at 125 s left with a "Extra time to help you! +32s" nudge (d-L60-f300.png). The boss bite and first-win cards of L20/L60 I did not see, because I did not win them by play.
+Screens covered: title, map, Daily (screen only, did not play it), Feast (screenshot taken, s-phone-feast.png, not looked at closely and not played), shop, cookbook, settings (shot, not studied), win and fail cards, desktop 1440x900 (title, map, L6 play) and landscape 844x390 (title, map, L6 play, e-land-L6-100.png). Not checked: sound, real-GPU fps (headless shows 20-35 fps, meaningless), Daily/Feast play, Firefox/WebKit, the ?record clip, a real return the next day.
+
+READABILITY (phone 390x844, from a 68-year-old's view):
+Good: ticket text and counts are large, buttons are huge (PLAY, NEXT, RETRY), cards are clean, the timer is a big red stopwatch, "Hold and drag" pulse text is clear, off-screen food arrows show the icon of what is needed. Tutorial-free first level is gentle.
+Weak: (a) card small text such as "Next pot: Cauldron, 32 more coins", "100 s extra this try", "Win 3 more for a chest" and the Cookbook star rows is only about 11-13 px of 390 and low contrast gold on cream; (b) the clock icon + "0:28/0:40" on the win card is unlabeled and I could not tell whether it is time used or time left; (c) the "3 stars: 0:02" chip on L41 (d-L41-f150.png) reads as a countdown to something bad, not "3-star window".
+
+3 BEST THINGS
+1. The first minute: tap-anywhere title, L1 won in seconds with a satisfying chain, "ORDER UP!" stamp, 3 stars (a-card-win-L1-2.png). A true first-timer gets a win in under 20 s.
+2. Fail card is kind and one-button: crying pot, shows what is missing, big "RETRY +N s" with free extra time, plus a booster alternative (b-card-fail-L5-3.png, d-L20-end.png). I retried twice without thinking.
+3. Presentation: warm, chunky 3D food, readable goals, Market and Harbour feel different (Market stone and checker, Harbour wood boardwalk, d-L21-start.png, d-L41-f150.png), map and shop look premium (s-phone-map.png, s-phone-shop.png).
+
+TOP 5 PROBLEMS
+1. Console 404 /site.css on every load (index.html line 20). Remove the stylesheet link or serve the file; zero-error console is a ship gate item.
+2. Near-loss and 1-star cluster for a slow hand at L9 (7.4 s left, 1 star) and L12 (5.0 s left, 1 star): the first-try shorter clock stacks with a slow hand so the end of the first 12 levels feels like barely scraping through. I want a slow-hand win to leave about 15 s spare on L9-L12, or the "Extra time to help you" nudge to fire earlier than it did.
+3. Win card time readout (a-card-win-L6-5.png, b-card-win-L7-6.png): the stopwatch "0:28" has no label. Say "Time left 0:28" or "Time 1:10". Same card: the green "Daily Order" button, the "You can buy the Rice Cooker!" banner and gift/magnet chips are stacked tight above NEXT (L6 card); NEXT is lower in importance in the layout than it should be, and a grandparent may hit the green button first. Give NEXT the top spot and show the Daily offer once as a small chip.
+4. Small low-contrast text on cards and map banners (see readability list). Raise the 11-13 px gold-on-cream lines ("Next pot: ...", "N s extra this try", "Win 3 more for a chest") to at least 15 px with darker ink.
+5. Phone map has an empty brown band under the Daily/Feast/Cookbook/Shop buttons (s-phone-map.png, about 130 px wasted) while the level path is cut off at the top; push the buttons to the bottom edge or give the path the space. And the "3 stars: 0:02" chip on late levels (d-L41-f150.png) should hide once 3 stars is out of reach instead of showing a 2-second countdown.
+
+THE ONE CHANGE THAT WOULD RAISE MY SCORE MOST: make the first-12-level pace kinder to a slow hand (grace clock so L8-L12 do not end with 5-8 s left and 1 star) and fix the /site.css console error. With both, and the unlabeled card clock, I would score 8.8.
+
+HONEST LIMITS: the driver is a bot with a slow-hand model, not a human grandparent; headless runs about 20-35 fps so I could not judge feel or fps; the 12-level run was split over three script runs with the save copied in between; L20/L21/L41/L60 were cold jumps; I did not play Daily or Feast, did not hear any audio, did not test pausing sound, did not play the L60 ending or a boss win by play.
