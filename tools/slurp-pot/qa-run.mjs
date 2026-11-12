@@ -7,7 +7,7 @@
 //   node tools/slurp-pot/qa-run.mjs --gpu                headed Chromium with GPU flags (the only honest fps, PLAYBOOK lesson)
 //   options: --trace (print state every 4 s while playing)  --root <dir> --slug <dir> (serve another web root, used by the stub harness)
 //            --levels 1-60  --kind expert|greedy|planner|casual|average  --l1-secs 60  --boot-secs 45  --sweep-mins 40
-//            --sizes 390x844,1440x900 (subset of the 7 shot sizes)  --port 8735  --out studio/2026-11-04/meta/qa  --no-memgate
+//            --sizes 390x844,1440x900 (subset of the 7 shot sizes)  --perf-levels 1,45,60  --port 8735  --out studio/2026-11-04/meta/qa  --no-memgate
 //
 // RAM rule (11-04): exactly one browser process at a time (engines run one after another, every section reuses it through
 // short-lived contexts that are closed in finally), no workers, and before each launch the macOS `memory_pressure` free
@@ -482,12 +482,14 @@ async function secShots(browser, bname) {
   }
 }
 
+const PERF_LEVELS = String(opt('perf-levels', '1')).split(',').map(Number).filter(n => n >= 1 && n <= 60);
 async function secPerf(browser, bname) {
-  for (const tier of ['mid', 'low']) {
+  for (const lv of PERF_LEVELS) for (const tier of ['mid', 'low']) {
     const s = await open(browser, bname, PHONE, { query: `qa=1&tier=${tier}` });
-    if (!s.ready) { rec('perf', bname, `tier ${tier}`, false, 'no __qa; ' + errs(s)); await s.ctx.close(); continue; }
+    const tag = lv === 1 ? `tier ${tier}` : `L${lv} tier ${tier}`;
+    if (!s.ready) { rec('perf', bname, tag, false, 'no __qa; ' + errs(s)); await s.ctx.close(); continue; }
     if (s.cdp) await s.cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-    await s.page.evaluate(() => { window.__qaSkip(); window.__qaBot(true, 'greedy'); window.__qaLevel(1); });
+    await s.page.evaluate(n => { window.__qaSkip(); window.__qaBot(true, 'greedy'); window.__qaLevel(n); }, lv);
     const d = await s.page.evaluate(() => new Promise(res => {
       const a = []; let last = performance.now(); const t0 = last;
       const f = now => { a.push(now - last); last = now; if (now - t0 < 10000) requestAnimationFrame(f); else res(a); };
@@ -498,8 +500,8 @@ async function secPerf(browser, bname) {
     const long = d.filter(x => x > 50).length;
     const p95 = d.slice().sort((x, y) => x - y)[Math.floor(d.length * 0.95)] || 0;
     const detail = `4x CPU throttle: median ${fps.toFixed(1)} fps (${m.toFixed(1)} ms), p95 ${p95.toFixed(0)} ms, ${long} frames > 50 ms of ${d.length}; render.stats fps ${q ? q.fps : '?'}, tier ${q ? q.tier : '?'}, dpr ${q ? q.dpr : '?'}, draw calls ${q ? q.drawCalls : '?'}`;
-    if (GPU && bname === 'chromium') rec('perf', bname, `tier ${tier}`, fps >= 50 && !s.errors.length, detail + (errs(s) ? '; ' + errs(s) : ''));
-    else rec('perf', bname, `tier ${tier}`, true, 'UNMEASURED (software GL, run with --gpu): ' + detail, s.errors.length ? 'FAIL' : 'INFO');
+    if (GPU && bname === 'chromium') rec('perf', bname, tag, fps >= 50 && !s.errors.length, detail + (errs(s) ? '; ' + errs(s) : ''));
+    else rec('perf', bname, tag, true, 'UNMEASURED (software GL, run with --gpu): ' + detail, s.errors.length ? 'FAIL' : 'INFO');
     await s.ctx.close();
   }
 }
