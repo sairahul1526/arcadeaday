@@ -419,6 +419,11 @@ function makeEngine(ctx, offline) {
     padlock() {
       tone('square', 2400, 2400, 0.01, 0.12, 0, { a: 0.001 }); noise(0.02, 6000, 6000, 1, 0.2, 0, 'highpass', { a: 0.001 });
       tone('sine', 1568, 1568, 0.4, 0.12, 0.05, { a: 0.01 }); tone('sine', 2093, 2093, 0.4, 0.09, 0.07, { a: 0.01 });
+      // DECISION (11-14, C1): boss-open stinger on top of the click: low thump, bright rising triad, short duck so it lands.
+      tone('sine', 110, 52, 0.28, 0.5, 0.02, { a: 0.004 });
+      [523, 659, 784, 1046].forEach((f, i) => tone('triangle', f, f, 0.22, 0.17, 0.12 + i * 0.06, { lp: 3600 }));
+      noise(0.22, 700, 4200, 1.1, 0.14, 0.1, 'bandpass', { a: 0.08 });
+      duckMusic(0.9);
     },
     bossNudge() { for (let i = 0; i < 3; i++) { tone('square', 1800, 1800, 0.012, 0.11, i * 0.05, { a: 0.001 }); noise(0.012, 5000, 5000, 1, 0.07, i * 0.05, 'highpass', { a: 0.001 }); } },
     bump() { tone('sine', 180, 110, 0.07, 0.45, 0, { a: 0.002 }); noise(0.03, 600, 600, 1, 0.22, 0, 'bandpass', { a: 0.002 }); },

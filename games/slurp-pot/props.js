@@ -52,7 +52,9 @@ export const GROUND_BASE = { picnic: '#F7E9D4', market: '#A9B0B8', harbour: '#80
 // Gingham tones (sRGB) and relative luminance, for the Levels contrast rule (§4.2).
 // R4 (11-06): a step darker and less saturated than the 11-04 cloth, so red food and white food both read on it. Display only:
 // catalog.js SURF keeps the old tones because level generation reads them and Dailies may not move.
-export const GINGHAM = { cream: '#F7E9D4', stripe: '#E4AC9D', cross: '#C9685A', lum: { cream: 0.828, stripe: 0.484, cross: 0.231 } };
+// DECISION (11-14, A2 art r9 "Picnic gingham fights pink/red food on open cloth, L1-L3"): the play board's check goes about 25 % toward cream
+// (stripe #E4AC9D -> #E9BBAB, cross #C9685A -> #D58879), so cupcakes, tomatoes and strawberries stand out on open cloth. The map keeps its saturated cloth.
+export const GINGHAM = { cream: '#F7E9D4', stripe: '#E9BBAB', cross: '#D58879', lum: { cream: 0.828, stripe: 0.558, cross: 0.331 } };
 
 // ---------------------------------------------------------------- colour helpers
 const _lin = new Map();

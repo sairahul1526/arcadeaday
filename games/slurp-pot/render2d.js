@@ -549,11 +549,12 @@ function board(g) {
   g.save(); g.beginPath(); g.rect(x0, z0, bw, bd); g.clip();
   if (town === 'picnic') {   // gingham: period 0.5 u, stripes 0.25 u (cream / stripe / cross = 1/4 · 1/2 · 1/4)
     const P = 0.5, s = 0.25;
-    g.fillStyle = '#E4AC9D'; g.beginPath();
+    // DECISION (11-14, A2): softened 25 % toward cream, same tones as props.js GINGHAM.
+    g.fillStyle = '#E9BBAB'; g.beginPath();
     for (let x = x0; x < x1; x += P) g.rect(x, z0, s, bd);
     for (let z = z0; z < z1; z += P) g.rect(x0, z, bw, s);
     g.fill();
-    g.fillStyle = '#C9685A'; g.beginPath();
+    g.fillStyle = '#D58879'; g.beginPath();
     for (let x = x0; x < x1; x += P) for (let z = z0; z < z1; z += P) g.rect(x, z, s, s);
     g.fill();
   } else if (town === 'market') {   // square tiles with joints and a few lighter stones

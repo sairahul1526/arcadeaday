@@ -63,12 +63,12 @@ const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const back = t => { t = clamp(t, 0, 1); const s = 1.7; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); };
 
 export const STR = {
-  title: 'Slurp Pot', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', nextN: 'NEXT · Level {n}', allDoneBtn: 'FINISH', retry: 'RETRY', retryMore: 'RETRY +{n} s',
+  title: 'Slurp Pot', titleTag: 'Start tiny. Eat the whole park.', titleTagShort: 'Start tiny. Eat it all.', play: 'PLAY', playN: 'PLAY · Level {n}', next: 'NEXT', nextN: 'NEXT · Level {n}', allDoneBtn: 'FINISH', retry: 'RETRY', retryMore: 'RETRY +{n} s',
   mercyLine: '{n} s extra this try', mercyBoth: '{n} s extra this try. Pot {p}% bigger!', mercyBothShort: '+{n} s. Pot {p}% bigger!',
   mercyRetry: 'Extra time to help you! +{n}s', mercyRetryGrow: 'Extra time and a bigger pot to help you!',
   mercyGift: 'A little gift: +{n}s on the clock!', mercyGiftGrow: 'A little gift: extra time and a bigger pot!',
   tipArrows: 'Follow the arrows to the food you still need.', tipSmall: 'Eat small things first to grow.', tipBig: "Big things have to wait until you're bigger.",
-  goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars', goal2Left: 'Finish with {n} left for 2 stars', goal2LeftShort: '{n} left for 2 stars',
+  missBites: '{n} more bites to go', missBite1: '1 more bite to go', missShort: '{n} to go', goal3: 'Finish {n}s faster for 3 stars', goal3Short: '{n}s faster for 3 stars', goal3Left: 'Finish with {n} left for 3 stars', goal3LeftShort: '{n} left for 3 stars', goal2Left: 'Finish with {n} left for 2 stars', goal2LeftShort: '{n} left for 2 stars',
   starFinish: 'Finish', starLeft: '{n}s left',
   bossOrder: 'BOSS ORDER', bossUnlocked: 'BOSS UNLOCKED!', bossUnlockedT: 'BOSS UNLOCKED! +{n} s', clockHold: 'CLOCK HOLDS! EAT THE BOSS', bossEaten: 'BOSS EATEN!',
   canBuy: 'You can buy the {skin}!', canBuyShort: 'You can buy a new pot!', canGild: 'Gild your {skin}!', canGildShort: 'You can gild a pot!', replayBonus: 'Replay bonus', first3Bonus: '3-star bonus +{n}!',
@@ -456,7 +456,9 @@ function bindBus(bus) {
   on('ticketDone', d => { hud.flip = T; hud.bossPulse = T; });
   on('padlock', d => {
     hud.padPop = T; hud.padIdx = d.i; hud.bossPoint = T; tutSet('padlock'); hud.bossAdd = 0; hud.hold = 0;
-    if (lastW && lastW.mode !== 'feast' && !REC_M.record) hud.unlock = T;
+    // DECISION (11-14, C1): the boss opening is the loudest beat of a level, so it also gets a 0.12 s white flash and a small UI-layer shake
+    //   (drawn in frame()/drawUnlock; skipped under prefers-reduced-motion) and a stinger in audio.js (padlock). The 3D camera is not touched.
+    if (lastW && lastW.mode !== 'feast' && !REC_M.record) { hud.unlock = T; hud.flash = T; }
   });
   // r7d: the sim floored the clock at the walk to the final boss (consts.js BOSS_WALK); the unlock ribbon names the gift.
   on('bossTime', d => { hud.bossAdd = d.add | 0; });
@@ -614,7 +616,15 @@ function blob(x, y, s, col) {
 const ingIcon = (k, x, y, s) => icon(iconFor(k), x, y, s, (x, y, s) => blob(x, y, s, colorFor(k)));
 function padlock(x, y, s, open = 0) {
   const im = img('icon-padlock');
-  if (im && !open) { drawFit(g, im, x - s / 2, y - s / 2, s, s); return; }
+  // DECISION (11-14, A4, viral r9 "the boss lock is washed out under the gold ticket glow (L50)"): the art gets a 1.5 px ink outline
+  //   (four ink shadows of its own silhouette, offsets in device px), so it holds up over the gold glow and the cream ticket.
+  if (im && !open) {
+    const o = Math.max(1, Math.min(2.5, s * 0.06)) * dpr;
+    g.save(); g.shadowColor = C.ink; g.shadowBlur = 0;
+    for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) { g.shadowOffsetX = dx; g.shadowOffsetY = dy; drawFit(g, im, x - s / 2, y - s / 2, s, s); }
+    g.restore();
+    drawFit(g, im, x - s / 2, y - s / 2, s, s); return;
+  }
   g.save(); g.lineJoin = 'round';
   const bw = s * 0.7, bh = s * 0.52, by = y - s * 0.02;
   g.beginPath(); g.lineWidth = s * 0.13; g.strokeStyle = C.ink;
@@ -873,6 +883,7 @@ export function draw(state, w, dt) {
   btns = [];
   DBG.texts = []; DBG.over = [];
   try {
+    { const sk = bossShake(); if (sk) g.translate(sk[0], sk[1]); }
     const playing = screen === 'play' || screen === 'pause';
     if (REC_M.cover) { /* clean backplate */ }
     else if (REC_M.og) drawOg(st, w);
@@ -907,7 +918,7 @@ export function draw(state, w, dt) {
       else if (screen === 'feast') drawFeast(st);
       else if (screen === 'feastend') drawFeastEnd(st);
       else if (screen !== 'play') drawInfo(st, screen);
-      if (screen === 'play' && !finOn() && w) { if (!unlockOn() && bossBannerOut(w) >= 1) drawCallout(dt); drawBossBanner(w); drawUnlock(w); drawBeat(w); }
+      if (screen === 'play' && !finOn() && w) { if (!unlockOn() && bossBannerOut(w) >= 1) drawCallout(dt); drawBossBanner(w); drawUnlock(w); drawBeat(w); drawFlash(); }
     }
   } catch (e) { try { P.error(e); } catch {} }
   lastBtns = btns;
@@ -1551,14 +1562,20 @@ function drawBoosters(st, w) {
       circle(bx, byy, bs / 2); g.fillStyle = C.stamp; g.fill(); g.lineWidth = 1.5; g.strokeStyle = C.ink; g.stroke();
       txt(String(cnt), bx, byy + 0.5, Math.max(12.5, L.fs.badge), { col: '#fff' });
     } else if (!used) {
-      // 11-07 (art-director r5): the price read tiny at 390 px; tag and numerals about 25 % bigger.
-      const pw = Math.max(37, 42 * u), ph = Math.max(19, 21 * u);   // ph * 0.45 below the tin stays inside the 10u gap
-      const poor = hud.boostPoor && hud.boostPoor.kind === kind && T - hud.boostPoor.t < 0.4 ? Math.sin((T - hud.boostPoor.t) * 60) * 3 : 0;
-      g.translate(poor, 0);
-      // DECISION (11-10, D4): the price chip is dark ink with white numerals (was cream on cream, lost on the light board).
-      rr(cx - pw / 2, r.y + r.h - ph * 0.55, pw, ph, ph / 2); g.fillStyle = C.ink; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#FFF6E2'; g.stroke();
-      coin(cx - pw * 0.24, r.y + r.h - ph * 0.55 + ph / 2, ph * 0.34);
-      txt(String(PRICES[kind]), cx + pw * 0.12, r.y + r.h - ph * 0.55 + ph / 2 + 0.5, Math.max(15.5, 15 * u), { col: '#FFFFFF' });
+      // DECISION (11-14, A4 + D7, viral/mobile r9 "booster stack over food on the right edge", "greyed boosters look broken"): the tins are
+      //   smaller (layout.js bst) and an empty one no longer carries a permanent price chip; it shows a small "+" (buyable) or "0" (too
+      //   few coins) badge like the stocked ones show their count, and the price chip appears only for 1.6 s after a tap on it.
+      const bz = Math.max(18, 20 * u), poorT = hud.boostPoor && hud.boostPoor.kind === kind ? T - hud.boostPoor.t : 99;
+      circle(bx, byy, bz / 2); g.fillStyle = canBuy ? C.go : '#9A8F84'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = C.ink; g.stroke();
+      txt(canBuy ? '+' : '0', bx, byy + 0.5, Math.max(12.5, L.fs.badge), { col: '#fff' });
+      if (poorT < 1.6) {
+        const pw = Math.max(37, 42 * u), ph = Math.max(19, 21 * u), poor = poorT < 0.4 ? Math.sin(poorT * 60) * 3 : 0;
+        g.save(); g.translate(poor, 0); g.globalAlpha = Math.min(1, (1.6 - poorT) / 0.3);
+        rr(cx - pw / 2, r.y + r.h - ph * 0.55, pw, ph, ph / 2); g.fillStyle = C.ink; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#FFF6E2'; g.stroke();
+        coin(cx - pw * 0.24, r.y + r.h - ph * 0.55 + ph / 2, ph * 0.34);
+        txt(String(PRICES[kind]), cx + pw * 0.12, r.y + r.h - ph * 0.55 + ph / 2 + 0.5, Math.max(15.5, 15 * u), { col: '#FFFFFF' });
+        g.restore();
+      }
     }
     g.restore();
   });
@@ -1656,6 +1673,7 @@ function bouncePointer(x, y) {
 }
 
 // ---- chain badge ----
+const REDUCE_MOTION = () => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 function drawChain(w) {
   const n = w.chain ? w.chain.g | 0 : 0, drop = T - hud.chainDrop;
   let show = n >= 3 ? n : (drop >= 0 && drop < 0.35 ? hud.chainShown : 0);
@@ -1668,7 +1686,14 @@ function drawChain(w) {
   const fs = L.fs.chain, label = fmt(STR.chainShort, { n: show }), tw2 = measure(label, fs);
   x = clamp(x, L.play.x + tw2 / 2 + 8, L.play.x + L.play.w - tw2 / 2 - 8 - (lastBtns.some(b => b.id.startsWith('b-')) ? L.hud.bst + 10 : 0));
   y = clamp(y, L.play.y + fs, L.play.y + L.play.h - fs);
-  const inc = T - (hud.chainInc ?? -9), sc = inc >= 0 && inc < 0.18 ? 1 + 0.25 * Math.sin(inc / 0.18 * Math.PI) : 1;
+  const inc = T - (hud.chainInc ?? -9);
+  // DECISION (11-14, C2 small, viral r9 "chain x5 does not feel like anything"): the x5 step pops 1.6x for 0.4 s with a gold ring
+  //   that spreads from the number; every other step keeps the small 1.25x pop. Reduced motion keeps only the small pop.
+  const x5 = n === 5 && !REDUCE_MOTION(), pk = x5 ? 0.4 : 0.18, sc = inc >= 0 && inc < pk ? 1 + (x5 ? 0.6 : 0.25) * Math.sin(inc / pk * Math.PI) : 1;
+  if (x5 && inc >= 0 && inc < 0.5) {
+    const k = inc / 0.5;
+    g.save(); g.globalAlpha = 1 - k; circle(x, y, fs * (0.7 + 1.6 * k)); g.lineWidth = Math.max(2, 4 * L.u * (1 - k)); g.strokeStyle = C.gold; g.stroke(); g.restore();
+  }
   g.save(); g.translate(x, y + (n < 3 ? drop * 60 : 0)); g.scale(sc, sc);
   if (n < 3) g.globalAlpha = clamp(1 - drop / 0.35, 0, 1);
   txt(label, 0, 0, fs, { col: C.gold, stroke: C.ink, sk: Math.max(3, 3 * L.u) * 2, shadow: 'rgba(58,36,24,0.5)' });
@@ -1989,7 +2014,9 @@ function drawGhost(w) {
       circle(p0.x, p0.y, R0 * (0.9 + 0.5 * kk)); g.lineWidth = Math.max(2, wd * L.u); g.strokeStyle = `rgba(255,211,110,${((1 - kk) * 0.95 * fade).toFixed(2)})`; g.stroke();
     }
     g.restore();
-    if (idle && hud.n > 2) {
+    // DECISION (11-14, A4, viral r9 "Hold and drag floats on L44/L50/L60 over a played save"): the tag is for a player meeting the
+    //   early levels for the first time (L3-L6, at or past their furthest level); a QA jump or a late level with a played save never shows it.
+    if (idle && hud.n > 2 && hud.n <= 6 && hud.n >= curLv()) {
       const tf = Math.max(14, 15 * L.u), tw = measure(STR.holdDrag, tf, FB, '800') + tf * 1.6, th = tf * 1.9;
       const tx = clamp(p0.x - tw / 2, L.play.x + 8, L.play.x + L.play.w - 8 - tw), ty = Math.min(p0.y + R0 * 1.45, L.play.y + L.play.h - th - 8);
       const bob = Math.sin(T * 4) * 2 * L.u;
@@ -2372,6 +2399,18 @@ function drawBossBanner(w) {
   g.restore();
 }
 const unlockOn = () => !!hud && T >= hud.unlock && T - hud.unlock < 1.7;
+// C1 (11-14): UI-layer shake for 0.3 s after the boss opens (about 4 px, decaying), and a white flash for 0.12 s. Both off under reduced motion.
+function bossShake() {
+  if (!hud || hud.flash == null || REC_M.record || REDUCE_MOTION()) return null;
+  const k = T - hud.flash; if (k < 0 || k > 0.3) return null;
+  const a = 4 * (1 - k / 0.3) * Math.min(1, L.u * 1.2 + 0.3);
+  return [Math.sin(k * 90) * a, Math.cos(k * 70) * a * 0.7];
+}
+function drawFlash() {
+  if (!hud || hud.flash == null || REC_M.record || REDUCE_MOTION()) return;
+  const k = T - hud.flash; if (k < 0 || k > 0.12) return;
+  g.save(); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = `rgba(255,255,255,${(0.6 * (1 - k / 0.12)).toFixed(3)})`; g.fillRect(0, 0, cssW, cssH); g.restore();
+}
 function drawUnlock(w) {
   if (!unlockOn()) return;
   const k = T - hud.unlock, u = L.u, band = L.hud.callout, big = hud.big;
@@ -2412,6 +2451,8 @@ function drawTitle(st) {
   g.save(); g.translate(lb.x + lb.w / 2, lb.y + lb.h * 0.55); g.rotate(-0.04 + wob);
   txt(STR.title, 0, 0, ls, { col: C.gold, stroke: C.ink, sk: Math.max(5, ls * 0.16), shadow: C.ink, maxW: lb.w * 0.96, min: 24 });
   g.restore();
+  // DECISION (11-14, G3): promise line under the wordmark (cold-start hook: say what the game is in five words).
+  if (B.tag && B.tag.h >= 14) txtMin([STR.titleTag, STR.titleTagShort], B.tag.x + B.tag.w / 2, B.tag.y + B.tag.h / 2, Math.min(fs.tag, B.tag.h * 0.8), { f: FB, col: C.ink, maxW: B.tag.w * 0.96, stroke: 'rgba(255,246,227,0.95)', sk: 4 });
   // pot hero bobbing
   if (B.pot.h > 40) {
     const s = Math.min(B.pot.w * 0.8, B.pot.h * 0.98), bob = Math.sin(T * 2.2) * s * 0.025;
@@ -2476,8 +2517,9 @@ function pill(r, ic, s, fs2) {
 function roundBtn(b, gl, o = {}) {
   const down = isDown(b.id), R = Math.min(b.w, b.h) / 2, cx = b.x + b.w / 2, cy = b.y + b.h / 2 + (down ? 2 : 0);
   g.save(); if (o.dim) g.globalAlpha = 0.55;
-  circle(cx, cy + Math.max(2, 3 * L.u) - (down ? 2 : 0), R); g.fillStyle = 'rgba(58,36,24,0.35)'; g.fill();
-  circle(cx, cy, R); g.fillStyle = C.paper; g.fill(); g.lineWidth = Math.max(2, 2.2 * L.u); g.strokeStyle = C.ink; g.stroke();
+  // DECISION (11-14, D7): a dimmed (locked) round button is flat: no drop shadow, grey fill, thin rim.
+  if (!o.dim) { circle(cx, cy + Math.max(2, 3 * L.u) - (down ? 2 : 0), R); g.fillStyle = 'rgba(58,36,24,0.35)'; g.fill(); }
+  circle(cx, cy, R); g.fillStyle = o.dim ? '#D9CDB8' : C.paper; g.fill(); g.lineWidth = o.dim ? Math.max(1.5, 1.6 * L.u) : Math.max(2, 2.2 * L.u); g.strokeStyle = o.dim ? '#8E7A66' : C.ink; g.stroke();
   glyph(gl, cx, cy, R * 1.3);
   g.restore();
 }
@@ -2504,7 +2546,7 @@ function drawWin(st, w) {
   //   alternating with the chest / gift line every 2.5 s. It is the same row, so the card is not taller and NEXT stays where it is pinned.
   const tmr = !canBuy && (d.kind || 'level') === 'level' && (d.n | 0) >= 1 && (d.n | 0) <= 5 ? tomorrowPill() : null;
   // D6 (11-09): the stats row exists only when a cell will fill it: the time left (not on L1 or a Feast) or the best chain
-  //   when the brag ribbon over the pot is not carrying it. The ribbon needs a hero of 70 px, so a short card lays out again.
+  //   (11-14: the best chain is always a stats cell now, a red pill from BRAG_CHAIN up; no ribbon over the hero).
   const tCell = d.kind !== 'feast' && d.tLeft != null && (d.n | 0) !== 1, bragAsk = (d.chainBest | 0) >= BRAG_CHAIN;
   // DECISION (11-10, G1, viral r8 "the clip asks what's your count, a level never shows one"): every win card names the count,
   //   "You ate N!" (game.js passes the level's bites as d.eaten), first in the stats row.
@@ -2514,8 +2556,9 @@ function drawWin(st, w) {
   //   every portal build (portals forbid share prompts and outbound links), and record/og/cover captures keep the clean card.
   const canSh = !!P.canShare && !REC_M.record && !REC_M.og && !REC_M.cover;
   const winOpts = { nextSkin: !!(next || tmr), buySkin: canBuy, goal: !!goal, strip: strip.length > 0, daily: dOffer, share: canSh };
-  let CL = cardLayout(L, 'win', { ...winOpts, stats: eCell || tCell || (!!d.chainBest && !bragAsk) });
-  if (!tCell && d.chainBest && bragAsk && !(CL.blocks.hero && CL.blocks.hero.h >= 70)) CL = cardLayout(L, 'win', { ...winOpts, stats: true });
+  // DECISION (11-14, D4, curator r9 "the Chain ribbon cuts across the clipboard and the pot"): a big chain no longer gets a ribbon over the hero art;
+  //   it is a red pill in the stats row beside "You ate N!", so nothing is drawn on the art.
+  const CL = cardLayout(L, 'win', { ...winOpts, stats: eCell || tCell || !!d.chainBest });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2585,19 +2628,6 @@ function drawWin(st, w) {
     const ps = Math.min(B.hero.w * 0.5, hh * 1.05), bob = Math.sin(T * 3) * ps * 0.02;
     potArt('pot-happy', B.hero.x + B.hero.w * 0.73, B.hero.y + hh / 2 + bob, ps);
   }
-  // 11-07 Sat (U13): a big run is a brag even on one star, so it gets the ribbon over the pot, the part of the card a screenshot keeps.
-  const brag = (d.chainBest | 0) >= BRAG_CHAIN && B.hero.h >= 70;
-  if (brag) {
-    const bk = back(clamp((cardT - 0.35) / 0.25, 0, 1)), bh = clamp(B.hero.h * 0.3, 32, 46 * cu), bw = Math.min(B.hero.w * 0.5, Math.max(150, 200 * cu));
-    if (bk > 0.02) {
-      // 11-07 Sat r7c (kid13 r7 #5): the ribbon's forked tails reach bh/2 past its body, so at 390 wide the right fork touched the
-      //   card edge; the centre now stops where the whole ribbon, tails included, stays 6 px inside the hero box.
-      const bx = Math.min(B.hero.x + B.hero.w * 0.73, B.hero.x + B.hero.w - bw / 2 - bh / 2 - 6), by = B.hero.y + B.hero.h - bh * 0.62;
-      g.save(); g.translate(bx, by); g.rotate(-0.05); g.scale(bk, bk);
-      ribbon(0, 0, bw, bh, fmt(STR.bestChain, { n: d.chainBest }), Math.max(14, bh * 0.5));
-      g.restore();
-    }
-  }
   // stars fill one by one, the first from the first frame (U11)
   const S = B.stars, n = clamp(d.stars | 0, 0, 3), sr = Math.min(S.h * 0.46, S.w / 8);
   for (let i = 0; i < 3; i++) {
@@ -2623,18 +2653,26 @@ function drawWin(st, w) {
     let cells = [];
     if (eCell) cells.push(['shop', fmt(STR.youAte, { n: d.eaten | 0 }), fmt(STR.youAteShort, { n: d.eaten | 0 })]);
     if (tCell) cells.push(['clock', fmt(STR.timeLeft, { t: tStr }), tStr]);
-    if (d.chainBest && !brag) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest }), fmt(STR.chainShort, { n: d.chainBest })]);
+    if (d.chainBest) cells.push(['chain', fmt(STR.bestChain, { n: d.chainBest }), fmt(STR.chainShort, { n: d.chainBest }), bragAsk]);
     // G1 (11-10): three cells on a narrow card take their short words, then the chain (then the clock) gives way to the count
     const fits = list => list.every(c => fs.stat * 1.2 + 16 + measure(c[1], fs.stat, FB, '800') <= st2.w / list.length);
     // 11-12 (FIX-LIST-8 D, grandparent r9): the clock keeps its "left" longest, so "0:28" never stands unlabeled; it takes the
     //   short form only when the other cells' short words still do not fit
-    if (!fits(cells)) cells = cells.map(c => c[0] === 'clock' ? c : [c[0], c[2], c[2]]);
-    if (!fits(cells)) cells = cells.map(c => [c[0], c[2], c[2]]);
+    if (!fits(cells)) cells = cells.map(c => c[0] === 'clock' ? c : [c[0], c[2], c[2], c[3]]);
+    if (!fits(cells)) cells = cells.map(c => [c[0], c[2], c[2], c[3]]);
     while (cells.length > 1 && !fits(cells)) cells.pop();
     const cw = st2.w / Math.max(1, cells.length);
-    cells.forEach(([ic, s], i) => {
+    cells.forEach(([ic, s, , hot], i) => {
       const x0 = st2.x + i * cw, is = fs.stat * 1.2, tws = Math.min(measure(s, fs.stat, FB, '800'), cw - is - 10);
       const sx = x0 + (cw - (is + 6 + tws)) / 2;
+      if (hot) {   // D4: a run of BRAG_CHAIN or more is a red pill, the brag the old hero ribbon carried
+        const ph = Math.min(st2.h, fs.stat * 1.7), px = sx - 8, pw = is + 6 + tws + 16;
+        rr(px, cy - ph / 2, pw, ph, ph / 2); g.fillStyle = C.tomato; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+        circle(sx + is / 2, cy, is * 0.5); g.fillStyle = C.paper; g.fill();   // the chain glyph is red: it needs paper under it on a red pill
+        glyph(ic, sx + is / 2, cy, is * 0.9);
+        txt(s, sx + is + 6, cy + 1, fs.stat, { f: FB, align: 'left', col: '#FFFFFF', maxW: cw - is - 10 });
+        return;
+      }
       glyph(ic, sx + is / 2, cy, is);
       txt(s, sx + is + 6, cy + 1, fs.stat, { f: FB, align: 'left', col: C.ink, maxW: cw - is - 10 });
     });
@@ -2669,6 +2707,12 @@ function drawWin(st, w) {
       const x0 = B.hint.x + (B.hint.w - (is + 4 + tw)) / 2, cyh = B.hint.y + B.hint.h / 2;
       rewardIcon(tmr.rw, x0 + is / 2, cyh, is);
       txt(s1, x0 + is + 4, cyh + 1, hfs, { f: FB, align: 'left', col: HINT_INK, maxW: room });
+    } else if (next.bar != null && B.hint.h >= hfs * 1.45) {
+      // pot line with its coin bar: text on top, a thin track under it (the fill is bank / price of the next pot)
+      const bw = Math.min(B.hint.w * 0.7, Math.max(120, 170 * cu)), bh = Math.max(5, 6 * cu), bxx = B.hint.x + (B.hint.w - bw) / 2, byy2 = B.hint.y + B.hint.h - bh - 1;
+      txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + (B.hint.h - bh) / 2 - 1, hfs, { f: FB, col: HINT_INK, maxW: B.hint.w });
+      rr(bxx, byy2, bw, bh, bh / 2); g.fillStyle = 'rgba(58,36,24,0.2)'; g.fill();
+      rr(bxx, byy2, bw * next.bar, bh, bh / 2); g.fillStyle = C.gold; g.fill(); g.lineWidth = 1.2; g.strokeStyle = C.ink; rr(bxx, byy2, bw, bh, bh / 2); g.stroke();
     } else txtMin(next, B.hint.x + B.hint.w / 2, B.hint.y + B.hint.h / 2, hfs, { f: FB, col: HINT_INK, maxW: B.hint.w });
     g.restore();
   }
@@ -2739,6 +2783,7 @@ function drawWin(st, w) {
 }
 const shareAt = { t: -9, p: false };
 
+const GOAL_FAR = 30;     // B5 (11-14): a 3-star line further than this beyond the clock is not offered on the win card
 const BRAG_CHAIN = 15;   // gulps since E1 (11-09); the raw bite run made 20 a given on L1
 /** U6: what this win paid beyond its own coins, as chips. Only while game.js skips the reward cards (d.strip). */
 function winStrip(d) {
@@ -2801,6 +2846,9 @@ function nextUp(d, ns) {
   if (ns) {
     const name = (typeof ns === 'object' && (STR['sk_' + ns.id] || ns.name || ns.id)) || '', need = typeof ns === 'object' ? ns.need ?? ns.coins ?? '' : '', one = need === 1;
     skin = typeof ns === 'string' ? [ns] : [fmt(one ? STR.nextSkin1 : STR.nextSkin, { skin: name, n: need }), fmt(one ? STR.nextSkinShort1 : STR.nextSkinShort, { n: need })];
+    // DECISION (11-14, G4, viral r9 "show the next skin teaser with a coin bar after the first win"): the pot line carries how far the bank is
+    //   from its price (0..1); drawWin draws it as a thin bar under the text.
+    if (skin && typeof ns === 'object' && ns.price > 0) skin.bar = clamp(1 - (ns.need | 0) / ns.price, 0.03, 0.99);
   }
   if (chest && c.left <= 3) return chest;
   if (gift && left <= 5) return gift;
@@ -2827,6 +2875,10 @@ function starGoal(d, w) {
   //   in the same clock words; 2★ wins and Freeze wins keep the 3★ line.
   const t2 = st ? st.t2 : 0, need2 = +d.t2Left || 0;
   if ((d.stars | 0) === 1 && need2 > 0 && t2 > 0) { const n = ms(Math.ceil(t2)); return { text: fmt(STR.goal2Left, { n }), short: fmt(STR.goal2LeftShort, { n }), fill: clamp(1 - need2 / t2, 0.04, 0.96), two: true }; }
+  // DECISION (11-14, B5 card half, viral r9 "Finish 47s faster for 3 stars beside 0:45 left"): a 3-star line more than GOAL_FAR s beyond
+  //   the clock is out of reach, so the card does not offer it. A 1-star win already named its 2-star line above (m:ss, the clock's
+  //   units); a 2-star win names nothing (no stored best clock to name), and the stars row stands alone.
+  if (need > GOAL_FAR && t3 > 0) return null;
   // DECISION (11-10, C2; kid13 r8: "0:45 left" beside "Finish with 0:46 left for 3 stars" hid a 1 s miss): a 2★ win off the
   //   clock now says the gap itself, "Finish 1s faster for 3 stars". 1★ wins keep the 2★ clock line, Freeze wins the 3★ one.
   if (need > 0 && t3 > 0 && (d.stars | 0) === 2) return { text: fmt(STR.goal3, { n: need }), short: fmt(STR.goal3Short, { n: need }), fill: clamp(1 - need / t3, 0.04, 0.96) };
@@ -2893,7 +2945,9 @@ function drawFail(st, w) {
   const noBar = failMissing(d) > 0 || (w && w.tickets && w.tickets.some(t => t.lines.some(l => l.got < l.need)));
   const help = d.mercy > 0, tip = failTip(d, w);
   const bo = d.boostRetry && d.boostRetry.kind ? d.boostRetry : null;
-  const CL = cardLayout(L, 'fail', { canFreeze, noBar, help, tip: !!tip, boost: !!bo });
+  // DECISION (11-14, C2, viral + mobile r9 "the fail card should say what was missing"): a timeout that left bites on the order says how many.
+  const missN = d.why !== 'spoiled' ? failMissing(d) : 0;
+  const CL = cardLayout(L, 'fail', { canFreeze, noBar, help, tip: !!tip, boost: !!bo, miss: missN > 0 });
   const B = CL.blocks, fs = CL.fs, cu = CL.cu;
   const oy = cardIn();
   g.save(); g.translate(0, oy);
@@ -2957,6 +3011,10 @@ function drawFail(st, w) {
       g.restore();
       txt(`${Math.min(l.got, l.need)}/${l.need}`, cx + d0 * 0.54 + 6, cy + 1, cnt, { align: 'left', col: done ? '#2E8A45' : C.stamp, maxW: cellW - d0 * 1.04 - 10 });
     });
+  }
+  if (B.miss && missN > 0) {
+    const r = B.miss, mf = Math.max(14, Math.min(fs.body * 1.1, r.h * 0.8)), o = { n: missN };
+    txtMin([fmt(missN === 1 ? STR.missBite1 : STR.missBites, o), fmt(STR.missShort, o)], r.x + r.w / 2, r.y + r.h / 2 + 1, mf, { f: FB, col: C.stamp, maxW: r.w });
   }
   // Friday fix 2 (U9): the tip, for a player who has lost here more than once
   if (B.tip && tip) {
@@ -3266,6 +3324,13 @@ function drawMap(st, dt) {
       const tw = mp.towns[cn.town], bot = cn.row === 0 ? tw.ribbon + mp.hdrH : cn.y + mp.step + R0 + mp.starH + 6;
       s0 = tw.h <= V.h + 1 ? tw.y + tw.h - V.h : bot - V.h;
     }
+    // DECISION (11-14, D5, curator r9 "L7 node clipped under the header pills"): the opening scroll never leaves a node half under the
+    //   top edge: a node cut by it is brought fully into view (the view slides down by at most one node, the current node stays in view).
+    if (!mp.serp) {
+      const R1 = mp.nodeD / 2 + 4;
+      for (const nd of mp.nodes) if (nd.y - R1 < s0 && nd.y + R1 > s0) { s0 = nd.y - R1 - 2; break; }
+      if (cn.y + R1 + mp.starH > s0 + V.h) s0 = cn.y + R1 + mp.starH - V.h;
+    }
     MAP.s = clamp(s0, 0, MAP.max); MAP.v = 0; MAP.glide = null; MAP.drag = null; MAP.init = key;
   }
   mapPhysics(dt);
@@ -3531,8 +3596,11 @@ function mapIcon(ic, cur, dly, fs) {
   const br = Math.max(10, 11 * u);
   if (ic.pill) {
     const r = ic.r, down = isDown(b.id) ? 2 : 0, rad = r.h / 2;
-    rr(r.x, r.y + Math.max(2, 3 * u), r.w, r.h, rad); g.fillStyle = 'rgba(58,36,24,0.35)'; g.fill();
-    rr(r.x, r.y + down, r.w, r.h, rad); g.fillStyle = locked ? '#D9CDB8' : C.paper; g.fill(); g.lineWidth = Math.max(2, 2.2 * u); g.strokeStyle = C.ink; g.stroke();
+    // DECISION (11-14, D7): a locked pill is flat (no drop shadow, a thin grey rim, no press) so it does not read as a live button;
+    //   the padlock and the level badge say why. Tapping it still opens the lock card.
+    if (!locked) { rr(r.x, r.y + Math.max(2, 3 * u), r.w, r.h, rad); g.fillStyle = 'rgba(58,36,24,0.35)'; g.fill(); }
+    rr(r.x, r.y + (locked ? 0 : down), r.w, r.h, rad); g.fillStyle = locked ? '#D9CDB8' : C.paper; g.fill();
+    g.lineWidth = locked ? Math.max(1.5, 1.6 * u) : Math.max(2, 2.2 * u); g.strokeStyle = locked ? '#8E7A66' : C.ink; g.stroke();
     const ix = ic.ico.x + ic.ico.w / 2, iy = ic.ico.y + ic.ico.h / 2 + down;
     g.save(); if (locked) g.globalAlpha = 0.45; glyph(id, ix, iy, ic.ico.w * 0.95); g.restore();
     if (locked) padlock(ix, iy + ic.ico.h * 0.06, ic.ico.w * 0.62);
@@ -3559,7 +3627,8 @@ function mapIcon(ic, cur, dly, fs) {
     badge(bx, by, br, lvTxt, C.ink);
     if (d1) {   // the day-1 coin tag on the icon's lower right
       const f2 = Math.max(12.5, 12 * u), tagW = measure('+' + d1, f2, FB, '800') + f2 * 1.6, th = f2 * 1.4;
-      const tx = Math.min(ic.r.x + ic.r.w * 0.5, cssW - tagW - 2), ty = ic.r.y + ic.r.h - th * 0.75;
+      // DECISION (11-14, D7): the tag sits wholly on the icon (it used to hang over the label's first letters)
+      const tx = Math.min(ic.r.x + ic.r.w * 0.55, cssW - tagW - 2), ty = ic.r.y + ic.r.h - th * 1.08;
       rr(tx, ty, tagW, th, th / 2); g.fillStyle = '#FFE9A8'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = C.ink; g.stroke();
       coin(tx + th * 0.5, ty + th / 2, th * 0.32);
       txt('+' + d1, tx + th * 0.92 + (tagW - th * 0.92) / 2, ty + th / 2 + 0.5, f2, { f: FB, col: C.ink, maxW: tagW - th * 0.95 });
@@ -3663,6 +3732,8 @@ function drawShop(st) {
       const shake = gPoorK < 0.4 ? Math.sin(gPoorK * 60) * 4 : 0;
       g.save(); g.translate(shake, 0);
       if (gPoorK < 2) paperBtn(b, fmt(STR.needCoins, { n: GILD_PRICE }), { u: cu, fs: fs.btn2, fill: '#FFD9D4' });
+      // DECISION (11-14, D7): Gild you cannot afford is a quiet paper button (a gold primary next to Wear competed with it); gold only once you can pay.
+      else if (coins < GILD_PRICE) paperBtn(b, `${STR.gild} ${GILD_PRICE}`, { u: cu, fs: fs.btn2, fill: C.paperS, icon: (x, y, s) => coin(x, y, s * 0.34) });
       else goldBtn(b, gArmed ? STR.tapToBuy : `${STR.gild} ${GILD_PRICE}`, { u: cu, fs: fs.btn, glow: gArmed ? 0.5 + 0.5 * Math.sin(T * 8) : 0, icon: gArmed ? null : (x, y, s) => coin(x, y, s * 0.34) });
       g.restore();
     }
@@ -4092,15 +4163,17 @@ function drawFeastEnd(st) {
     txt(STR.feastOver, 0, 0, fs.head, { col: C.ink, stroke: C.paper, sk: 4, maxW: B.head.w * 0.95, min: 18 }); g.restore();
   }
   if (B.hero.h > 30) {
-    const hero = img('win-feast');
-    g.save(); g.globalAlpha = 0.9; if (hero) drawFit(g, hero, B.hero.x, B.hero.y, B.hero.w, B.hero.h); g.restore();
+    // DECISION (11-14, D7, r9 "the 5 sits on the pot's belly"): the pot keeps the top 74% of the art block untouched; the count and
+    //   its label share one row under it (big number, then the "orders served" pill), so nothing covers the face or the belly.
+    const hero = img('win-feast'), hh = B.hero.h, ah = hh * 0.74, rowH = hh - ah;
+    g.save(); g.globalAlpha = 0.9; if (hero) drawFit(g, hero, B.hero.x, B.hero.y, B.hero.w, ah); g.restore();
     const n = d.tickets | 0, k = clamp((cardT - 0.15) / 0.5, 0, 1), shown = Math.round(n * ease(k));
-    const big = Math.min(B.hero.h * 0.3, 72 * cu), cx = B.hero.x + B.hero.w / 2, cy = B.hero.y + B.hero.h * 0.7; // low, so the pot keeps its face
-    txt(String(shown), cx, cy, big, { col: C.gold, stroke: C.ink, sk: Math.max(5, big * 0.12), shadow: C.ink, maxW: B.hero.w * 0.8 });
-    const lab = n === 1 ? STR.served1 : STR.served;
-    const lf = Math.max(14, fs.stat * 1.1), lw = measure(lab, lf, FB, '800') + lf * 1.6;
-    rr(cx - lw / 2, cy + big * 0.55, lw, lf * 1.7, lf * 0.85); g.fillStyle = C.paper; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
-    txt(lab, cx, cy + big * 0.55 + lf * 0.87, lf, { f: FB, col: C.ink, maxW: lw - 8 });
+    const lab = n === 1 ? STR.served1 : STR.served, rcy = B.hero.y + ah + rowH / 2;
+    const big = Math.min(rowH * 1.05, 60 * cu), lf = Math.max(13, Math.min(fs.stat * 1.1, rowH * 0.5)), lw = measure(lab, lf, FB, '800') + lf * 1.6, ph = lf * 1.7;
+    const nw = measure(String(Math.max(n, shown)), big) + 10, tot = nw + 8 + lw, x0 = B.hero.x + B.hero.w / 2 - tot / 2;
+    txt(String(shown), x0 + nw / 2, rcy, big, { col: C.gold, stroke: C.ink, sk: Math.max(4, big * 0.12), shadow: C.ink, maxW: nw + 6 });
+    rr(x0 + nw + 8, rcy - ph / 2, lw, ph, ph / 2); g.fillStyle = C.paper; g.fill(); g.lineWidth = 2; g.strokeStyle = C.ink; g.stroke();
+    txt(lab, x0 + nw + 8 + lw / 2, rcy + 1, lf, { f: FB, col: C.ink, maxW: lw - 8 });
   }
   const s2 = B.stats, cyS = s2.y + s2.h / 2, cells = [];
   cells.push(['star', fmt(STR.bestN, { n: Math.max(d.best | 0, d.tickets | 0) })]);

@@ -91,7 +91,7 @@ function checkCards(L, ctx) {
       ['win', {}], ['win', { daily: true, strip: true, stats: true }], ['win', { daily: true, strip: true, goal: true, nextSkin: true, stats: true }], ['win', { daily: true, strip: true, buySkin: true, goal: true, stats: true }], ['win', { share: true }], ['win', { share: true, daily: true, strip: true, goal: true, nextSkin: true, stats: true }], ['win', { share: true, strip: true, buySkin: true, goal: true, stats: true }], ['win', { strip: true }], ['win', { strip: true, nextSkin: true }], ['win', { strip: true, goal: true }], ['win', { strip: true, goal: true, nextSkin: true }], ['win', { strip: true, goal: true, nextSkin: true, buySkin: true }], ['win', { strip: true, nextSkin: true, buySkin: true }], ['info', { primary: true, second: true, ending: true }], ['info', { primary: true, second: false, ending: true }], ['win', { nextSkin: true }], ['win', { goal: true }], ['win', { goal: true, nextSkin: true }], ['win', { goal: true, nextSkin: true, buySkin: true }], ['win', { nextSkin: true, buySkin: true }],
       ['fail', { canFreeze: true }], ['fail', { canFreeze: false }], ['fail', { noBar: true, canFreeze: true }], ['fail', { noBar: true, canFreeze: false }],
       ['fail', { canFreeze: true, help: true }], ['fail', { canFreeze: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, help: true, tip: true }], ['fail', { canFreeze: false, help: true, tip: true }],
-      ['fail', { canFreeze: true, boost: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, boost: true, help: true, tip: true }], ['fail', { canFreeze: false, boost: true, help: true, tip: true }], ['fail', { noBar: true, boost: true }],
+      ['fail', { canFreeze: true, boost: true, help: true, tip: true }], ['fail', { noBar: true, canFreeze: true, boost: true, help: true, tip: true }], ['fail', { canFreeze: false, boost: true, help: true, tip: true }], ['fail', { noBar: true, boost: true }], ['fail', { noBar: true, canFreeze: true, miss: true }], ['fail', { noBar: true, canFreeze: true, boost: true, help: true, tip: true, miss: true }], ['fail', { noBar: true, canFreeze: false, help: true, miss: true }],
       ['pause', { showMute: true }], ['pause', {}], ['pause', { showMute: true, stars: true }], ['pause', { stars: true }], ['settings', {}], ['map', {}], ['map', { chipR: 300, chipT: L.H - 52 }], ['map', { chipR: 240, chipT: L.H - 40, saving: true }],
       ['shop', {}], ['cookbook', {}], ['daily', {}], ['daily', { primary: false }], ['daily', { town: false }], ['ladder', {}],
       ['feast', { towns: 1 }], ['feast', { towns: 3 }], ['feastend', {}],
@@ -137,6 +137,8 @@ function checkCards(L, ctx) {
           for (let j = i + 1; j < list.length; j++) if (overlap(list[i], list[j])) fail(cx, `${arr}[${i}] overlaps ${arr}[${j}]`);
         }
       }
+      // G3 (11-14): the title's promise line needs a readable rect (font >= 14 px, height >= 18 px) and must sit under the wordmark, above the pot
+      if (name === 'title') { const t = C.blocks.tag, lg = C.blocks.logo; checks++; if (!t) fail(cx, 'title has no tag rect'); else { if (t.h < 18 - EPS || C.fs.tag < 14 - EPS) fail(cx, `title tag too small ${fmt(t)} fs ${C.fs.tag}`); if (t.y < lg.y + lg.h - EPS) fail(cx, 'title tag above the wordmark'); } }
       if (Array.isArray(C.blocks.tins)) for (const t of C.blocks.tins) { checks++; if (!inside(t.icon, C.blocks.shelf)) fail(cx, `tin icon outside shelf`); }
       if (name === 'map') checkMap(C, cx, S);
       if (C.blocks.icons) for (const ic of C.blocks.icons) {
@@ -170,7 +172,7 @@ function checkMap(C, cx, S) {
   if (M.serp) {
     // D1/F3 (11-10): landscape serpentine. Enough nodes in one view, the bottom pill row clear of the web chips, the top pills sane
     checks++;
-    const perView = (Math.floor((V.h - M.nodeD - M.starH) / M.step) + 1) * 5;   // whole rows that fit in one view
+    const perView = (Math.floor((V.h - M.nodeD - M.starH) / M.step) + 1) * (M.K || 5);   // whole rows that fit in one view
     if (perView < 8) fail(cx, `serp map shows ${perView} nodes per view (< 8)`);
     if (M.col.x < V.x - EPS || M.col.x + M.col.w > V.x + V.w + EPS) fail(cx, `serp column ${fmt(M.col)} wider than the view`);
     const chipR = M.chipR || 0;

@@ -599,7 +599,7 @@ bus.on('bite', ev => {
   const w = S.w;
   if (!w || M.record || M.og) return;
   const b = (w.stats && w.stats.bites) | 0;
-  if (b > 0 && b % 10 === 0 && S.kind !== 'feast') safe(meta.addCoins, 1, 'bite');
+  if (b > 0 && b % 14 === 0 && S.kind !== 'feast') safe(meta.addCoins, 1, 'bite');   // DECISION (11-14, E1): every 14th bite (was 10th), see meta.js
   if (S.run && ev) {
     S.run.eaten[ev.kind] = (S.run.eaten[ev.kind] | 0) + 1;
     if ((ev.tier | 0) >= 3) S.run.big++;

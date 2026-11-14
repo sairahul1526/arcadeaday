@@ -1951,6 +1951,51 @@ function starterPatch(c) {
   }
   c.piles.push({ x: r3(best.x), z: r3(best.z), r: PATCH_R });
 }
+// DECISION (11-14, A3, art-director r9 "3 of 4 targets only edge arrows" on L57): the starter patch (L2-L10) is the only thing that
+// puts an ordered food on the first screen, so on the wide late boards nothing the ticket asks for was in view of spawn (the nearest
+// icecream on L57 sat 21 u away). From TARGET_SEED_FROM, the first ticket's two nearest open lines (not a pen, a roll lane, a belt or a
+// stack) each pull ONE of their foods into view of spawn, ahead of the pot (z lower), on the first free slot the normal placement test
+// allows. Items move in place, so counts, kinds, supply and every other draw hold; the pass has no rng and runs after the snack piles.
+// DECISION (11-14, A3 verify): seeding failed verify on L50, L53 and L55 (gate 5: it pulled the level's only far line next to spawn) and
+//   moved the average bot's spare out of band on L50-L52 (food in view = faster finishes). It keeps only the levels it passed on.
+export const TARGET_SEED_FROM = 50, TARGET_SEED_N = 2, TARGET_SEED_LEVELS = new Set([54, 56, 57, 58, 59, 60]);
+function seedTargets(c) {
+  const isOpen2 = (o, kinds) => !kinds.has(o.kind) && o.zone === 0 && o.lane < 0 && o.belt < 0 && !o.stack && o.role === 'junk' && o.tier <= 1;
+  const sp = c.spawn, tk = c.spec.tickets[0];
+  const inView = o => Math.abs(o.x - sp.x) <= SCREEN_HX && Math.abs(o.z - sp.z) <= SCREEN_HZ;
+  const isOpen = o => o.role === 'ing' && o.zone === 0 && o.lane < 0 && o.belt < 0 && !o.stack;
+  const shown = new Set(tk.lines.filter(l => c.items.some(o => o.kind === l.kind && o.role === 'ing' && inView(o))).map(l => l.kind));
+  for (const l of tk.lines) {
+    if (shown.size >= TARGET_SEED_N) break;
+    if (shown.has(l.kind) || l.place === 'roll') continue;
+    const os = c.items.filter(o => o.kind === l.kind && isOpen(o)).sort((a, b) => hyp(a.x - sp.x, a.z - sp.z) - hyp(b.x - sp.x, b.z - sp.z));
+    const o = os.find(q => canFit(c.r0, q.a)) || os[0];
+    if (!o) continue;
+    let put = false;
+    // free slots anywhere on the first screen (not behind the pot: z lower is ahead), nearest to a point 3.5 u ahead of spawn first
+    const ax = sp.x, az = sp.z - 3.5;
+    const slots = hexSlots(ax, az, 4.5, 0.3).filter(q => Math.abs(q.x - sp.x) <= SCREEN_HX - 0.3 && q.z <= sp.z - 1.6 && sp.z - q.z <= SCREEN_HZ - 0.3);
+    for (const q of slots) if (canMove(c, o, q.x, q.z)) { o.x = r3(q.x); o.z = r3(q.z); put = true; break; }
+    if (!put) { // crowded spawn: swap with a junk item already on the first screen (same size class, both spots still legal)
+      const kinds = new Set(tk.lines.map(q => q.kind));
+      const js = c.items.filter(j => isOpen2(j, kinds) && inView(j) && j.a >= o.a * 0.4 && j.a <= o.a * 2.5)
+        .sort((a, b) => hyp(a.x - ax, a.z - az) - hyp(b.x - ax, b.z - az));
+      for (const j of js) {
+        const ox = o.x, oz = o.z, jx = j.x, jz = j.z;
+        j.x = 1e6; j.z = 1e6;
+        const ok = canMove(c, o, jx, jz);
+        j.x = jx; j.z = jz;
+        if (!ok) continue;
+        o.x = 1e6; o.z = 1e6;
+        const ok2 = canMove(c, j, ox, oz);
+        o.x = ox; o.z = oz;
+        if (!ok2) continue;
+        j.x = r3(ox); j.z = r3(oz); o.x = r3(jx); o.z = r3(jz); put = true; break;
+      }
+    }
+    if (put) shown.add(l.kind);
+  }
+}
 // DECISION (11-06 Fri, L3 snack piles): L21–L60 get 5 to 12 tight piles of T0/T1 food on top of the tuned layout (critics:
 // wide boards with sparse food from L30 on), one of them in view of spawn. A post-pass with its own rng: it appends items
 // after everything else, so a level keeps every item and draw it had, and Daily and Feast (n 0) never get here. A pile uses
@@ -2067,6 +2112,7 @@ export function genLevel(spec, seed) {
   if (spec.n >= 1 && spec.n <= 3) fillGaps(c);
   addDecor(c);
   if (spec.n >= PILE_FROM) snackPiles(c, spec, seed);
+  if (spec.n >= TARGET_SEED_FROM && TARGET_SEED_LEVELS.has(spec.n)) seedTargets(c);
   hotChilis(c, spec, seed);
   // DECISION (Sim 11-03): the expanded level carries its zone graph (level.zoneGraph) so bots need not import levels.js.
   const lv = finish(c, spec, seed);

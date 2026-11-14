@@ -91,6 +91,12 @@ export function bandOf(n) {
   // DECISION (11-10, FIX-LIST-7 B3): L2-L6 got a long pace and a 5-14 s grace (levels-data.js: pace = the slow hand's median finish / 0.65,
   // so a first-time player three-stars about half its runs). A casual bot is quicker than that hand and now three-stars most runs, so the
   // casual 3-star ceiling is off on L4-L6; L7 keeps 50.
+  // DECISION (11-14, FIX-LIST-8 B2 and B3; levels-data.js is rewritten by writeLevelsData, so the note lives here). No band moved.
+  //   B2: the slow hand had 0-8 s spare on L9, L10 and L12, so T and grace rose together by 8 s (L9/L10 T 107 grace 35, L12 T 119 grace 50):
+  //   the pace and the star lines stay, the slow hand gets about 21-28 s (studio/2026-11-14/levels/slow-b2.txt).
+  //   B3 (mobile r9 "3 stars feel out of reach in Market"): the average bot three-starred 8, 13 and 5 % of L21-L23. Grace fell with T kept
+  //   (L21 22 -> 19, L22 32 -> 29, L23 27 -> 23), so the pace grows and the win odds do not move (grace buys no stars, the clock is the same).
+  //   Measured: average 3-star 23-30 %, spare 32-33 % (verify-b3*.txt).
   if (n <= 6) return { avg: 80, exp: 98, plan: 0.88, avg3: [40, 100], cas3: 100 };
   if (n <= 7) return { avg: 80, exp: 98, plan: 0.88, avg3: [40, 100], cas3: 50 };
   if (n <= 10) return { avg: 75, exp: 97, plan: 0.80, avg3: [40, 100], cas3: 50 };

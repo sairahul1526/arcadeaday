@@ -33,7 +33,9 @@ export const CAM_OPEN_S = 2.2;
 // 11-07 (r5 landscape check): the 0.88 is for a short PORTRAIT screen only; on a 844x390 phone it closed a view that was
 // already too close (see camLand).
 // 11-11 (D5): the desktop pull-back now lives in camLand for every level, so the L1-only 1.2 is gone (it would stack to 2.5x).
-export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : 1);
+// DECISION (11-14, D8 curator r9 "desktop L1-L5 camera very pulled back, the pot is about 100 px at 1440x900"): a desktop window (the camLand
+// gate: 1100+ wide, 700+ tall, landscape) closes in 28 % on L1-L5 only; L6 and up keep the D5 overview. Applied after the board cap, render only.
+export const camViewK = (w, h, n) => (h < 700 && w <= h ? 0.88 : w > h && w >= 1100 && h >= 700 && n >= 1 && n <= 5 ? 0.72 : 1);
 /**
  * Landscape follow-width factor. DECISION (11-07 Sat, r5): a flat 1.35 left a 844x390 phone (2.16:1) seeing about half the depth
  * a portrait phone sees, the pot 40 % of the screen's height (curator r5 r-play-844x390). The short side now shows at least

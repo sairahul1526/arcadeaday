@@ -30,7 +30,9 @@ import { KINDS } from './catalog.js';
 import { kindMax as KIND_MAX } from './levels-data.js';
 import { G, K_ING, SIZEUP_MUL } from './consts.js';
 
-export const HOOK_DEFAULT = 'Can a pea-sized pot eat the WHOLE park?';
+// DECISION (11-14, G1 viral r9): frame 0 is a fed pot at 20 eaten (since 11-11 REC_SKIP), so "pea-sized pot" lied to the picture. The hook now says what the
+//   clip shows and flows into the cap2 tease ("Eat everything in the park" ... "...even the giant cake?").
+export const HOOK_DEFAULT = 'Eat everything in the park';
 export const CAP2_DEFAULT = '…even the giant cake?';
 export const LEVELS = 60;
 const DT = 1 / 60;
@@ -409,7 +411,10 @@ const REC_Q = 0.92;                                 // every course item fits wi
 const REC_V = 0.86;                                 // planned cruise = 86 % of top speed (the director has headroom)
 const REC_GAP = 0.06, REC_GAP_MAX = 0.5;            // bite spacing (s); 0.5 keeps the chain alive (CHAIN_WIN 0.7)
 const REC_HOLD_D = 4.0;                             // pot centre to cake centre at the padlock (0.5 s rush)
-const REC_FLANK = 100, REC_FLANK_T = 12;             // crowd items beside the route, and until when (340 cap: 237 + 100)
+// DECISION (11-14, G2 viral r9 "10-13 s dead stretch: empty lawn while the count climbs 123 -> 136"): the flank crowd ran out at course 11 s
+//   (100 items, until 12 s), so the chunky props of 12-15 s (coolers, benches, parasols, trees, swing sets) had bare gingham around them.
+//   170 items until 15.4 s keeps the lawn dense to the padlock (246 route items + 20 back + 170 stays under the 340 cap).
+const REC_FLANK = 170, REC_FLANK_T = 15.4;           // crowd items beside the route, and until when
 export const REC_BACK = 20;                         // food either side of the pot's wake on frame 0 (not in the plan, never eaten)
 const REC_ITEMS = 236;                              // course items (+ the cake), well under ITEM_MAX; the clip is tuned at this count
 // The course's kind ladder (16 kinds + strawberry + cake = KINDS_MAX 18): colourful tiny food, picnic snacks, then

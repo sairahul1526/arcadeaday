@@ -7,6 +7,9 @@
 // grace, so the 3★ line (the pace) does not move. A retry is the stored level, so every bot gate and slow-hand table holds.
 //   node tools/slurp-pot/first-try.mjs 5-39 [--runs 40] [--jobs 3] [--write]
 // Spike levels (every 5th) lose `spike` instead. Prints per level: T, pace, cut, avg first-try wins, slow-hand wins at T0 and at T.
+// DECISION (11-14, B1): mercy.js caps the cut at play time (first-try clock >= 60 % of T, cut + step-1 mercy <= 38 s). The table keeps the
+// wanted cut (what --write stores) and adds the played one: cut', its clock Tf = T - cut', the wins of both hands at Tf, and the gift
+// (cut' + step-1 mercy) the fail card offers after a first fail. Aim: avg@Tf near 27-36 only where the caps let it, gift <= ~38.
 import { fork } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +17,7 @@ import * as LV from '../../games/slurp-pot/levels.js';
 import * as B from '../../games/slurp-pot/bots.js';
 import * as L from '../../games/slurp-pot/logic.js';
 import { SPECS } from '../../games/slurp-pot/levels-data.js';
+import { firstCut, mercySecs } from '../../games/slurp-pot/mercy.js';
 
 const SLOW = { m: .55, lag: .7, sigma: 35 * Math.PI / 180, every: .5 };
 const OPEN = 400, DT = 1 / 60, FIRST_MIN = 30;
@@ -53,7 +57,7 @@ if (process.argv.includes('--child')) {
   const fin = ts => ts.map(t => t === null ? Infinity : t).sort((a, b) => a - b);
   const wins = (ts, T) => ts.filter(t => t !== null && t <= T + DT).length;
   const cuts = {};
-  console.log('  n   T  pace  cut   T0 | avg@T0 avg@T | slow@T0 slow@T');
+  console.log('  n   T  pace  cut   T0 | avg@T0 avg@T | slow@T0 slow@T | played cut\' Tf gift | avg@Tf slow@Tf');
   for (const r of out) {
     const s = SPECS.find(x => x.n === r.n), g = s.grace > 0 ? s.grace : 0, pace = s.T - g;
     const a = fin(r.avg), lose = isSpike(r.n) ? SPIKE : LOSE;
@@ -61,7 +65,8 @@ if (process.argv.includes('--child')) {
     if (!isFinite(T0)) T0 = s.T;
     T0 = Math.max(FIRST_MIN, Math.min(s.T, T0));
     const cut = s.T - T0; cuts[r.n] = cut;
-    console.log(`${String(r.n).padStart(3)} ${String(s.T).padStart(3)} ${String(pace).padStart(5)} ${String(cut).padStart(4)} ${String(T0).padStart(4)} | ${String(wins(r.avg, T0)).padStart(3)}/${runs} ${String(wins(r.avg, s.T)).padStart(3)}/${runs} | ${String(wins(r.slow, T0)).padStart(3)}/${runs} ${String(wins(r.slow, s.T)).padStart(3)}/${runs}`);
+    const lvl = { ...LV.getLevel(r.n), first: cut }, pc = firstCut(lvl), Tf = s.T - pc, gift = pc + mercySecs(lvl, 1);
+    console.log(`${String(r.n).padStart(3)} ${String(s.T).padStart(3)} ${String(pace).padStart(5)} ${String(cut).padStart(4)} ${String(T0).padStart(4)} | ${String(wins(r.avg, T0)).padStart(3)}/${runs} ${String(wins(r.avg, s.T)).padStart(3)}/${runs} | ${String(wins(r.slow, T0)).padStart(3)}/${runs} ${String(wins(r.slow, s.T)).padStart(3)}/${runs} | ${String(pc).padStart(11)} ${String(Tf).padStart(3)} ${String(gift).padStart(4)} | ${String(wins(r.avg, Tf)).padStart(3)}/${runs} ${String(wins(r.slow, Tf)).padStart(3)}/${runs}`);
   }
   if (write) {
     const path = fileURLToPath(new URL('../../games/slurp-pot/levels-data.js', import.meta.url));

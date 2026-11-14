@@ -74,16 +74,20 @@ let P = null; // the platform layer, set by initMeta(P)
 export const SAVE_V = 2;
 export const BOOSTS = ['magnet', 'freeze', 'mega'];
 export const TOWN_LEVELS = 20;
-export const MILESTONE_EVERY = 15, MILESTONE_COINS = 60;
+// DECISION (11-14, E1, mobile-designer r9 "2172 coins by L24 vs prices 40-1300, nothing makes me choose"): every level-driven coin source runs
+//   about 30 % lower: win pay 10 -> 7, star pay 5/10/20 -> 4/7/14, replay 3 -> 2, the 3-star replay bonus 15 -> 10, small chests 30/40/50/60 ->
+//   20/28/35/42, town chests 150/150/300 -> 105/105/210, the star milestone 60 -> 42, and game.js pays a bite coin every 14th bite (was 10th).
+//   Prices stay, so the first pot (150) still lands around L5-L8 and the coin bar is a live goal for the next hours.
+export const MILESTONE_EVERY = 15, MILESTONE_COINS = 42;
 export const MAX_SCORE = LEVELS * 3 * 100 + LEVELS * 10 + 99; // 18,699
 export const TUT = { drag: 1, recipe: 2, padlock: 4, stars: 8, pens: 16, rolling: 32, fragile: 64, belt: 128, twocourse: 256, simmer: 512, gulls: 1024, truck: 2048, layered: 4096, freeze: 8192 };
-const WIN_A = 10, STAR_PAY = [0, 5, 10, 20], REPLAY_A = 3, DAILY_A = 40, DAILY_B = 10;
+const WIN_A = 7, STAR_PAY = [0, 4, 7, 14], REPLAY_A = 2, DAILY_A = 40, DAILY_B = 10;
 // DECISION (11-10, C2): a replay that first reaches 3 stars pays a flat named bonus on top of the star gain, so the
 //   replay has a payoff the card can name ("3-star bonus"), not only a bigger number.
-const FIRST3_A = 15;
+const FIRST3_A = 10;
 const starPay = (n, st) => Math.round(STAR_PAY[st] * (1 + n / 30));
-const SMALL_CHEST = { 1: 30, 5: 40, 10: 50, 15: 60 };
-const CHEST_COINS = [150, 150, 300], CHEST_BOOST = 2;
+const SMALL_CHEST = { 1: 20, 5: 28, 10: 35, 15: 42 };
+const CHEST_COINS = [105, 105, 210], CHEST_BOOST = 2;
 const HELP_MAX = 2; // carryAfterWin(MERCY_MAX) in mercy.js: a win always takes one step off, so 3 never carries
 const MAX_COINS = 9999999, MAX_BOOST = 99, DAILY_KEEP = 30, GHOST_MAX = 99, FEAST_MAX = 9999;
 const IST_MS = 5.5 * 3600e3, DAY_MS = 86400e3;
